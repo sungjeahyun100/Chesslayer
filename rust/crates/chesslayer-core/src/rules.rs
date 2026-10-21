@@ -1,11 +1,9 @@
-use crate::{Board, GameAction, PlayerId};
+use crate::{Board, Position};
 
-/// The result must describe the reason without binding the shared core to standard chess.
+/// Reasons are descriptive; a module decides when an outcome occurs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ResultReason {
     RoyalCaptured,
-    Checkmate,
-    Stalemate,
     RuleDefined(u16),
 }
 
@@ -13,7 +11,7 @@ pub enum ResultReason {
 pub enum GameResult {
     Ongoing,
     Win {
-        winner: PlayerId,
+        winner: crate::PlayerId,
         reason: ResultReason,
     },
     Draw {
@@ -25,20 +23,30 @@ pub enum GameResult {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GameState {
     pub board: Board,
-    pub turn: PlayerId,
+    pub turn: crate::PlayerId,
     pub result: GameResult,
 }
 
-/// Rule-dependent definitions and state are associated types, not a universal schema.
-/// The engine core does not dictate what makes a move legal or how a run ends.
+/// A rule module supplies its own setup, action, state and outcome types.
+/// The core imposes no piece-definition schema or victory logic.
 pub trait RuleModule {
+    type Setup;
     type State;
-    type Definition;
+    type Action;
+    type Outcome;
+    type Error;
 
-    fn piece_definitions(&self) -> &[Self::Definition];
-    fn board_boundary(&self) -> Board;
-    fn initial_position(&self) -> Self::State;
-    fn legal_actions(&self, state: &mut Self::State) -> Vec<GameAction>;
-    fn apply_action(&self, state: &mut Self::State, action: &GameAction) -> bool;
-    fn victory_condition(&self, state: &mut Self::State) -> GameResult;
+    fn start(&self, setup: Self::Setup) -> Result<Self::State, Self::Error>;
+    fn legal_actions(
+        &self,
+        state: &Self::State,
+        from: Position,
+    ) -> Result<Vec<Self::Action>, Self::Error>;
+    fn apply_action(
+        &self,
+        state: &mut Self::State,
+        action: &Self::Action,
+    ) -> Result<(), Self::Error>;
+    fn result(&self, state: &Self::State) -> GameResult;
+    fn outcome(&self, state: &Self::State) -> Self::Outcome;
 }
