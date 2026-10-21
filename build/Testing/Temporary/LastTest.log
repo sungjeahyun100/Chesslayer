@@ -1,0 +1,35 @@
+Start testing: Oct 21 18:10 KST
+----------------------------------------------------------
+1/2 Testing: standard_chess
+1/2 Test: standard_chess
+Command: "/home/sjh100/바탕화면/var-chess-sts/build/chess_tests"
+Directory: /home/sjh100/바탕화면/var-chess-sts/build
+"standard_chess" start time: Oct 21 18:10 KST
+Output:
+----------------------------------------------------------
+All tests passed
+<end of output>
+Test time =   2.29 sec
+----------------------------------------------------------
+Test Passed.
+"standard_chess" end time: Oct 21 18:10 KST
+"standard_chess" time elapsed: 00:00:02
+----------------------------------------------------------
+
+2/2 Testing: chessembly
+2/2 Test: chessembly
+Command: "/home/sjh100/바탕화면/var-chess-sts/build/interpreter_tests"
+Directory: /home/sjh100/바탕화면/var-chess-sts/build
+"chessembly" start time: Oct 21 18:10 KST
+Output:
+----------------------------------------------------------
+Interpreter tests passed
+<end of output>
+Test time =   0.00 sec
+----------------------------------------------------------
+Test Passed.
+"chessembly" end time: Oct 21 18:10 KST
+"chessembly" time elapsed: 00:00:00
+----------------------------------------------------------
+
+End testing: Oct 21 18:10 KST

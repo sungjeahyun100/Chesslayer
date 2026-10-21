@@ -1,0 +1,1 @@
+/usr/bin/c++ -O3 -DNDEBUG -Wl,--dependency-file=CMakeFiles/chess_tests.dir/link.d CMakeFiles/chess_tests.dir/tests.cpp.o -o chess_tests  libchessembly.a
