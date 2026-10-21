@@ -22,7 +22,13 @@ pub struct ActionStep {
 
 impl ActionStep {
     pub fn new(from: Position, take: Position, move_to: Position, effect: Effect) -> Self {
-        Self { from, take, move_to, effect, transition: None }
+        Self {
+            from,
+            take,
+            move_to,
+            effect,
+            transition: None,
+        }
     }
 }
 
@@ -34,7 +40,10 @@ pub struct DefaultAction {
 
 impl DefaultAction {
     pub fn one(first: ActionStep) -> Self {
-        Self { first, continuation: Vec::new() }
+        Self {
+            first,
+            continuation: Vec::new(),
+        }
     }
 
     pub fn steps(&self) -> impl Iterator<Item = &ActionStep> {
@@ -95,14 +104,21 @@ fn apply_step(
 
     let valid = match step.effect {
         Effect::Move => take == to && from != to && destination.is_none(),
-        Effect::TakeMove => take == to && from != to
-            && destination.is_none_or(|piece| enemy(piece, mover.owner)),
-        Effect::Take => take == to && from != to
-            && victim.is_some_and(|piece| enemy(piece, mover.owner)),
-        Effect::TakeJump => take != to && from != to && destination.is_none()
-            && victim.is_some_and(|piece| enemy(piece, mover.owner)),
-        Effect::Catch => to == from && take != from
-            && victim.is_some_and(|piece| enemy(piece, mover.owner)),
+        Effect::TakeMove => {
+            take == to && from != to && destination.is_none_or(|piece| enemy(piece, mover.owner))
+        }
+        Effect::Take => {
+            take == to && from != to && victim.is_some_and(|piece| enemy(piece, mover.owner))
+        }
+        Effect::TakeJump => {
+            take != to
+                && from != to
+                && destination.is_none()
+                && victim.is_some_and(|piece| enemy(piece, mover.owner))
+        }
+        Effect::Catch => {
+            to == from && take != from && victim.is_some_and(|piece| enemy(piece, mover.owner))
+        }
         Effect::Shift => take == to && from != to && destination.is_some(),
     };
     if !valid {
@@ -110,7 +126,9 @@ fn apply_step(
     }
 
     if let Some(name) = step.transition.as_deref() {
-        mover.kind = board.find_piece_type(name).ok_or(ActionError::UnknownTransition)?;
+        mover.kind = board
+            .find_piece_type(name)
+            .ok_or(ActionError::UnknownTransition)?;
     }
 
     for index in [from, take, to] {
@@ -145,13 +163,33 @@ mod tests {
 
     fn sample() -> Board {
         let mut board = Board::new(8, 8).unwrap();
-        board.set_catalog(
-            vec!["".into(), "runner".into(), "target".into()],
-            vec!["white".into(), "black".into()],
-            vec![1, -1],
-        ).unwrap();
-        board.set_piece(Position::new(2, 2), Some(Piece { kind: 1, owner: 0, id: 10 })).unwrap();
-        board.set_piece(Position::new(3, 2), Some(Piece { kind: 2, owner: 1, id: 20 })).unwrap();
+        board
+            .set_catalog(
+                vec!["".into(), "runner".into(), "target".into()],
+                vec!["white".into(), "black".into()],
+                vec![1, -1],
+            )
+            .unwrap();
+        board
+            .set_piece(
+                Position::new(2, 2),
+                Some(Piece {
+                    kind: 1,
+                    owner: 0,
+                    id: 10,
+                }),
+            )
+            .unwrap();
+        board
+            .set_piece(
+                Position::new(3, 2),
+                Some(Piece {
+                    kind: 2,
+                    owner: 1,
+                    id: 20,
+                }),
+            )
+            .unwrap();
         board
     }
 
@@ -163,17 +201,29 @@ mod tests {
     fn moving_capture_stay_capture_and_swap_preserve_identity() {
         let target = Position::new(3, 2);
         let mut board = sample();
-        apply_default_action(&mut board, &DefaultAction::one(step(Effect::Take, target, target))).unwrap();
+        apply_default_action(
+            &mut board,
+            &DefaultAction::one(step(Effect::Take, target, target)),
+        )
+        .unwrap();
         assert_eq!(board.piece_at(target).unwrap().unwrap().id, 10);
 
         let mut board = sample();
         let home = Position::new(2, 2);
-        apply_default_action(&mut board, &DefaultAction::one(step(Effect::Catch, home, target))).unwrap();
+        apply_default_action(
+            &mut board,
+            &DefaultAction::one(step(Effect::Catch, home, target)),
+        )
+        .unwrap();
         assert_eq!(board.piece_at(home).unwrap().unwrap().id, 10);
         assert_eq!(board.piece_at(target).unwrap(), None);
 
         let mut board = sample();
-        apply_default_action(&mut board, &DefaultAction::one(step(Effect::Shift, target, target))).unwrap();
+        apply_default_action(
+            &mut board,
+            &DefaultAction::one(step(Effect::Shift, target, target)),
+        )
+        .unwrap();
         assert_eq!(board.piece_at(home).unwrap().unwrap().id, 20);
         assert_eq!(board.piece_at(target).unwrap().unwrap().id, 10);
     }
@@ -193,14 +243,18 @@ mod tests {
     fn failed_continuation_rolls_back_all_changes() {
         let mut board = sample();
         let before = board.clone();
-        let mut action = DefaultAction::one(step(
-            Effect::Move, Position::new(1, 2), Position::new(1, 2),
-        ));
+        let mut action =
+            DefaultAction::one(step(Effect::Move, Position::new(1, 2), Position::new(1, 2)));
         action.continuation.push(ActionStep::new(
-            Position::new(1, 2), Position::new(3, 2),
-            Position::new(3, 2), Effect::Move,
+            Position::new(1, 2),
+            Position::new(3, 2),
+            Position::new(3, 2),
+            Effect::Move,
         ));
-        assert_eq!(apply_default_action(&mut board, &action), Err(ActionError::InvalidEffect));
+        assert_eq!(
+            apply_default_action(&mut board, &action),
+            Err(ActionError::InvalidEffect)
+        );
         assert_eq!(board, before);
     }
 }

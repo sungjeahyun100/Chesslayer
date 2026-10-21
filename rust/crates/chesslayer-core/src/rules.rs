@@ -12,8 +12,13 @@ pub enum ResultReason {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameResult {
     Ongoing,
-    Win { winner: PlayerId, reason: ResultReason },
-    Draw { reason: ResultReason },
+    Win {
+        winner: PlayerId,
+        reason: ResultReason,
+    },
+    Draw {
+        reason: ResultReason,
+    },
 }
 
 /// Shared turn and result only. Each ruleset owns its additional state.

@@ -57,25 +57,43 @@ pub struct Board {
 
 impl Board {
     pub fn new(width: usize, height: usize) -> Result<Self, BoardError> {
-        let len = width.checked_mul(height).ok_or(BoardError::InvalidDimensions)?;
-        if width == 0 || height == 0 || width > i32::MAX as usize
-            || height > i32::MAX as usize || len > i32::MAX as usize
+        let len = width
+            .checked_mul(height)
+            .ok_or(BoardError::InvalidDimensions)?;
+        if width == 0
+            || height == 0
+            || width > i32::MAX as usize
+            || height > i32::MAX as usize
+            || len > i32::MAX as usize
         {
             return Err(BoardError::InvalidDimensions);
         }
         Ok(Self {
-            width, height, cells: vec![None; len], playable: None,
+            width,
+            height,
+            cells: vec![None; len],
+            playable: None,
             piece_names: vec![String::new()],
             color_names: Vec::new(),
             color_directions: Vec::new(),
         })
     }
 
-    pub const fn width(&self) -> usize { self.width }
-    pub const fn height(&self) -> usize { self.height }
-    pub fn cells(&self) -> &[Option<Piece>] { &self.cells }
-    pub fn piece_names(&self) -> &[String] { &self.piece_names }
-    pub fn color_names(&self) -> &[String] { &self.color_names }
+    pub const fn width(&self) -> usize {
+        self.width
+    }
+    pub const fn height(&self) -> usize {
+        self.height
+    }
+    pub fn cells(&self) -> &[Option<Piece>] {
+        &self.cells
+    }
+    pub fn piece_names(&self) -> &[String] {
+        &self.piece_names
+    }
+    pub fn color_names(&self) -> &[String] {
+        &self.color_names
+    }
 
     pub fn set_catalog(
         &mut self,
@@ -89,7 +107,7 @@ impl Board {
             return Err(BoardError::InvalidDimensions);
         }
         for (owner, direction) in directions.iter().enumerate() {
-            if !matches!(direction, -1 | 1) {
+            if !matches!(*direction, -1 | 1) {
                 return Err(BoardError::InvalidDirection(owner as PlayerId));
             }
         }
@@ -104,7 +122,12 @@ impl Board {
             return Err(BoardError::InvalidMaskLength);
         }
         if let Some(mask) = &mask {
-            if self.cells.iter().zip(mask).any(|(piece, can_play)| piece.is_some() && !can_play) {
+            if self
+                .cells
+                .iter()
+                .zip(mask)
+                .any(|(piece, can_play)| piece.is_some() && !can_play)
+            {
                 return Err(BoardError::InvalidMaskLength);
             }
         }
@@ -130,12 +153,20 @@ impl Board {
     }
 
     pub fn piece_at(&self, position: Position) -> Result<Option<Piece>, BoardError> {
-        let index = self.index(position).ok_or(BoardError::OutsidePlayableArea(position))?;
+        let index = self
+            .index(position)
+            .ok_or(BoardError::OutsidePlayableArea(position))?;
         Ok(self.cells[index])
     }
 
-    pub fn set_piece(&mut self, position: Position, piece: Option<Piece>) -> Result<(), BoardError> {
-        let index = self.index(position).ok_or(BoardError::OutsidePlayableArea(position))?;
+    pub fn set_piece(
+        &mut self,
+        position: Position,
+        piece: Option<Piece>,
+    ) -> Result<(), BoardError> {
+        let index = self
+            .index(position)
+            .ok_or(BoardError::OutsidePlayableArea(position))?;
         if let Some(piece) = piece {
             self.validate_piece(piece)?;
         }
@@ -170,7 +201,9 @@ impl Board {
         if self.color_directions.is_empty() {
             return Ok(1);
         }
-        self.color_directions.get(usize::from(owner)).copied()
+        self.color_directions
+            .get(usize::from(owner))
+            .copied()
             .ok_or(BoardError::InvalidDirection(owner))
     }
 
@@ -179,7 +212,9 @@ impl Board {
     }
 
     pub(crate) fn find_piece_type(&self, name: &str) -> Option<PieceType> {
-        self.piece_names.iter().position(|item| item == name)
+        self.piece_names
+            .iter()
+            .position(|item| item == name)
             .filter(|&index| index != 0)
             .and_then(|index| PieceType::try_from(index).ok())
     }
@@ -192,9 +227,24 @@ mod tests {
     #[test]
     fn supports_nonstandard_boards_and_masks() {
         let mut board = Board::new(12, 10).unwrap();
-        board.set_catalog(vec!["".into(), "hopper".into()], vec!["white".into()], vec![-1]).unwrap();
+        board
+            .set_catalog(
+                vec!["".into(), "hopper".into()],
+                vec!["white".into()],
+                vec![-1],
+            )
+            .unwrap();
         let origin = Position::new(10, 8);
-        board.set_piece(origin, Some(Piece { kind: 1, owner: 0, id: 42 })).unwrap();
+        board
+            .set_piece(
+                origin,
+                Some(Piece {
+                    kind: 1,
+                    owner: 0,
+                    id: 42,
+                }),
+            )
+            .unwrap();
         assert_eq!(board.direction(0).unwrap(), -1);
         let mut mask = vec![true; 120];
         mask[0] = false;
@@ -207,8 +257,14 @@ mod tests {
     #[test]
     fn invalid_masks_and_positions_do_not_modify_board() {
         let mut board = Board::new(8, 8).unwrap();
-        assert_eq!(board.set_playable_mask(Some(vec![true; 20])), Err(BoardError::InvalidMaskLength));
+        assert_eq!(
+            board.set_playable_mask(Some(vec![true; 20])),
+            Err(BoardError::InvalidMaskLength)
+        );
         assert!(board.piece_at(Position::new(-1, 1)).is_err());
-        assert_eq!(board.cells().iter().filter(|piece| piece.is_some()).count(), 0);
+        assert_eq!(
+            board.cells().iter().filter(|piece| piece.is_some()).count(),
+            0
+        );
     }
 }
