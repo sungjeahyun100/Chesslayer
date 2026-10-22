@@ -1,4 +1,4 @@
-//! Reusable, read-only Chessembly candidate generator.
+//! 보드를 변경하지 않고 체섬블리 액션 후보를 생성한다.
 use chesslayer_core::{ActionStep, Board, BoardError, DefaultAction, Effect, Position};
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +24,7 @@ struct Inst {
 }
 #[derive(Clone, Debug)]
 pub struct Program {
+    // 세미콜론으로 구분한 체인들은 각각 독립적으로 실행된다.
     chains: Vec<Vec<Inst>>,
 }
 const SLOT_COUNT: usize = 256;
@@ -76,6 +77,7 @@ fn a(n: &Inst, i: usize) -> i32 {
 }
 impl Program {
     pub fn parse(src: &str) -> Result<Self, Error> {
+        // 먼저 명령을 체인별로 나누고 인자 수와 정수 범위를 검사한다.
         let (mut chains, mut chain, mut p) = (Vec::new(), Vec::new(), 0);
         let bytes = src.as_bytes();
         while p < bytes.len() {
@@ -167,6 +169,7 @@ impl Program {
         if !chain.is_empty() {
             chains.push(chain)
         }
+        // 블록·반복문·점프의 짝을 미리 연결해 실행 중 탐색을 줄인다.
         for ch in &mut chains {
             let (mut opens, mut dos, mut labels) = (vec![], vec![], HashMap::new());
             for i in 0..ch.len() {
@@ -211,6 +214,7 @@ impl Program {
         let d = i32::from(b.direction(actor.owner)?);
         let mut result = vec![];
         for ch in &self.chains {
+            // 레지스터와 기준 좌표는 체인마다 원점에서 새로 시작한다.
             let mut context = ExecutionContext::new(origin);
             let ExecutionContext {
                 frames,
@@ -221,6 +225,7 @@ impl Program {
             } = &mut context;
             let (mut pc, mut fuel) = (0usize, 0usize);
             while pc < ch.len() {
+                // 무한 반복이 후보 생성 전체를 멈추지 않도록 실행 횟수를 제한한다.
                 fuel += 1;
                 if fuel > 1_000_000 {
                     return Err(Error::ExecutionLimit);
@@ -242,6 +247,7 @@ impl Program {
                         return Err(Error::BlockLimit);
                     }
                     let mut child = frames[top];
+                    // 자식 블록은 현재 좌표를 이어받고 조건을 참으로 시작한다.
                     child.state = true;
                     child.close = n.partner;
                     frames.push(child);
@@ -265,6 +271,7 @@ impl Program {
                             | "label"
                     )
                 {
+                    // 조건이 거짓이면 일반 명령은 건너뛰되 제어 명령은 처리한다.
                     if top > 0 {
                         pc = frames[top].close
                     } else {
@@ -449,6 +456,7 @@ impl Program {
                                                 && x.first.effect == Effect::Take
                                                 && x.first.take == victim
                                         }) {
+                                            // 앞서 만든 단순 잡기 후보를 잡고 점프하는 후보로 교체한다.
                                             out.remove(i);
                                         }
                                         emit(out, origin, victim, q, Effect::TakeJump, trans)
@@ -499,7 +507,7 @@ impl ExecutionContext {
     }
 }
 fn slot(n: &Inst) -> usize {
-    a(n, 0) as usize // Program::parse validates the slot range.
+    a(n, 0) as usize // 파서가 슬롯 범위를 검사한다.
 }
 fn absolute_component(value: i32, extent: usize, direction: i32) -> i32 {
     if direction < 0 {
@@ -509,6 +517,7 @@ fn absolute_component(value: i32, extent: usize, direction: i32) -> i32 {
     }
 }
 fn target(p: Position, dx: i32, dy: i32, d: i32) -> Position {
+    // 전진 방향을 기준으로 상대 좌표를 보드 좌표로 바꾼다.
     Position::new(
         p.file.saturating_add(dx.saturating_mul(d)),
         p.rank.saturating_sub(dy.saturating_mul(d)),
@@ -547,6 +556,7 @@ fn wall(b: &Board, p: Position, d: i32) -> Wall {
         p.rank >= b.height() as i32,
     );
     if d < 0 {
+        // 반대편 플레이어에게도 위·아래·좌·우가 같은 상대 방향을 뜻하게 한다.
         std::mem::swap(&mut l, &mut r);
         std::mem::swap(&mut t, &mut bot)
     }
