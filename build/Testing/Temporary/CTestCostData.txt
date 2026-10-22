@@ -1,3 +1,0 @@
-standard_chess 3 0.762181
-chessembly 3 0.000674673
----
