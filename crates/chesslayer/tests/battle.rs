@@ -1,5 +1,4 @@
-use chesslayer_core::{ActionStep, DefaultAction, Effect, GameResult, Position, ResultReason};
-use chesslayer_rules::*;
+use chesslayer::*;
 fn p(x: i32, y: i32) -> Position {
     Position::new(x, y)
 }
@@ -117,37 +116,9 @@ fn start_collision_with_king_loses() {
         b.result,
         GameResult::Win {
             winner: ENEMY,
-            reason: ResultReason::RoyalCaptured
+            reason: ResultReason::Counterattack
         }
     )
-}
-#[test]
-fn core_rule_module_entry_point() {
-    use chesslayer_core::RuleModule;
-    let module = ChesslayerRules;
-    let setup = BattleStart {
-        players: vec![player(1, KING, p(4, 7)), player(2, ROOK, p(0, 6))],
-        encounter: Encounter {
-            enemies: vec![enemy(100, BISHOP, p(0, 3))],
-            royal_id: 100,
-        },
-    };
-    let mut state = module.start(setup).unwrap();
-    let selected = module
-        .legal_actions(&state, p(0, 6))
-        .unwrap()
-        .into_iter()
-        .find(|a| a.first.move_to == p(0, 3))
-        .unwrap();
-    module.apply_action(&mut state, &selected).unwrap();
-    assert_eq!(
-        module.result(&state),
-        GameResult::Win {
-            winner: PLAYER,
-            reason: ResultReason::RoyalCaptured
-        }
-    );
-    assert_eq!(module.outcome(&state)[1].position, Some(p(0, 3)));
 }
 #[test]
 fn orthodox_mate_position_does_not_end_battle() {

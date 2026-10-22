@@ -1,5 +1,8 @@
 //! 보드를 변경하지 않고 체섬블리 액션 후보를 생성한다.
-use chesslayer_core::{ActionStep, Board, BoardError, DefaultAction, Effect, Position};
+mod action;
+mod board;
+pub use action::{apply_default_action, ActionError, ActionStep, DefaultAction, Effect};
+pub use board::{Board, BoardError, Piece, PieceId, PieceType, PlayerId, Position};
 use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {

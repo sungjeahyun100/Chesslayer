@@ -1,6 +1,6 @@
 # Chesssembly 식의 작동 방식
 
-Chesssembly는 기물의 이동과 조건을 명령식으로 기술합니다. `Program::parse(source)`가 식을 검사해 프로그램으로 만들고, `Program::execute(&board, origin)`이 입력 보드를 바꾸지 않은 채 순서가 있는 액션 후보를 생성합니다. `interpret(&board, origin, source)`는 두 단계를 한 번에 수행합니다. 후보를 실제 보드에 적용하는 함수는 `chesslayer_core::apply_default_action`입니다.
+Chesssembly는 기물의 이동과 조건을 명령식으로 기술합니다. `Program::parse(source)`가 식을 검사해 프로그램으로 만들고, `Program::execute(&board, origin)`이 입력 보드를 바꾸지 않은 채 순서가 있는 액션 후보를 생성합니다. `interpret(&board, origin, source)`는 두 단계를 한 번에 수행합니다. 후보를 실제 보드에 적용하는 함수는 `chessembly::apply_default_action`입니다.
 
 ## 공통 실행 규칙
 

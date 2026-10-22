@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/chesslayer-core", "crates/chessembly", "crates/chesslayer-rules"]
+members = ["crates/chessembly", "crates/chesslayer", "crates/chesslayer-web"]
 resolver = "2"
 
 [workspace.package]

@@ -1,5 +1,5 @@
 use chessembly::Program;
-use chesslayer_core::{apply_default_action, Board, Effect, Piece, Position};
+use chessembly::{apply_default_action, Board, Effect, Piece, Position};
 use std::fmt::Write;
 
 // Fixed ordered actions and resulting boards for the Chessembly behavior cases.

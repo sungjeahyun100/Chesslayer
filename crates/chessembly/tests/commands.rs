@@ -1,5 +1,5 @@
 use chessembly::{interpret, Error, Program};
-use chesslayer_core::{Board, Piece, Position};
+use chessembly::{Board, Piece, Position};
 
 fn p(file: i32, rank: i32) -> Position {
     Position::new(file, rank)

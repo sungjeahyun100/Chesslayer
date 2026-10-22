@@ -1,1 +1,7 @@
 /target/
+/web/node_modules/
+/web/dist/
+/web/src/wasm/
+/web/test-results/
+/web/playwright-report/
+/web/*.tsbuildinfo

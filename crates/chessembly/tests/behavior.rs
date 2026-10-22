@@ -1,5 +1,5 @@
+use chessembly::{apply_default_action, Board, DefaultAction, Effect, Piece, Position};
 use chessembly::{interpret, Error, Program};
-use chesslayer_core::{apply_default_action, Board, DefaultAction, Effect, Piece, Position};
 fn p(x: i32, y: i32) -> Position {
     Position::new(x, y)
 }
@@ -103,7 +103,7 @@ fn input_purity_determinism_limits_and_masks() {
     apply_default_action(&mut after, &a[0]).unwrap();
     assert_eq!(after.piece_at(p(1, 2)).unwrap().unwrap().kind, 2);
     let mut bad = run(&b, "move(-1,0)")[0].clone();
-    bad.continuation.push(chesslayer_core::ActionStep::new(
+    bad.continuation.push(chessembly::ActionStep::new(
         p(1, 2),
         p(3, 2),
         p(3, 2),

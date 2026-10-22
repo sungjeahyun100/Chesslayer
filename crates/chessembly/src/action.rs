@@ -1,4 +1,4 @@
-use crate::{Board, Piece, PieceType, PlayerId, Position};
+use crate::{Board, Piece, PlayerId, Position};
 
 /// Shared, invariant effects. Rule modules may reject an action but cannot reinterpret its effect.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -49,20 +49,6 @@ impl DefaultAction {
     pub fn steps(&self) -> impl Iterator<Item = &ActionStep> {
         std::iter::once(&self.first).chain(self.continuation.iter())
     }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Move {
-    pub from: Position,
-    pub to: Position,
-    pub promotion: Option<PieceType>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum GameAction {
-    Move(Move),
-    RuleCommand(String),
-    Chessembly(DefaultAction),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

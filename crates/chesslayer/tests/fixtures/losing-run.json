@@ -1,0 +1,32 @@
+[
+  {
+    "from": 51,
+    "to": 35,
+    "type": "move"
+  },
+  {
+    "from": 60,
+    "to": 51,
+    "type": "move"
+  },
+  {
+    "from": 51,
+    "to": 44,
+    "type": "move"
+  },
+  {
+    "from": 44,
+    "to": 37,
+    "type": "move"
+  },
+  {
+    "from": 37,
+    "to": 30,
+    "type": "move"
+  },
+  {
+    "from": 30,
+    "to": 21,
+    "type": "move"
+  }
+]
