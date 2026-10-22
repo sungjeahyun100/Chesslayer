@@ -9,13 +9,13 @@ pub const HASTE_ACTIONS: u8 = 2;
 pub const GUN_ADJACENT_FORMATION: bool = true;
 pub const GUN_HALF_WIDTH: i32 = 1;
 pub const GUN_HITS_ALLIES: bool = true;
-pub const ROUTE: [Option<usize>; 6] = [Some(0), Some(1), None, Some(2), Some(3), Some(4)];
-pub const ENCOUNTER_NAMES: [&str; 5] = [
+pub const ENCOUNTER_NAMES: [&str; 6] = [
     "홀로 선 왕",
     "왕관을 쓴 기사",
     "쌍둥이 주교",
     "폰의 성벽",
     "마하라자",
+    "왕관의 근위대",
 ];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
@@ -78,7 +78,7 @@ pub fn characters() -> Vec<Character> {
 }
 pub fn encounter(index: usize) -> Encounter {
     let royal_kind = match index {
-        1 => KNIGHT,
+        1 | 5 => KNIGHT,
         4 => AMAZON,
         _ => KING,
     };
@@ -87,12 +87,21 @@ pub fn encounter(index: usize) -> Encounter {
         kind: royal_kind,
         position: Position::new(4, 0),
     }];
-    if index == 2 {
+    if matches!(index, 2 | 5) {
         for (i, file) in [2, 5].into_iter().enumerate() {
             enemies.push(EnemyPiece {
                 id: 101 + i as u32,
                 kind: BISHOP,
                 position: Position::new(file, 0),
+            });
+        }
+    }
+    if index == 5 {
+        for (id, file) in [(103, 3), (104, 5)] {
+            enemies.push(EnemyPiece {
+                id,
+                kind: PAWN,
+                position: Position::new(file, 1),
             });
         }
     }

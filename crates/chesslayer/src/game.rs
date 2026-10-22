@@ -1,12 +1,13 @@
-use crate::{cards::*, content::*, *};
+use crate::{cards::*, content::*, map::*, *};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunPhase {
+    Map,
     Combat,
     Reward,
-    Intermission,
+    Treasure,
     Rest,
     Victory,
     Defeat,
@@ -19,7 +20,8 @@ pub enum Command {
     EndTurn,
     EnemyStep,
     ChooseReward { index: usize },
-    Continue,
+    SelectNode { id: usize },
+    ClaimTreasure,
     RestUpgrade { id: u32 },
     RestRevive { id: u32 },
     RestSkip,
@@ -31,7 +33,10 @@ pub struct Game {
     pub deck: Vec<Card>,
     pub relics: Vec<Relic>,
     pub phase: RunPhase,
-    pub node: usize,
+    pub map: ActMap,
+    pub current_node: Option<usize>,
+    pub path: Vec<usize>,
+    pub completed: Vec<usize>,
     pub seed: u32,
     pub character: String,
     pub log: Vec<String>,
@@ -63,13 +68,16 @@ impl Game {
             encounter: encounter(0),
         })
         .map_err(engine_error)?;
-        let mut game = Self {
+        let game = Self {
             battle,
             cards: CardCombat::default(),
             deck,
             relics: vec![choice.relic],
-            phase: RunPhase::Combat,
-            node: 0,
+            phase: RunPhase::Map,
+            map: ActMap::generate(seed),
+            current_node: None,
+            path: vec![],
+            completed: vec![],
             seed,
             character: choice.name.into(),
             log: vec![],
@@ -77,7 +85,6 @@ impl Game {
             rng: Rng::new(seed),
             next_card_id: 11,
         };
-        game.start_battle()?;
         Ok(game)
     }
     fn log(&mut self, message: impl Into<String>) {
@@ -92,7 +99,10 @@ impl Game {
         }
     }
     fn start_battle(&mut self) -> Result<(), String> {
-        let index = ROUTE[self.node].ok_or("전투 노드가 아닙니다.")?;
+        let index = self
+            .current_node
+            .and_then(|id| self.map.nodes[id].encounter)
+            .ok_or("전투 노드가 아닙니다.")?;
         let mut encounter = encounter(index);
         self.log(format!("{} · 전투 시작", ENCOUNTER_NAMES[index]));
         if self.relics.contains(&Relic::Whirlwind) {
@@ -127,6 +137,74 @@ impl Game {
         self.events();
         self.check_finish();
         Ok(())
+    }
+    pub fn available_nodes(&self) -> Vec<usize> {
+        if self.phase != RunPhase::Map {
+            return vec![];
+        }
+        match self.current_node {
+            None => self.map.starts(),
+            Some(id) if self.completed.contains(&id) => self.map.nodes[id].next.clone(),
+            Some(_) => vec![],
+        }
+    }
+    fn complete_node(&mut self) {
+        let id = self.current_node.expect("content requires a selected node");
+        self.completed.push(id);
+        self.phase = RunPhase::Map;
+    }
+    fn grant_node_relic(&mut self) {
+        let relic = self.map.nodes[self.current_node.unwrap()]
+            .relic
+            .expect("reward node has relic");
+        if self.relics.contains(&relic) {
+            self.deck.push(Card {
+                id: self.next_card_id,
+                kind: CardKind::Ward,
+            });
+            self.next_card_id += 1;
+            self.log(format!(
+                "{}은 이미 보유 중입니다. 대신 가호 카드 1장을 얻었습니다.",
+                relic.name()
+            ));
+        } else {
+            self.relics.push(relic);
+            self.log(format!(
+                "유물 획득: {} · {}",
+                relic.name(),
+                relic.description()
+            ));
+        }
+    }
+    fn map_view(&self) -> MapView {
+        let available = self.available_nodes();
+        MapView {
+            rows: self.map.rows,
+            lanes: MAP_LANES,
+            current: self.current_node,
+            path: self.path.clone(),
+            nodes: self
+                .map
+                .nodes
+                .iter()
+                .map(|n| NodeView {
+                    id: n.id,
+                    row: n.row,
+                    lane: n.lane,
+                    kind: n.kind,
+                    name: n.name(),
+                    description: n.description(),
+                    next: n.next.clone(),
+                    available: available.contains(&n.id),
+                    visited: self.completed.contains(&n.id),
+                    current: self.current_node == Some(n.id),
+                    skipped: self
+                        .current_node
+                        .is_some_and(|id| n.row <= self.map.nodes[id].row)
+                        && !self.path.contains(&n.id),
+                })
+                .collect(),
+        }
     }
     fn require_player(&self) -> Result<(), String> {
         if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
@@ -173,21 +251,38 @@ impl Game {
                     "보상: {}을 덱에 추가했습니다.",
                     kind.definition().name
                 ));
-                self.phase = RunPhase::Intermission;
+                if self
+                    .current_node
+                    .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Elite)
+                {
+                    self.grant_node_relic();
+                }
+                self.complete_node();
             }
-            Command::Continue => {
-                if self.phase != RunPhase::Intermission {
-                    return Err("보상 또는 휴식을 먼저 완료하세요.".into());
+            Command::SelectNode { id } => {
+                if !self.available_nodes().contains(&id) {
+                    return Err("현재 위치에서 연결된 다음 노드만 선택할 수 있습니다.".into());
                 }
-                self.node += 1;
-                if self.node >= ROUTE.len() {
-                    self.phase = RunPhase::Victory;
-                } else if ROUTE[self.node].is_none() {
-                    self.phase = RunPhase::Rest;
-                    self.log("작은 쉼터 · 강화 또는 부활을 한 번 선택하세요.");
-                } else {
-                    self.start_battle()?;
+                self.current_node = Some(id);
+                self.path.push(id);
+                match self.map.nodes[id].kind {
+                    NodeKind::Combat | NodeKind::Elite | NodeKind::Boss => self.start_battle()?,
+                    NodeKind::Rest => {
+                        self.phase = RunPhase::Rest;
+                        self.log("작은 쉼터 · 강화 또는 부활을 한 번 선택하세요.");
+                    }
+                    NodeKind::Treasure => {
+                        self.phase = RunPhase::Treasure;
+                        self.log("남겨진 보물 · 새로운 힘을 발견했습니다.");
+                    }
                 }
+            }
+            Command::ClaimTreasure => {
+                if self.phase != RunPhase::Treasure {
+                    return Err("지금은 보물을 받을 수 없습니다.".into());
+                }
+                self.grant_node_relic();
+                self.complete_node();
             }
             Command::RestUpgrade { id } => {
                 if self.phase != RunPhase::Rest {
@@ -204,7 +299,7 @@ impl Game {
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
                 self.log("휴식: 폰이 템페스트 폰으로 강화되었습니다.");
-                self.phase = RunPhase::Intermission;
+                self.complete_node();
             }
             Command::RestRevive { id } => {
                 if self.phase != RunPhase::Rest {
@@ -228,13 +323,13 @@ impl Game {
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
                 self.log(format!("휴식: {}에서 아군이 부활했습니다.", square(origin)));
-                self.phase = RunPhase::Intermission;
+                self.complete_node();
             }
             Command::RestSkip => {
                 if self.phase != RunPhase::Rest {
                     return Err("휴식 중이 아닙니다.".into());
                 }
-                self.phase = RunPhase::Intermission;
+                self.complete_node();
                 self.log("휴식을 마쳤습니다.");
             }
         }
@@ -297,11 +392,17 @@ impl Game {
         if let GameResult::Win { winner, reason } = self.battle.result {
             self.cards = CardCombat::default();
             if winner == PLAYER {
-                self.phase = if self.node == ROUTE.len() - 1 {
+                self.phase = if self
+                    .current_node
+                    .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Boss)
+                {
                     RunPhase::Victory
                 } else {
                     RunPhase::Reward
                 };
+                if self.phase == RunPhase::Victory {
+                    self.completed.push(self.current_node.unwrap());
+                }
                 self.log("승리! 적 로얄을 직접 포획했습니다. 생존 진형을 계승합니다.");
             } else {
                 self.phase = RunPhase::Defeat;
@@ -474,8 +575,10 @@ impl Game {
         Ok(())
     }
     pub fn snapshot(&self) -> Snapshot {
-        let resting = self.phase == RunPhase::Rest
-            || (self.phase == RunPhase::Intermission && ROUTE[self.node].is_none());
+        let resting = matches!(
+            self.phase,
+            RunPhase::Rest | RunPhase::Map | RunPhase::Treasure
+        );
         let pieces: Vec<_> = self
             .battle
             .board
@@ -572,10 +675,23 @@ impl Game {
             .collect();
         Snapshot {
             phase: self.phase,
-            node: self.node,
-            encounter: ROUTE[self.node]
-                .map(|i| ENCOUNTER_NAMES[i])
-                .unwrap_or("작은 쉼터"),
+            map: self.map_view(),
+            encounter: self
+                .current_node
+                .map(|id| self.map.nodes[id].name())
+                .unwrap_or("갈림길의 입구"),
+            node_kind: self.current_node.map(|id| self.map.nodes[id].kind),
+            node_reward: self
+                .current_node
+                .and_then(|id| self.map.nodes[id].relic)
+                .map(|r| RelicView {
+                    name: r.name(),
+                    description: if self.relics.contains(&r) {
+                        "이미 가진 유물입니다. 대신 가호 카드 1장을 얻습니다."
+                    } else {
+                        r.description()
+                    },
+                }),
             character: self.character.clone(),
             turn: self.battle.turn,
             round: self.round,
@@ -618,7 +734,9 @@ impl Game {
 #[derive(Serialize)]
 pub struct Snapshot {
     pub phase: RunPhase,
-    pub node: usize,
+    pub map: MapView,
+    pub node_kind: Option<NodeKind>,
+    pub node_reward: Option<RelicView>,
     pub encounter: &'static str,
     pub character: String,
     pub turn: u16,

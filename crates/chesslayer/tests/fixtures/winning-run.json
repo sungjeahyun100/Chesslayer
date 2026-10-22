@@ -1,5 +1,9 @@
 [
   {
+    "id": 2,
+    "type": "select_node"
+  },
+  {
     "id": 10,
     "target": 5,
     "type": "play_card"
@@ -29,7 +33,71 @@
     "type": "choose_reward"
   },
   {
-    "type": "continue"
+    "id": 6,
+    "type": "select_node"
+  },
+  {
+    "type": "claim_treasure"
+  },
+  {
+    "id": 8,
+    "type": "select_node"
+  },
+  {
+    "from": 12,
+    "to": 5,
+    "type": "move"
+  },
+  {
+    "from": 59,
+    "to": 43,
+    "type": "move"
+  },
+  {
+    "from": 5,
+    "to": 14,
+    "type": "move"
+  },
+  {
+    "index": 0,
+    "type": "choose_reward"
+  },
+  {
+    "id": 10,
+    "type": "select_node"
+  },
+  {
+    "id": 9,
+    "type": "rest_upgrade"
+  },
+  {
+    "id": 14,
+    "type": "select_node"
+  },
+  {
+    "from": 43,
+    "to": 36,
+    "type": "move"
+  },
+  {
+    "from": 36,
+    "to": 4,
+    "type": "move"
+  },
+  {
+    "index": 0,
+    "type": "choose_reward"
+  },
+  {
+    "id": 17,
+    "type": "select_node"
+  },
+  {
+    "type": "claim_treasure"
+  },
+  {
+    "id": 18,
+    "type": "select_node"
   },
   {
     "from": 52,
@@ -37,86 +105,13 @@
     "type": "move"
   },
   {
-    "from": 59,
-    "to": 31,
-    "type": "move"
-  },
-  {
-    "from": 31,
-    "to": 4,
-    "type": "move"
-  },
-  {
-    "index": 0,
-    "type": "choose_reward"
-  },
-  {
-    "type": "continue"
-  },
-  {
-    "id": 9,
-    "type": "rest_upgrade"
-  },
-  {
-    "type": "continue"
-  },
-  {
     "from": 61,
     "to": 25,
     "type": "move"
   },
   {
-    "from": 25,
-    "to": 4,
-    "type": "move"
-  },
-  {
-    "index": 0,
-    "type": "choose_reward"
-  },
-  {
-    "type": "continue"
-  },
-  {
-    "from": 62,
-    "to": 45,
-    "type": "move"
-  },
-  {
-    "from": 45,
-    "to": 28,
-    "type": "move"
-  },
-  {
-    "from": 28,
-    "to": 13,
-    "type": "move"
-  },
-  {
-    "from": 13,
-    "to": 3,
-    "type": "move"
-  },
-  {
-    "index": 0,
-    "type": "choose_reward"
-  },
-  {
-    "type": "continue"
-  },
-  {
-    "from": 36,
-    "to": 28,
-    "type": "move"
-  },
-  {
-    "from": 3,
-    "to": 9,
-    "type": "move"
-  },
-  {
-    "from": 63,
-    "to": 55,
+    "from": 48,
+    "to": 49,
     "type": "move"
   }
 ]

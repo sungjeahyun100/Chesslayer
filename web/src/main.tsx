@@ -10,11 +10,11 @@ import type {
   Snapshot,
 } from "./types";
 import "./style.css";
+import { ActMap, nodeTypes } from "./ActMap";
 
 const icons = ["", "♙", "♘", "♗", "♖", "♕", "♔", "♕", "♙"];
 const blackIcons = ["", "♟", "♞", "♝", "♜", "♛", "♚", "♛", "♟"];
 const relicIcons = { haste: "»", whirlwind: "◎", self_defense: "◇" };
-const route = ["왕", "기사", "쉼터", "주교", "성벽", "마하라자"];
 function Tags({ card }: { card: CardDefinition }) {
   return (
     <div className="tags">
@@ -74,6 +74,7 @@ function App() {
   const [targetCard, setTargetCard] = useState<Card | null>(null);
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const outcomeRef = useRef<HTMLElement>(null);
@@ -119,6 +120,7 @@ function App() {
       setState(JSON.parse(engine.current.dispatch(JSON.stringify(command))));
       setSelected(null);
       setTargetCard(null);
+      setMapOpen(false);
       setError("");
     } catch (e) {
       setError(String(e));
@@ -149,13 +151,15 @@ function App() {
   }, []);
   function start() {
     try {
-      // Fixed initial seed makes playtesting repeatable without a debug interface.
-      const next = new WebGame(character, 2026);
+      // Entropy only comes from the browser; the seeded Rust engine generates the entire Act.
+      const seed = crypto.getRandomValues(new Uint32Array(1))[0];
+      const next = new WebGame(character, seed);
       engine.current?.free();
       engine.current = next;
       setState(JSON.parse(next.snapshot()));
       setSelected(null);
       setTargetCard(null);
+      setMapOpen(false);
       setError("");
       setScreen("game");
     } catch (e) {
@@ -190,6 +194,7 @@ function App() {
     setSelected(piece?.owner === 0 && selected !== cell ? cell : null);
   }
   const turn = state?.turn === 0;
+  const showMap = state?.phase === "map" || mapOpen;
   return (
     <>
       <header className="topbar">
@@ -223,9 +228,9 @@ function App() {
             행동합니다. ★는 로얄, ◇는 가호입니다.
           </p>
           <p>
-            승리한 진형은 다음 전투로 이어집니다. 적의 시작 칸과 겹친 아군은
-            역습으로 사라집니다. 킹을 잃으면 원정이 끝납니다. 새로고침하면
-            진행은 초기화됩니다.
+            맵에서 이어진 다음 노드를 선택하세요. 승리한 진형은 다음 전투로
+            이어집니다. 적의 시작 칸과 겹친 아군은 역습으로 사라집니다. 킹을
+            잃으면 원정이 끝납니다. 새로고침하면 진행은 초기화됩니다.
           </p>
           <p>
             소멸: 사용 후 이번 전투에서 제외 · 보존: 턴 종료에도 손패 유지 ·
@@ -252,7 +257,7 @@ function App() {
               <em>다음 전투의 시작.</em>
             </h1>
             <p className="intro">
-              진형을 이어가고, 카드로 판을 바꾸세요.
+              길을 선택하고, 카드로 판을 바꾸세요.
               <br />
               당신의 기물로 완성하는 첫 번째 원정.
             </p>
@@ -264,8 +269,8 @@ function App() {
               {ready ? "새 게임 시작" : "엔진 불러오는 중…"} <span>↗</span>
             </button>
             <div className="home-facts">
-              <span>4개의 전투</span>
-              <span>1개의 쉼터</span>
+              <span>갈라지는 경로</span>
+              <span>선택하는 보상</span>
               <span>마지막 로얄</span>
             </div>
           </section>
@@ -326,184 +331,186 @@ function App() {
           </div>
         </main>
       )}
-      {screen === "game" && state && (
+      {screen === "game" && state && showMap && (
+        <ActMap state={state} send={send} onClose={() => setMapOpen(false)} />
+      )}
+      {screen === "game" && state && !showMap && (
         <main className="game-layout" data-phase={state.phase}>
-          <nav className="route" aria-label="원정 경로">
-            {route.map((name, i) => (
-              <div
-                key={name}
-                className={`${i === state.node ? "current" : ""} ${i < state.node ? "complete" : ""}`}
-                aria-current={i === state.node ? "step" : undefined}
-              >
-                <span>
-                  {i < state.node
-                    ? "✓"
-                    : i === 2
-                      ? "⌂"
-                      : i === 5
-                        ? "♛"
-                        : String(i < 2 ? i + 1 : i)}
-                </span>
-                <small>{name}</small>
-              </div>
-            ))}
+          <nav className="node-navigation" aria-label="원정 위치">
+            <span>
+              ACT I / {state.map.nodes.find((n) => n.current)!.row + 1}번째 지점
+              · {state.node_kind && nodeTypes[state.node_kind].label}
+            </span>
+            <button className="text-button" onClick={() => setMapOpen(true)}>
+              전체 지도 보기 ↗
+            </button>
           </nav>
-          <section className="battle-area">
-            <div className="battle-heading">
-              <div>
-                <p className="eyebrow">FIRST EXPEDITION / {state.character}</p>
-                <h1>{state.encounter}</h1>
-              </div>
-              <div
-                className={`turn-pill ${turn ? "your-turn" : ""}`}
-                data-testid="turn"
-              >
-                {state.phase === "combat" ? (
-                  <>
-                    <i />
-                    {turn ? "나의 턴" : "적의 턴"}
-                    <small>{state.actions_left}회 행동</small>
-                  </>
-                ) : (
-                  "진형 계승"
-                )}
-              </div>
-            </div>
-            <div className="board-frame" ref={boardRef}>
-              <div className="rank-labels">
-                {"87654321".split("").map((r) => (
-                  <span key={r}>{r}</span>
-                ))}
-              </div>
-              <div className="board" role="group" aria-label="체스 보드">
-                {Array.from({ length: 64 }, (_, i) => {
-                  const piece = state.pieces.find((p) => p.cell === i);
-                  const legal =
-                    selected !== null &&
-                    state.moves.some((m) => m.from === selected && m.to === i);
-                  const target =
-                    piece && targetCard?.targets.includes(piece.id);
-                  const square = `${"abcdefgh"[i % 8]}${8 - Math.floor(i / 8)}`;
-                  return (
-                    <button
-                      key={i}
-                      data-square={square}
-                      data-legal={legal || undefined}
-                      className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${selected === i ? "selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""}`}
-                      onClick={() => clickSquare(i)}
-                      disabled={state.phase !== "combat" || !turn}
-                      aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}`}
-                      aria-pressed={selected === i}
-                    >
-                      {legal && (
-                        <span className={piece ? "capture-dot" : "move-dot"} />
-                      )}
-                    </button>
-                  );
-                })}
-                <div className="piece-layer">
-                  {state.pieces.map((p) => (
-                    <PieceGlyph key={p.id} piece={p} />
-                  ))}
-                </div>
-              </div>
-              <div className="file-labels">
-                {"abcdefgh".split("").map((f) => (
-                  <span key={f}>{f}</span>
-                ))}
-              </div>
-            </div>
-            <div className="board-caption">
-              <span>백 · 나의 진형</span>
-              <span>★ 적 로얄: {state.royal_name}</span>
-            </div>
-            {state.phase === "combat" && (
-              <div
-                className={`action-hint ${targetCard ? "target-hint" : ""}`}
-                aria-live="polite"
-              >
-                {targetCard ? (
-                  <>
-                    <strong>{targetCard.definition.name}</strong> · 표시된
-                    기물을 선택하세요.
-                    <button
-                      className="text-button"
-                      onClick={() => setTargetCard(null)}
-                    >
-                      취소 Esc
-                    </button>
-                  </>
-                ) : selected !== null ? (
-                  "표시된 칸을 클릭해 이동하세요."
-                ) : turn ? (
-                  "카드를 사용하거나, 백 기물을 선택하세요."
-                ) : (
-                  "상대가 다음 수를 고르고 있습니다…"
-                )}
-              </div>
-            )}
-          </section>
-          <aside className="sidebar">
-            <section className="turn-panel">
-              <div className="section-label">
-                TURN {state.round.toString().padStart(2, "0")}
-                <span>기본 마나 3</span>
-              </div>
-              <div className="mana">
-                <span className="mana-orb">{state.mana}</span>
-                <div>
-                  <strong>사용 가능한 마나</strong>
-                  <small>내 턴 시작 시 회복됩니다.</small>
-                </div>
-              </div>
-              <button
-                className="primary end-turn"
-                onClick={() => send({ type: "end_turn" })}
-                disabled={!turn || state.phase !== "combat"}
-              >
-                턴 종료 <span>→</span>
-              </button>
-            </section>
-            <section className="relic-panel">
-              <div className="section-label">
-                보유 유물 <span>{state.relics.length}</span>
-              </div>
-              {state.relics.map((r) => (
-                <div className="relic" key={r.name}>
-                  <span>◇</span>
+          {state.phase !== "treasure" && (
+            <>
+              <section className="battle-area">
+                <div className="battle-heading">
                   <div>
-                    <strong>{r.name}</strong>
-                    <p>{r.description}</p>
+                    <p className="eyebrow">
+                      FIRST EXPEDITION / {state.character}
+                    </p>
+                    <h1>{state.encounter}</h1>
+                  </div>
+                  <div
+                    className={`turn-pill ${turn ? "your-turn" : ""}`}
+                    data-testid="turn"
+                  >
+                    {state.phase === "combat" ? (
+                      <>
+                        <i />
+                        {turn ? "나의 턴" : "적의 턴"}
+                        <small>{state.actions_left}회 행동</small>
+                      </>
+                    ) : (
+                      "진형 계승"
+                    )}
                   </div>
                 </div>
-              ))}
-            </section>
-            <section className="log-panel">
-              <div className="section-label">
-                전투 기록<span>최근 기록</span>
-              </div>
-              <div
-                className="battle-log"
-                ref={logRef}
-                role="log"
-                aria-label="전투 기록"
-              >
-                {state.log.map((line, i) => (
-                  <p
-                    key={`${i}-${line}`}
-                    className={
-                      line.includes("역습") || line.includes("승리")
-                        ? "important"
-                        : ""
-                    }
+                <div className="board-frame" ref={boardRef}>
+                  <div className="rank-labels">
+                    {"87654321".split("").map((r) => (
+                      <span key={r}>{r}</span>
+                    ))}
+                  </div>
+                  <div className="board" role="group" aria-label="체스 보드">
+                    {Array.from({ length: 64 }, (_, i) => {
+                      const piece = state.pieces.find((p) => p.cell === i);
+                      const legal =
+                        selected !== null &&
+                        state.moves.some(
+                          (m) => m.from === selected && m.to === i,
+                        );
+                      const target =
+                        piece && targetCard?.targets.includes(piece.id);
+                      const square = `${"abcdefgh"[i % 8]}${8 - Math.floor(i / 8)}`;
+                      return (
+                        <button
+                          key={i}
+                          data-square={square}
+                          data-legal={legal || undefined}
+                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${selected === i ? "selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""}`}
+                          onClick={() => clickSquare(i)}
+                          disabled={state.phase !== "combat" || !turn}
+                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}`}
+                          aria-pressed={selected === i}
+                        >
+                          {legal && (
+                            <span
+                              className={piece ? "capture-dot" : "move-dot"}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                    <div className="piece-layer">
+                      {state.pieces.map((p) => (
+                        <PieceGlyph key={p.id} piece={p} />
+                      ))}
+                    </div>
+                  </div>
+                  <div className="file-labels">
+                    {"abcdefgh".split("").map((f) => (
+                      <span key={f}>{f}</span>
+                    ))}
+                  </div>
+                </div>
+                <div className="board-caption">
+                  <span>백 · 나의 진형</span>
+                  <span>★ 적 로얄: {state.royal_name}</span>
+                </div>
+                {state.phase === "combat" && (
+                  <div
+                    className={`action-hint ${targetCard ? "target-hint" : ""}`}
+                    aria-live="polite"
                   >
-                    <span>·</span>
-                    {line}
-                  </p>
-                ))}
-              </div>
-            </section>
-          </aside>
+                    {targetCard ? (
+                      <>
+                        <strong>{targetCard.definition.name}</strong> · 표시된
+                        기물을 선택하세요.
+                        <button
+                          className="text-button"
+                          onClick={() => setTargetCard(null)}
+                        >
+                          취소 Esc
+                        </button>
+                      </>
+                    ) : selected !== null ? (
+                      "표시된 칸을 클릭해 이동하세요."
+                    ) : turn ? (
+                      "카드를 사용하거나, 백 기물을 선택하세요."
+                    ) : (
+                      "상대가 다음 수를 고르고 있습니다…"
+                    )}
+                  </div>
+                )}
+              </section>
+              <aside className="sidebar">
+                <section className="turn-panel">
+                  <div className="section-label">
+                    TURN {state.round.toString().padStart(2, "0")}
+                    <span>기본 마나 3</span>
+                  </div>
+                  <div className="mana">
+                    <span className="mana-orb">{state.mana}</span>
+                    <div>
+                      <strong>사용 가능한 마나</strong>
+                      <small>내 턴 시작 시 회복됩니다.</small>
+                    </div>
+                  </div>
+                  <button
+                    className="primary end-turn"
+                    onClick={() => send({ type: "end_turn" })}
+                    disabled={!turn || state.phase !== "combat"}
+                  >
+                    턴 종료 <span>→</span>
+                  </button>
+                </section>
+                <section className="relic-panel">
+                  <div className="section-label">
+                    보유 유물 <span>{state.relics.length}</span>
+                  </div>
+                  {state.relics.map((r) => (
+                    <div className="relic" key={r.name}>
+                      <span>◇</span>
+                      <div>
+                        <strong>{r.name}</strong>
+                        <p>{r.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </section>
+                <section className="log-panel">
+                  <div className="section-label">
+                    전투 기록<span>최근 기록</span>
+                  </div>
+                  <div
+                    className="battle-log"
+                    ref={logRef}
+                    role="log"
+                    aria-label="전투 기록"
+                  >
+                    {state.log.map((line, i) => (
+                      <p
+                        key={`${i}-${line}`}
+                        className={
+                          line.includes("역습") || line.includes("승리")
+                            ? "important"
+                            : ""
+                        }
+                      >
+                        <span>·</span>
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </section>
+              </aside>
+            </>
+          )}
           {state.phase === "combat" && (
             <section className="hand-area">
               <div className="hand-heading">
@@ -559,6 +566,12 @@ function App() {
                     남은 기물의 위치와 강화는 이어집니다. 덱에 추가할 카드 한
                     장을 선택하세요.
                   </p>
+                  {state.node_kind === "elite" && state.node_reward && (
+                    <p className="elite-reward">
+                      추가 보상: {state.node_reward.name} ·{" "}
+                      {state.node_reward.description}
+                    </p>
+                  )}
                   <div className="reward-cards">
                     {state.rewards.map((card, i) => (
                       <button
@@ -576,21 +589,18 @@ function App() {
                   </div>
                 </>
               )}
-              {state.phase === "intermission" && (
+              {state.phase === "treasure" && (
                 <>
-                  <p className="eyebrow">READY FOR THE NEXT MOVE</p>
-                  <h2>
-                    {state.node === 2 ? "다시, 앞으로." : "보상을 받았습니다."}
-                  </h2>
-                  <p>
-                    현재 덱 {state.deck_count}장. 다음 적의 시작 위치와 겹친
-                    아군은 역습으로 제거됩니다.
-                  </p>
+                  <p className="eyebrow">A GIFT ALONG THE WAY</p>
+                  <h2>남겨진 보물</h2>
+                  <div className="treasure-relic">◇</div>
+                  <h3>{state.node_reward?.name}</h3>
+                  <p>{state.node_reward?.description}</p>
                   <button
                     className="primary large"
-                    onClick={() => send({ type: "continue" })}
+                    onClick={() => send({ type: "claim_treasure" })}
                   >
-                    {state.node === 1 ? "쉼터로 이동" : "다음 전투 진행"} →
+                    보물 받고 맵으로 →
                   </button>
                 </>
               )}
@@ -648,7 +658,7 @@ function App() {
                     className="text-button"
                     onClick={() => send({ type: "rest_skip" })}
                   >
-                    그대로 출발하기 →
+                    휴식을 마치고 맵으로 →
                   </button>
                 </>
               )}

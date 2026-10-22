@@ -14,7 +14,8 @@ chesslayer-web (WebGame: WASM 객체 하나가 Game 하나를 소유)
 chesslayer
   battle.rs   기존 Battle 기반 이동·턴·가호·로얄 보호·역습·outcome
   cards.rs    카드 정의, 영구 덱과 별개인 전투 더미
-  content.rs  몬스터, 캐릭터, 경로, 임시 규칙 상수, 결정적 RNG
+  content.rs  몬스터, 캐릭터, 임시 규칙 상수, 결정적 RNG
+  map.rs      한 번 생성하는 제1막 그래프, 노드 콘텐츠와 표시 자료형
   game.rs     명령 검증, AI, 보상, 휴식, 원정 상태와 UI 스냅샷
   ↓
 chessembly (보드, 액션, 파서와 이동 후보 계산)
@@ -22,11 +23,28 @@ chessembly (보드, 액션, 파서와 이동 후보 계산)
 
 ## 한 번의 명령
 
-1. UI는 `move`, `play_card`, `end_turn`, `enemy_step`, `choose_reward`, `continue`, 휴식 명령 중 하나를 보냅니다.
-2. Rust가 현재 단계·진영·합법 수·손패·비용·대상·진형을 검증합니다. 프론트엔드의 disabled 표시는 편의일 뿐입니다.
+1. UI는 `move`, `play_card`, `end_turn`, `enemy_step`, `choose_reward`, `select_node`, `claim_treasure`, 휴식 명령 중 하나를 보냅니다.
+2. Rust가 현재 단계·연결된 다음 노드·진영·합법 수·손패·비용·대상·진형을 검증합니다. 프론트엔드의 disabled 표시는 편의일 뿐입니다.
 3. 기존 `Battle::legal_actions`와 `apply_piece_action`으로 행동합니다. 카드 비용은 효과 검증과 실행이 성공한 뒤 차감합니다.
 4. Rust가 새 스냅샷을 반환합니다. 이동할 수 있는 칸과 카드 대상 ID도 여기서 전달합니다. TypeScript에는 체스 행마나 승패 판정이 없습니다.
 5. 적 턴에서는 UI가 애니메이션을 위한 650ms 간격으로 `enemy_step`만 요청합니다. 어떤 수를 둘지는 Rust가 정합니다. 전투 종료 후 명령과 잘못된 진영의 명령은 Rust가 거부합니다.
+
+## 맵과 진행 상태
+
+`Game::new()`에서 `ActMap::generate(seed)`를 한 번 호출합니다. 노드 유형·전투 편성·유물·연결 목록은 원정 중 바꾸지 않습니다. 지도 RNG는 전투/덱 RNG와 별도 스트림을 사용합니다. 브라우저는 새 런마다 난수 시드 하나를 전달하며 지도 생성과 이동 허가는 Rust가 담당합니다.
+
+`Game.current_node`, `path`, `completed`가 탐험 상태입니다. `available_nodes()`는 맵 단계에서만 시작점 또는 완료된 현재 노드의 직접 후속 노드를 반환합니다. 잘못된 선택은 상태 변경 전에 거부합니다. UI는 스냅샷의 `available/visited/current/skipped`를 표시하며 별도의 진행 규칙을 계산하지 않습니다.
+
+```text
+새 런 → Map → select_node
+  일반/엘리트 → Combat → Reward → choose_reward → Map
+  휴식 → Rest → 강화/부활/건너뛰기 → Map
+  보물 → Treasure → claim_treasure → Map
+  보스 → Combat → Victory
+  전투 중 킹 사망 → Defeat
+```
+
+`web/src/ActMap.tsx`가 SVG 연결선과 HTML 노드 버튼을 그립니다. 전투 중 지도 열기는 보기 전환일 뿐이며 현재 콘텐츠를 건너뛸 수 없습니다. 기존 직선 경로 상수와 `continue` 명령, 전투 사이 자동 순번 증가를 제거했습니다. 구체적인 생성 방식과 임시 콘텐츠는 [ACT_MAP.md](ACT_MAP.md)에 있습니다.
 
 ## 상태 계승
 

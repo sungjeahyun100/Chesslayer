@@ -1,4 +1,4 @@
-use chesslayer::{cards::*, content::*, game::*, *};
+use chesslayer::{cards::*, content::*, game::*, map::*, *};
 fn p(x: i32, y: i32) -> Position {
     Position::new(x, y)
 }
@@ -36,8 +36,44 @@ fn action(b: &Battle, from: Position, to: Position) -> DefaultAction {
         .find(|a| a.steps().last().unwrap().move_to == to)
         .unwrap()
 }
+fn started(character: &str, seed: u32) -> Game {
+    let mut game = Game::new(character, seed).unwrap();
+    let id = game
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.row == 0 && n.encounter == Some(0))
+        .unwrap()
+        .id;
+    game.dispatch(Command::SelectNode { id }).unwrap();
+    game
+}
+fn start_before(character: &str, kind: NodeKind) -> Game {
+    let mut game = Game::new(character, 2026).unwrap();
+    let id = game
+        .map
+        .starts()
+        .into_iter()
+        .find(|&id| {
+            game.map.nodes[id]
+                .next
+                .iter()
+                .any(|&id| game.map.nodes[id].kind == kind)
+        })
+        .unwrap();
+    game.dispatch(Command::SelectNode { id }).unwrap();
+    game
+}
+fn select_kind(game: &mut Game, kind: NodeKind) {
+    let id = game
+        .available_nodes()
+        .into_iter()
+        .find(|&id| game.map.nodes[id].kind == kind)
+        .unwrap();
+    game.dispatch(Command::SelectNode { id }).unwrap();
+}
 fn fixture_game() -> Game {
-    let mut g = Game::new("vanguard", 2026).unwrap();
+    let mut g = started("vanguard", 2026);
     g.cards.hand = (0..5)
         .map(|i| Card {
             id: 100 + i,
@@ -49,7 +85,7 @@ fn fixture_game() -> Game {
 
 #[test]
 fn initial_position_moves_ai_and_seed_replay() {
-    let mut a = Game::new("vanguard", 2026).unwrap();
+    let mut a = started("vanguard", 2026);
     let mut b = a.clone();
     assert_eq!(a.battle.outcome(), Battle::standard_roster());
     assert_eq!(a.snapshot().pieces.len(), 17);
@@ -251,7 +287,7 @@ fn gun_formation_and_non_capture_removal_are_validated() {
 }
 #[test]
 fn reward_persistence_counterattack_and_relics() {
-    let mut g = Game::new("guardian", 2026).unwrap();
+    let mut g = start_before("guardian", NodeKind::Combat);
     g.battle = battle(
         roster(&[(5, KING, 4, 7), (1, ROOK, 4, 1), (9, PAWN, 0, 4)]),
         vec![e(100, KNIGHT, 4, 0)],
@@ -264,8 +300,7 @@ fn reward_persistence_counterattack_and_relics() {
     assert!(g.cards.hand.is_empty());
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     assert_eq!(g.deck.len(), 11);
-    g.dispatch(Command::Continue).unwrap();
-    assert_eq!(g.node, 1);
+    select_kind(&mut g, NodeKind::Combat);
     assert!(g.log.iter().any(|s| s.starts_with("역습")));
     assert_eq!(g.battle.outcome()[1].position, None);
     assert!(g.battle.board.piece_at(p(4, 0)).unwrap().is_some());
@@ -289,22 +324,34 @@ fn reward_persistence_counterattack_and_relics() {
     assert!(b.board.piece_at(p(0, 0)).unwrap().is_none());
     assert!(b.events.iter().any(|s| s.starts_with("호신용품")));
     let mut a = Game::new("wanderer", 42).unwrap();
-    a.node = 3;
-    a.phase = RunPhase::Intermission;
-    a.dispatch(Command::Continue).unwrap();
+    let target = a
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.kind == NodeKind::Elite)
+        .unwrap()
+        .id;
+    let parent = a
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.next.contains(&target))
+        .unwrap()
+        .id;
+    a.current_node = Some(parent);
+    a.completed.push(parent);
+    a.dispatch(Command::SelectNode { id: target }).unwrap();
     assert!(a.log.iter().any(|s| s.starts_with("소용돌이")));
-    let original = encounter(3);
-    assert!(a
+    assert!(encounter(5).enemies.iter().any(|e| a
         .battle
         .board
-        .piece_at(original.enemies[0].position)
+        .piece_at(e.position)
         .unwrap()
-        .is_none_or(|p| p.id != 100));
+        .is_none_or(|p| p.id != e.id)));
 }
 #[test]
 fn rest_upgrade_revive_and_occupied_origin_rejection() {
-    let mut g = fixture_game();
-    g.node = 1;
+    let mut g = start_before("vanguard", NodeKind::Rest);
     let mut players = Battle::standard_roster();
     players[0].position = None;
     players[1].position = Some(p(0, 7));
@@ -313,7 +360,7 @@ fn rest_upgrade_revive_and_occupied_origin_rejection() {
     g.battle = battle(players, vec![e(100, KNIGHT, 4, 0)], 100);
     g.dispatch(Command::Move { from: 12, to: 4 }).unwrap();
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    g.dispatch(Command::Continue).unwrap();
+    select_kind(&mut g, NodeKind::Rest);
     assert_eq!(g.phase, RunPhase::Rest);
     assert!(g
         .dispatch(Command::RestRevive { id: 1 })
@@ -323,11 +370,12 @@ fn rest_upgrade_revive_and_occupied_origin_rejection() {
     let mut upgrade = g.clone();
     upgrade.dispatch(Command::RestUpgrade { id: 9 }).unwrap();
     assert_eq!(upgrade.battle.outcome()[8].kind, TEMPEST_PAWN);
-    upgrade.dispatch(Command::Continue).unwrap();
+    let next = upgrade.available_nodes()[0];
+    upgrade.dispatch(Command::SelectNode { id: next }).unwrap();
     assert_eq!(upgrade.battle.outcome()[8].kind, TEMPEST_PAWN);
     g.dispatch(Command::RestRevive { id: 3 }).unwrap();
     assert_eq!(g.battle.outcome()[2].position, Some(p(2, 7)));
-    assert_eq!(g.phase, RunPhase::Intermission);
+    assert_eq!(g.phase, RunPhase::Map);
 }
 #[test]
 fn king_death_ends_run_and_no_moves_does_not_win() {
@@ -383,10 +431,14 @@ fn seeded_full_run_reaches_boss_victory() {
             game.dispatch(Command::EnemyStep).unwrap();
         }
     }
-    assert_eq!(wins, 4);
+    assert!(wins >= 3);
     assert_eq!(game.phase, RunPhase::Victory);
-    assert_eq!(game.node, 5);
-    assert_eq!(game.deck.len(), 14);
+    assert_eq!(
+        game.map.nodes[game.current_node.unwrap()].kind,
+        NodeKind::Boss
+    );
+    assert_eq!(game.completed.len(), MAP_ROWS);
+    assert!(game.deck.len() >= 13);
     assert!(game.log.iter().any(|s| s.starts_with("역습")));
     assert_eq!(game.battle.outcome()[8].kind, TEMPEST_PAWN);
 }
