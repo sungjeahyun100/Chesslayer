@@ -1,2 +1,0 @@
-/usr/bin/ar qc libchessembly.a CMakeFiles/chessembly.dir/chessembly.cpp.o
-/usr/bin/ranlib libchessembly.a

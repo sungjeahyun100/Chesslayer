@@ -1,7 +1,0 @@
-/home/sjh100/바탕화면/var-chess-sts/build/CMakeFiles/chessembly.dir
-/home/sjh100/바탕화면/var-chess-sts/build/CMakeFiles/chess_engine.dir
-/home/sjh100/바탕화면/var-chess-sts/build/CMakeFiles/chess_tests.dir
-/home/sjh100/바탕화면/var-chess-sts/build/CMakeFiles/interpreter_tests.dir
-/home/sjh100/바탕화면/var-chess-sts/build/CMakeFiles/test.dir
-/home/sjh100/바탕화면/var-chess-sts/build/CMakeFiles/edit_cache.dir
-/home/sjh100/바탕화면/var-chess-sts/build/CMakeFiles/rebuild_cache.dir
