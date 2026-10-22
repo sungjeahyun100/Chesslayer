@@ -2,8 +2,8 @@ use chessembly::Program;
 use chesslayer_core::{apply_default_action, Board, Effect, Piece, Position};
 use std::fmt::Write;
 
-// Fixed ordered actions and resulting boards for the 14 Chessembly behavior cases.
-// The fixture was captured before removing the earlier differential harness.
+// Fixed ordered actions and resulting boards for the Chessembly behavior cases.
+// The first 14 fixture rows predate removal of the earlier differential harness.
 #[test]
 fn ordered_actions_and_resulting_boards_match_fixture() {
     let mut board = Board::new(6, 5).unwrap();
@@ -35,6 +35,13 @@ fn ordered_actions_and_resulting_boards_match_fixture() {
         "{ anchor(-1,0) move(-1,0) } move(0,1)",
         "transition(target) move(-1,0)",
         "anchor(-2,0) edge-left(-1,0) move(1,0)",
+        "false true move(-1,0)",
+        "true write(0) false read(0) move(-1,0)",
+        "true write(0) false read-or(0) move(-1,0)",
+        "true write(0) false read-xor(0) move(-1,0)",
+        "write-anchor(0) anchor(-1,0) read-anchor(0) move(-1,0)",
+        "absolute-x(0) move(1,0)",
+        "false move(-1,0)",
     ];
     let mut actual = String::new();
     for (index, code) in cases.iter().enumerate() {

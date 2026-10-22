@@ -6,6 +6,8 @@ pub enum Error {
     Parse(String),
     Board(BoardError),
     EmptyOrigin,
+    UninitializedRegister(i32),
+    UninitializedAnchor(i32),
     ExecutionLimit,
     BlockLimit,
 }
@@ -23,6 +25,13 @@ struct Inst {
 #[derive(Clone, Debug)]
 pub struct Program {
     chains: Vec<Vec<Inst>>,
+}
+const SLOT_COUNT: usize = 256;
+fn slot_op(name: &str) -> bool {
+    matches!(
+        name,
+        "write" | "read" | "read-and" | "read-or" | "read-xor" | "write-anchor" | "read-anchor"
+    )
 }
 fn arity(n: &str) -> Option<i8> {
     Some(match n {
@@ -48,8 +57,7 @@ fn arity(n: &str) -> Option<i8> {
         | "corner-bottom-left"
         | "corner-bottom-right"
         | "enemy"
-        | "friendly"
-        | "danger" => 2,
+        | "friendly" => 2,
         "piece-on" | "color-on" => 3,
         "absolute-x" | "absolute-y" | "piece" | "color" | "repeat" | "label" | "jmp" | "jne"
         | "write" | "read" | "read-and" | "read-or" | "read-xor" | "write-anchor"
@@ -108,6 +116,9 @@ impl Program {
                 return Err(Error::Parse("invalid token".into()));
             }
             let name = &src[start..p];
+            if name == "danger" {
+                return Err(Error::Parse("unsupported expression: danger".into()));
+            }
             let expected =
                 arity(name).ok_or_else(|| Error::Parse(format!("unknown expression: {name}")))?;
             let mut args = vec![];
@@ -139,6 +150,13 @@ impl Program {
                 {
                     int(v)?;
                 }
+            }
+            if slot_op(name) && !(0..SLOT_COUNT as i32).contains(&int(&args[0])?) {
+                return Err(Error::Parse(format!(
+                    "invalid slot for {name}: {} (expected 0..={})",
+                    args[0],
+                    SLOT_COUNT - 1
+                )));
             }
             chain.push(Inst {
                 name: name.into(),
@@ -193,15 +211,14 @@ impl Program {
         let d = i32::from(b.direction(actor.owner)?);
         let mut result = vec![];
         for ch in &self.chains {
-            let mut frames = vec![Frame {
-                pos: origin,
-                state: true,
-                has_take: false,
-                take: origin,
-                close: 0,
-            }];
-            let mut trans: Option<String> = None;
-            let mut out = vec![];
+            let mut context = ExecutionContext::new(origin);
+            let ExecutionContext {
+                frames,
+                registers,
+                anchors,
+                trans,
+                out,
+            } = &mut context;
             let (mut pc, mut fuel) = (0usize, 0usize);
             while pc < ch.len() {
                 fuel += 1;
@@ -231,7 +248,23 @@ impl Program {
                     pc += 1;
                     continue;
                 }
-                if !frames[top].state && !matches!(op, "not" | "while" | "jmp" | "jne" | "label") {
+                if !frames[top].state
+                    && !matches!(
+                        op,
+                        "not"
+                            | "true"
+                            | "false"
+                            | "write"
+                            | "read"
+                            | "read-and"
+                            | "read-or"
+                            | "read-xor"
+                            | "while"
+                            | "jmp"
+                            | "jne"
+                            | "label"
+                    )
+                {
                     if top > 0 {
                         pc = frames[top].close
                     } else {
@@ -241,6 +274,20 @@ impl Program {
                 }
                 match op {
                     "not" => frames[top].state = !frames[top].state,
+                    "true" => frames[top].state = true,
+                    "false" => frames[top].state = false,
+                    "write" => registers[slot(n)] = Some(frames[top].state),
+                    "read" | "read-and" | "read-or" | "read-xor" => {
+                        let value = registers[slot(n)]
+                            .ok_or_else(|| Error::UninitializedRegister(a(n, 0)))?;
+                        frames[top].state = match op {
+                            "read" => value,
+                            "read-and" => frames[top].state && value,
+                            "read-or" => frames[top].state || value,
+                            "read-xor" => frames[top].state ^ value,
+                            _ => unreachable!(),
+                        };
+                    }
                     "do" => {
                         if ch.get(pc + 1).is_some_and(|next| next.name == "while") {
                             pc += 2;
@@ -281,18 +328,25 @@ impl Program {
                     "end" => break,
                     "piece" => frames[top].state = b.piece_name(actor)? == n.args[0],
                     "color" => frames[top].state = b.color_name(actor)? == n.args[0],
-                    "transition" => trans = n.args.first().cloned(),
-                    // These parsed opcodes currently have no execution effect.
-                    "true" | "false" | "write" | "read" | "read-and" | "read-or" | "read-xor"
-                    | "write-anchor" | "read-anchor" | "danger" | "absolute-x" | "absolute-y" => (),
-                    "absolute" => {
-                        let mut q = Position::new(a(n, 0), a(n, 1));
-                        if d < 0 {
-                            q = Position::new(
-                                b.width() as i32 - 1 - q.file,
-                                b.height() as i32 - 1 - q.rank,
-                            )
-                        }
+                    "transition" => *trans = n.args.first().cloned(),
+                    "write-anchor" => anchors[slot(n)] = Some(frames[top].pos),
+                    "read-anchor" => {
+                        frames[top].pos =
+                            anchors[slot(n)].ok_or_else(|| Error::UninitializedAnchor(a(n, 0)))?;
+                    }
+                    "absolute" | "absolute-x" | "absolute-y" => {
+                        let current = frames[top].pos;
+                        let x = if op == "absolute-y" {
+                            current.file
+                        } else {
+                            absolute_component(a(n, 0), b.width(), d)
+                        };
+                        let y = if op == "absolute-x" {
+                            current.rank
+                        } else {
+                            absolute_component(a(n, usize::from(op == "absolute")), b.height(), d)
+                        };
+                        let q = Position::new(x, y);
                         if b.contains(q) {
                             frames[top].pos = q
                         } else {
@@ -342,7 +396,7 @@ impl Program {
                                         frames[top].state = false
                                     } else {
                                         frames[top].pos = q;
-                                        emit(&mut out, origin, q, q, Effect::Move, &trans)
+                                        emit(out, origin, q, q, Effect::Move, trans)
                                     }
                                 }
                                 "take-move" => {
@@ -350,7 +404,7 @@ impl Program {
                                         frames[top].state = false
                                     } else {
                                         frames[top].pos = q;
-                                        emit(&mut out, origin, q, q, Effect::TakeMove, &trans);
+                                        emit(out, origin, q, q, Effect::TakeMove, trans);
                                         if enemy {
                                             frames[top].state = false
                                         }
@@ -362,7 +416,7 @@ impl Program {
                                     } else {
                                         frames[top].pos = q;
                                         if enemy {
-                                            emit(&mut out, origin, q, q, Effect::Take, &trans);
+                                            emit(out, origin, q, q, Effect::Take, trans);
                                             frames[top].has_take = true;
                                             frames[top].take = q
                                         }
@@ -372,13 +426,13 @@ impl Program {
                                     if !enemy {
                                         frames[top].state = false
                                     } else {
-                                        emit(&mut out, origin, q, origin, Effect::Catch, &trans)
+                                        emit(out, origin, q, origin, Effect::Catch, trans)
                                     }
                                 }
                                 "shift" => {
                                     frames[top].pos = q;
                                     if occupant.is_some() {
-                                        emit(&mut out, origin, q, q, Effect::Shift, &trans)
+                                        emit(out, origin, q, q, Effect::Shift, trans)
                                     }
                                 }
                                 "jump" => {
@@ -397,7 +451,7 @@ impl Program {
                                         }) {
                                             out.remove(i);
                                         }
-                                        emit(&mut out, origin, victim, q, Effect::TakeJump, &trans)
+                                        emit(out, origin, victim, q, Effect::TakeJump, trans)
                                     }
                                 }
                                 _ => unreachable!(),
@@ -407,7 +461,7 @@ impl Program {
                 }
                 pc += 1;
             }
-            result.extend(out);
+            result.extend(std::mem::take(out));
         }
         Ok(result)
     }
@@ -419,6 +473,40 @@ struct Frame {
     has_take: bool,
     take: Position,
     close: usize,
+}
+struct ExecutionContext {
+    frames: Vec<Frame>,
+    registers: [Option<bool>; SLOT_COUNT],
+    anchors: [Option<Position>; SLOT_COUNT],
+    trans: Option<String>,
+    out: Vec<DefaultAction>,
+}
+impl ExecutionContext {
+    fn new(origin: Position) -> Self {
+        Self {
+            frames: vec![Frame {
+                pos: origin,
+                state: true,
+                has_take: false,
+                take: origin,
+                close: 0,
+            }],
+            registers: [None; SLOT_COUNT],
+            anchors: [None; SLOT_COUNT],
+            trans: None,
+            out: Vec::new(),
+        }
+    }
+}
+fn slot(n: &Inst) -> usize {
+    a(n, 0) as usize // Program::parse validates the slot range.
+}
+fn absolute_component(value: i32, extent: usize, direction: i32) -> i32 {
+    if direction < 0 {
+        (extent as i32 - 1).saturating_sub(value)
+    } else {
+        value
+    }
 }
 fn target(p: Position, dx: i32, dy: i32, d: i32) -> Position {
     Position::new(

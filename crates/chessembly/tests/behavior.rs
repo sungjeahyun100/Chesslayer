@@ -127,7 +127,7 @@ fn input_purity_determinism_limits_and_masks() {
     assert_eq!(interpret(&b, p(2, 2), &deep), Err(Error::BlockLimit));
 }
 #[test]
-fn direction_noop_commands_and_rejections() {
+fn direction_condition_commands_and_rejections() {
     let mut b = board();
     b.set_piece(
         p(4, 3),
@@ -144,10 +144,12 @@ fn direction_noop_commands_and_rejections() {
             .move_to,
         p(3, 3)
     );
-    assert!(run(&b, "true move(-1,0)").len() == 1);
-    assert!(run(&b, "false move(-1,0)").len() == 1);
+    assert_eq!(run(&b, "true move(-1,0)").len(), 1);
+    assert!(run(&b, "false move(-1,0)").is_empty());
+    assert_eq!(run(&b, "false true move(-1,0)").len(), 1);
     for code in [
         "check",
+        "state(flag)",
         "set-state(flag,1)",
         "if-state(flag,1)",
         "bogus(1,2)",
@@ -156,6 +158,10 @@ fn direction_noop_commands_and_rejections() {
     ] {
         assert!(Program::parse(code).is_err(), "{code}")
     }
+    assert!(matches!(
+        Program::parse("danger(1,0)"),
+        Err(Error::Parse(message)) if message.contains("unsupported") && message.contains("danger")
+    ));
 }
 #[test]
 fn adjacent_do_while_skips_empty_body() {
