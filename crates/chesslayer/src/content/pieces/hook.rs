@@ -9,7 +9,7 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
     ..PieceDefinition::new(HOOK, "hook", "구행", movement)
 };
 
-fn movement() -> String {
+pub(super) fn movement() -> String {
     movement::ORTHOGONAL
         .iter()
         .map(|&(x, y)| {

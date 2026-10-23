@@ -1,5 +1,6 @@
 use crate::{cards::*, content::*, map::*, *};
 use serde::{Deserialize, Serialize};
+use std::collections::{BTreeMap, HashSet};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -11,6 +12,11 @@ pub enum RunPhase {
     Rest,
     Victory,
     Defeat,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reward {
+    Card(CardKind),
+    Relic(Relic),
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
@@ -24,6 +30,13 @@ pub enum Command {
     PlayCard {
         id: u32,
         target: Option<u32>,
+    },
+    PlayCardSelection {
+        id: u32,
+        #[serde(default)]
+        targets: Vec<u32>,
+        #[serde(default)]
+        upgrades: Vec<CardUpgradeChoice>,
     },
     EndTurn,
     EnemyStep,
@@ -43,11 +56,18 @@ pub enum Command {
     },
     RestSkip,
 }
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CardUpgradeChoice {
+    pub id: PieceId,
+    pub target: PieceType,
+}
 #[derive(Clone)]
 pub struct Game {
     pub battle: Battle,
     pub cards: CardCombat,
     pub deck: Vec<Card>,
+    /// Acquisition order, including the starter. Existing relics are never reordered.
     pub relics: Vec<Relic>,
     pub phase: RunPhase,
     pub map: ActMap,
@@ -60,6 +80,10 @@ pub struct Game {
     pub round: u32,
     rng: Rng,
     next_card_id: u32,
+    rewards: Vec<Reward>,
+    /// Positions only, captured before boundary cleanup even when Hard Disk is not owned yet.
+    last_battle_positions: BTreeMap<PieceId, Position>,
+    hard_disk_deployed: bool,
 }
 pub(crate) fn engine_error(e: Error) -> String {
     format!("요청한 행동을 수행할 수 없습니다: {e:?}")
@@ -102,6 +126,9 @@ impl Game {
             round: 1,
             rng: Rng::new(seed),
             next_card_id,
+            rewards: vec![],
+            last_battle_positions: BTreeMap::new(),
+            hard_disk_deployed: false,
         };
         Ok(game)
     }
@@ -115,6 +142,68 @@ impl Game {
         for e in std::mem::take(&mut self.battle.events) {
             self.log(e);
         }
+    }
+    fn latest_formation(&self) -> Option<Relic> {
+        self.relics
+            .iter()
+            .rev()
+            .copied()
+            .find(|r| r.formation().is_some())
+    }
+    fn starting_roster(&self) -> Result<(Vec<PlayerPiece>, bool), String> {
+        let mut roster = self.battle.outcome();
+        let mut occupied = HashSet::new();
+        let saved: Vec<_> = roster
+            .iter()
+            .filter(|p| p.position.is_some())
+            .filter_map(|p| {
+                self.last_battle_positions
+                    .get(&p.id)
+                    .map(|&pos| (p.id, pos))
+            })
+            .collect();
+        let hard_disk = self.relics.contains(&Relic::HardDisk)
+            && !saved.is_empty()
+            && saved.iter().all(|(_, pos)| {
+                (0..8).contains(&pos.file) && (0..8).contains(&pos.rank) && occupied.insert(*pos)
+            });
+        occupied.clear();
+        let formation = self.latest_formation();
+        let mut unplaced = vec![];
+        for (index, p) in roster.iter_mut().enumerate() {
+            if p.position.is_none() {
+                continue; // A snapshot or a preset must never revive a dead ID.
+            }
+            let desired = if hard_disk {
+                self.last_battle_positions.get(&p.id).copied()
+            } else {
+                formation.and_then(|r| r.position(p.id))
+            };
+            p.moved = false;
+            if let Some(pos) = desired.filter(|pos| occupied.insert(*pos)) {
+                p.position = Some(pos);
+            } else {
+                unplaced.push(index);
+            }
+        }
+        // Rest-revived/new IDs missing from the snapshot use their permanent home.
+        // Saved survivors have priority; a blocked home uses the first free square
+        // in a1..h1, a2..h2, ... order. No survivor is displaced or removed.
+        for index in unplaced {
+            let p = &mut roster[index];
+            let pos = if !occupied.contains(&p.origin) {
+                p.origin
+            } else {
+                (0..8)
+                    .rev()
+                    .flat_map(|rank| (0..8).map(move |file| Position::new(file, rank)))
+                    .find(|pos| !occupied.contains(pos))
+                    .ok_or("아군을 배치할 빈 칸이 없습니다.")?
+            };
+            occupied.insert(pos);
+            p.position = Some(pos);
+        }
+        Ok((roster, hard_disk))
     }
     fn start_battle(&mut self) -> Result<(), String> {
         let index = self
@@ -131,20 +220,23 @@ impl Game {
             }
             self.log("소용돌이: 적의 시작 위치를 섞었습니다.");
         }
+        let (players, hard_disk) = self.starting_roster()?;
+        if hard_disk {
+            self.log("하드디스크: 직전 전투의 생존 아군 위치를 복원했습니다.");
+        } else if let Some(relic) = self.latest_formation() {
+            self.log(format!("{}: 시작 진형을 적용했습니다.", relic.name()));
+        }
         let haste = self.relics.contains(&Relic::Haste);
         let options = BattleOptions {
             actions_per_turn: if haste { HASTE_ACTIONS } else { 1 },
             self_defense: self.relics.contains(&Relic::SelfDefense),
+            initiative: self.relics.contains(&Relic::Initiative),
+            hard_disk,
         };
-        self.battle = Battle::with_options(
-            BattleStart {
-                players: self.battle.outcome(),
-                encounter,
-            },
-            options,
-            &mut self.rng,
-        )
-        .map_err(engine_error)?;
+        self.battle =
+            Battle::with_options(BattleStart { players, encounter }, options, &mut self.rng)
+                .map_err(engine_error)?;
+        self.hard_disk_deployed = hard_disk;
         if haste {
             self.log(format!(
                 "가속: 양 진영이 턴마다 최대 {HASTE_ACTIONS}회 이동합니다."
@@ -176,12 +268,18 @@ impl Game {
         let relic = self.map.nodes[self.current_node.unwrap()]
             .relic
             .expect("reward node has relic");
+        self.grant_relic(relic);
+    }
+    fn add_card(&mut self, kind: CardKind) {
+        self.deck.push(Card {
+            id: self.next_card_id,
+            kind,
+        });
+        self.next_card_id += 1;
+    }
+    fn grant_relic(&mut self, relic: Relic) {
         if self.relics.contains(&relic) {
-            self.deck.push(Card {
-                id: self.next_card_id,
-                kind: CardKind::Ward,
-            });
-            self.next_card_id += 1;
+            self.add_card(CardKind::Ward);
             self.log(format!(
                 "{}은 이미 보유 중입니다. 대신 가호 카드 1장을 얻었습니다.",
                 relic.name()
@@ -194,6 +292,31 @@ impl Game {
                 relic.description()
             ));
         }
+    }
+    fn generate_rewards(&mut self) {
+        let mut cards = content::cards::REWARD_POOL.to_vec();
+        let mut relics: Vec<_> = RELIC_REWARD_POOL
+            .iter()
+            .copied()
+            .filter(|r| !self.relics.contains(r))
+            .collect();
+        let mut rewards = vec![Reward::Card(cards.swap_remove(self.rng.index(cards.len())))];
+        if !relics.is_empty() {
+            rewards.push(Reward::Relic(
+                relics.swap_remove(self.rng.index(relics.len())),
+            ));
+        }
+        let mut remaining: Vec<_> = cards
+            .into_iter()
+            .map(Reward::Card)
+            .chain(relics.into_iter().map(Reward::Relic))
+            .collect();
+        // Registered card kinds fill every slot when relics run out.
+        while rewards.len() < 3 {
+            rewards.push(remaining.swap_remove(self.rng.index(remaining.len())));
+        }
+        self.rng.shuffle(&mut rewards);
+        self.rewards = rewards;
     }
     fn map_view(&self) -> MapView {
         let available = self.available_nodes();
@@ -261,37 +384,61 @@ impl Game {
                     .ok_or("합법적인 이동이 아닙니다.")?;
                 self.perform_action(action)?;
             }
-            Command::PlayCard { id, target } => self.play_card(id, target)?,
+            Command::PlayCard { id, target } => {
+                self.play_card(id, content::cards::CardSelection::single(target))?
+            }
+            Command::PlayCardSelection {
+                id,
+                targets,
+                upgrades,
+            } => self.play_card(
+                id,
+                content::cards::CardSelection {
+                    target: None,
+                    targets,
+                    upgrades: upgrades.into_iter().map(|u| (u.id, u.target)).collect(),
+                },
+            )?,
             Command::EndTurn => {
                 self.require_player()?;
                 self.battle.end_turn().map_err(engine_error)?;
-                self.cards.end_turn();
-                self.log("플레이어가 턴을 마쳤습니다.");
+                self.events();
+                self.check_finish()?;
+                if self.phase == RunPhase::Combat {
+                    self.cards.end_turn();
+                    self.log("플레이어가 턴을 마쳤습니다.");
+                }
             }
             Command::EnemyStep => self.enemy_step()?,
             Command::ChooseReward { index } => {
                 if self.phase != RunPhase::Reward {
                     return Err("지금은 보상을 선택할 수 없습니다.".into());
                 }
-                let kind = *content::cards::REWARD_POOL
+                let reward = *self
+                    .rewards
                     .get(index)
                     .ok_or("보상 선택이 잘못되었습니다.")?;
-                self.deck.push(Card {
-                    id: self.next_card_id,
-                    kind,
-                });
-                self.next_card_id += 1;
-                self.log(format!(
-                    "보상: {}을 덱에 추가했습니다.",
-                    kind.definition().name
-                ));
+                match reward {
+                    Reward::Card(kind) => {
+                        self.add_card(kind);
+                        self.log(format!(
+                            "보상: {}을 덱에 추가했습니다.",
+                            kind.definition().name
+                        ));
+                    }
+                    Reward::Relic(relic) => self.grant_relic(relic),
+                }
                 if self
                     .current_node
                     .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Elite)
                 {
                     self.grant_node_relic();
                 }
+                self.rewards.clear();
                 self.complete_node();
+                if self.map.nodes[self.current_node.unwrap()].kind == NodeKind::Boss {
+                    self.phase = RunPhase::Victory;
+                }
             }
             Command::SelectNode { id } => {
                 if !self.available_nodes().contains(&id) {
@@ -323,14 +470,26 @@ impl Game {
                     return Err("쉼터에서만 강화할 수 있습니다.".into());
                 }
                 let mut roster = self.battle.outcome();
-                let p = roster
-                    .iter_mut()
-                    .find(|p| p.id == id && p.position.is_some())
+                let index = roster
+                    .iter()
+                    .position(|p| p.id == id && p.position.is_some())
                     .ok_or("살아 있는 아군 기물을 선택하세요.")?;
-                let upgrade = content::pieces::definition(p.kind)
+                let previous_kind = roster[index].kind;
+                let upgrade = content::pieces::definition(previous_kind)
                     .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
                     .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
-                let previous_kind = p.kind;
+                let missing: Vec<_> = content::pieces::required_owned(target)
+                    .iter()
+                    .filter(|&&kind| !roster.iter().any(|p| p.kind == kind))
+                    .map(|&kind| piece_name(kind))
+                    .collect();
+                if !missing.is_empty() {
+                    return Err(format!(
+                        "영구 로스터에 필요한 기물이 없습니다: {}",
+                        missing.join(", ")
+                    ));
+                }
+                let p = &mut roster[index];
                 p.kind = upgrade.target;
                 p.upgrades.push(upgrade.key.into());
                 self.battle
@@ -432,32 +591,41 @@ impl Game {
             if side == PLAYER {
                 self.cards.end_turn();
             } else {
-                self.round += 1;
-                self.cards.begin_turn(&mut self.rng);
+                self.begin_player_turn();
             }
         }
         Ok(())
     }
     fn check_finish(&mut self) -> Result<(), String> {
+        if self.phase != RunPhase::Combat {
+            return Ok(());
+        }
         if let GameResult::Win { winner, reason } = self.battle.result {
-            self.battle.reset_after_battle().map_err(engine_error)?;
+            self.last_battle_positions = self
+                .battle
+                .player_pieces()
+                .iter()
+                .filter_map(|p| p.position.map(|pos| (p.id, pos)))
+                .collect();
+            let keep_positions = self.relics.contains(&Relic::HardDisk);
+            self.battle
+                .reset_after_battle(keep_positions)
+                .map_err(engine_error)?;
             self.cards = CardCombat::default();
             if winner == PLAYER {
-                self.phase = if self
-                    .current_node
-                    .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Boss)
-                {
-                    RunPhase::Victory
+                self.phase = RunPhase::Reward;
+                self.generate_rewards();
+                self.log(match reason {
+                    ResultReason::SelfDefense => "승리! 호신용품으로 적 로얄이 사망했습니다.",
+                    ResultReason::HardDisk => {
+                        "승리! 하드디스크의 시작 배치와 겹친 적 로얄이 사망했습니다."
+                    }
+                    _ => "승리! 적 로얄을 직접 포획했습니다.",
+                });
+                self.log(if keep_positions {
+                    "하드디스크: 생존 기물의 종료 배치를 유지합니다."
                 } else {
-                    RunPhase::Reward
-                };
-                if self.phase == RunPhase::Victory {
-                    self.completed.push(self.current_node.unwrap());
-                }
-                self.log(if reason == ResultReason::SelfDefense {
-                    "승리! 호신용품으로 적 로얄이 사망했습니다. 생존 기물이 시작 칸으로 복귀합니다."
-                } else {
-                    "승리! 적 로얄을 직접 포획했습니다. 생존 기물이 시작 칸으로 복귀합니다."
+                    "생존 기물이 시작 칸으로 복귀합니다."
                 });
             } else {
                 self.phase = RunPhase::Defeat;
@@ -470,7 +638,16 @@ impl Game {
         }
         Ok(())
     }
-    fn play_card(&mut self, id: u32, target: Option<u32>) -> Result<(), String> {
+    fn begin_player_turn(&mut self) {
+        self.round = self.round.saturating_add(1);
+        self.cards
+            .begin_turn(&mut self.rng, self.relics.contains(&Relic::IceCream));
+    }
+    fn play_card(
+        &mut self,
+        id: u32,
+        selection: content::cards::CardSelection,
+    ) -> Result<(), String> {
         self.require_player()?;
         let index = self
             .cards
@@ -479,19 +656,71 @@ impl Game {
             .position(|c| c.id == id)
             .ok_or("손패에 없는 카드입니다.")?;
         let d = self.cards.hand[index].kind.definition();
-        if self.cards.mana < d.cost {
+        self.resolve_selection(index, &selection, d)
+    }
+    #[cfg(test)]
+    fn resolve_card(
+        &mut self,
+        index: usize,
+        target: Option<u32>,
+        d: CardDefinition,
+    ) -> Result<(), String> {
+        self.resolve_selection(index, &content::cards::CardSelection::single(target), d)
+    }
+    fn resolve_selection(
+        &mut self,
+        index: usize,
+        selection: &content::cards::CardSelection,
+        d: CardDefinition,
+    ) -> Result<(), String> {
+        use content::cards::SelectionMode;
+        match d.selection_mode {
+            SelectionMode::None
+                if selection.target.is_some()
+                    || !selection.targets.is_empty()
+                    || !selection.upgrades.is_empty() =>
+            {
+                return Err("이 카드는 대상을 선택하지 않습니다.".into())
+            }
+            SelectionMode::Single
+                if !selection.targets.is_empty() || !selection.upgrades.is_empty() =>
+            {
+                return Err("기물 하나만 선택하세요.".into())
+            }
+            SelectionMode::Multiple
+                if selection.target.is_some() || !selection.upgrades.is_empty() =>
+            {
+                return Err("복수 기물 선택이 올바르지 않습니다.".into())
+            }
+            SelectionMode::Upgrade
+                if selection.target.is_some() || !selection.targets.is_empty() =>
+            {
+                return Err("강화 경로 선택이 올바르지 않습니다.".into())
+            }
+            _ => {}
+        }
+        let cost = d.selected_cost(selection)?;
+        if self.cards.mana < cost {
             return Err("마나가 부족합니다.".into());
         }
-        let removed = (d.effect)(&mut self.battle, target)?;
-        self.cards.spend(index);
+        let mut next = self.battle.clone();
+        let removed = if let Some(effect) = d.selection_effect {
+            effect(&mut next, selection)?
+        } else {
+            (d.effect)(&mut next, selection.target)?
+        };
+        self.battle = next;
+        self.cards.spend_with_cost(index, &d, cost);
         self.log(format!(
             "{} 사용 · 마나 −{}{}",
             d.name,
-            d.cost,
+            cost,
             removed
                 .map(|n| format!(" · {n}기 제거 (로얄 보호)"))
                 .unwrap_or_default()
         ));
+        self.events();
+        self.check_finish()?;
         Ok(())
     }
     fn enemy_step(&mut self) -> Result<(), String> {
@@ -505,7 +734,7 @@ impl Game {
                 continue;
             }
             for action in self.battle.legal_actions(pos(i)?).map_err(engine_error)? {
-                let score = action
+                let mut score = action
                     .steps()
                     .filter_map(|s| {
                         self.battle
@@ -525,6 +754,13 @@ impl Game {
                         }
                     })
                     .sum();
+                if self
+                    .battle
+                    .limiter_status(piece.unwrap().id)
+                    .is_some_and(|(active, left)| active && left > 0)
+                {
+                    score += 10_000;
+                }
                 if score > best_score {
                     best.clear();
                     best_score = score;
@@ -536,9 +772,12 @@ impl Game {
         }
         if best.is_empty() {
             self.battle.end_turn().map_err(engine_error)?;
-            self.round += 1;
-            self.cards.begin_turn(&mut self.rng);
-            self.log("적에게 합법적인 수가 없어 턴을 넘겼습니다. 전투는 계속됩니다.");
+            self.events();
+            self.check_finish()?;
+            if self.phase == RunPhase::Combat {
+                self.begin_player_turn();
+                self.log("적에게 합법적인 수가 없어 턴을 넘겼습니다. 전투는 계속됩니다.");
+            }
         } else {
             let i = self.rng.index(best.len());
             self.perform_action(best.swap_remove(i))?;
@@ -570,6 +809,11 @@ impl Game {
                         royal: p.id == self.battle.royal_id || p.id == self.battle.king_id,
                         ward: self.battle.has_ward(p.id),
                         self_defense: self.battle.has_self_defense(p.id),
+                        temporary_upgrade: self.battle.has_temporary_upgrade(p.id),
+                        limiter: self
+                            .battle
+                            .limiter_status(p.id)
+                            .map(|(active, moves_left)| LimiterView { active, moves_left }),
                     })
             })
             .collect();
@@ -620,10 +864,14 @@ impl Game {
                 let disabled_reason =
                     if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
                         Some("내 턴을 기다리세요.")
-                    } else if self.cards.mana < d.cost {
+                    } else if self.cards.mana < if d.cost_per_target { 1 } else { d.cost } {
                         Some("마나가 부족합니다.")
                     } else if d.targeted && targets.is_empty() {
-                        Some("사용 가능한 진형이 없습니다.")
+                        Some(if c.kind == CardKind::SacredDomain {
+                            "희생할 아군 비숍이 없습니다."
+                        } else {
+                            "선택 가능한 기물이 없습니다."
+                        })
                     } else {
                         None
                     };
@@ -653,10 +901,15 @@ impl Game {
                     square: p.position.or(origin).map(square).unwrap_or_default(),
                     can_upgrade: self.phase == RunPhase::Rest
                         && p.position.is_some()
-                        && !content::pieces::definition(p.kind)
+                        && content::pieces::definition(p.kind)
                             .unwrap()
                             .upgrades
-                            .is_empty(),
+                            .iter()
+                            .any(|u| {
+                                content::pieces::required_owned(u.target)
+                                    .iter()
+                                    .all(|&kind| roster.iter().any(|owned| owned.kind == kind))
+                            }),
                     can_revive: self.phase == RunPhase::Rest
                         && origin.is_some()
                         && p.position.is_none()
@@ -680,6 +933,8 @@ impl Game {
                 .current_node
                 .and_then(|id| self.map.nodes[id].relic)
                 .map(|r| RelicView {
+                    id: r,
+                    status: None,
                     name: r.name(),
                     description: if self.relics.contains(&r) {
                         "이미 가진 유물입니다. 대신 가호 카드 1장을 얻습니다."
@@ -692,6 +947,13 @@ impl Game {
             round: self.round,
             actions_left: self.battle.actions_left,
             mana: self.cards.mana,
+            mana_rule: if self.relics.contains(&Relic::IceCream) {
+                "아이스크림: 내 턴 시작마다 남은 코스트에 3을 더합니다."
+            } else {
+                "내 턴 시작 시 코스트가 3으로 회복됩니다."
+            },
+            initiative_turns_left: self.battle.initiative_turns_left(),
+            hard_disk_deployed: self.phase == RunPhase::Combat && self.hard_disk_deployed,
             pieces,
             moves,
             hand,
@@ -703,14 +965,56 @@ impl Game {
                 .relics
                 .iter()
                 .map(|r| RelicView {
+                    id: *r,
+                    status: if *r == Relic::Initiative {
+                        Some(if self.phase != RunPhase::Combat {
+                            "다음 전투 시작 시 보호가 활성화됩니다.".into()
+                        } else if self.battle.initiative_turns_left() > 0 {
+                            format!(
+                                "보호 중 · 남은 적 턴 {}회",
+                                self.battle.initiative_turns_left()
+                            )
+                        } else {
+                            "보호 종료 · 다음 전투에 다시 적용됩니다.".into()
+                        })
+                    } else if r.formation().is_some() {
+                        Some(if Some(*r) == self.latest_formation() {
+                            "선택된 시작 진형 · 하드디스크 기록이 있으면 기록 우선".into()
+                        } else {
+                            "비활성 · 더 최근에 획득한 시작 진형이 있습니다.".into()
+                        })
+                    } else if *r == Relic::HardDisk {
+                        Some(
+                            if self.phase == RunPhase::Combat && self.hard_disk_deployed {
+                                "직전 전투 종료 배치를 이번 전투 시작에 복원했습니다.".into()
+                            } else if self.last_battle_positions.is_empty() {
+                                "아직 복원할 이전 전투 배치가 없습니다.".into()
+                            } else {
+                                "직전 전투 종료 배치를 다음 전투에 복원합니다.".into()
+                            },
+                        )
+                    } else if *r == Relic::IceCream && self.phase == RunPhase::Combat {
+                        Some(format!("이번 전투 누적 코스트 잔액 {}", self.cards.mana))
+                    } else {
+                        None
+                    },
                     name: r.name(),
                     description: r.description(),
                 })
                 .collect(),
             log: self.log.clone(),
-            rewards: content::cards::REWARD_POOL
+            rewards: self
+                .rewards
                 .iter()
-                .map(|k| k.definition())
+                .map(|r| match r {
+                    Reward::Card(kind) => RewardView::Card(kind.definition()),
+                    Reward::Relic(relic) => RewardView::Relic(RelicView {
+                        id: *relic,
+                        status: None,
+                        name: relic.name(),
+                        description: relic.description(),
+                    }),
+                })
                 .collect(),
             rest_options,
             upgrade_paths: content::pieces::ALL
@@ -725,6 +1029,17 @@ impl Game {
                         to_name: piece_name(u.target),
                         effect: u.effect,
                         requirement: u.requirement,
+                        required_pieces: content::pieces::required_owned(u.target)
+                            .iter()
+                            .map(|&kind| RequiredPieceView {
+                                kind,
+                                name: piece_name(kind),
+                                owned: roster.iter().any(|p| p.kind == kind),
+                            })
+                            .collect(),
+                        unlocked: content::pieces::required_owned(u.target)
+                            .iter()
+                            .all(|&kind| roster.iter().any(|p| p.kind == kind)),
                     })
                 })
                 .collect(),
@@ -752,7 +1067,10 @@ pub struct Snapshot {
     pub turn: u16,
     pub round: u32,
     pub actions_left: u8,
-    pub mana: u8,
+    pub mana: u32,
+    pub mana_rule: &'static str,
+    pub initiative_turns_left: u8,
+    pub hard_disk_deployed: bool,
     pub pieces: Vec<PieceView>,
     pub moves: Vec<MoveView>,
     pub hand: Vec<CardView>,
@@ -762,11 +1080,17 @@ pub struct Snapshot {
     pub deck_count: usize,
     pub relics: Vec<RelicView>,
     pub log: Vec<String>,
-    pub rewards: Vec<CardDefinition>,
+    pub rewards: Vec<RewardView>,
     pub rest_options: Vec<RestOption>,
     pub upgrade_paths: Vec<UpgradeView>,
     pub royal_name: &'static str,
     pub seed: u32,
+}
+#[derive(Serialize)]
+#[serde(tag = "type", content = "definition", rename_all = "snake_case")]
+pub enum RewardView {
+    Card(CardDefinition),
+    Relic(RelicView),
 }
 #[derive(Serialize)]
 pub struct PieceView {
@@ -781,6 +1105,13 @@ pub struct PieceView {
     pub royal: bool,
     pub ward: bool,
     pub self_defense: bool,
+    pub temporary_upgrade: bool,
+    pub limiter: Option<LimiterView>,
+}
+#[derive(Serialize)]
+pub struct LimiterView {
+    pub active: bool,
+    pub moves_left: u8,
 }
 #[derive(Serialize)]
 pub struct MoveView {
@@ -804,8 +1135,10 @@ pub struct CardView {
 }
 #[derive(Serialize)]
 pub struct RelicView {
+    pub id: Relic,
     pub name: &'static str,
     pub description: &'static str,
+    pub status: Option<String>,
 }
 #[derive(Serialize)]
 pub struct RestOption {
@@ -834,4 +1167,42 @@ pub struct UpgradeView {
     pub to_name: &'static str,
     pub effect: &'static str,
     pub requirement: &'static str,
+    pub required_pieces: Vec<RequiredPieceView>,
+    pub unlocked: bool,
+}
+
+#[derive(Serialize)]
+pub struct RequiredPieceView {
+    pub kind: PieceType,
+    pub name: &'static str,
+    pub owned: bool,
+}
+
+#[cfg(test)]
+mod relic_resource_tests {
+    use super::*;
+
+    #[test]
+    fn six_cost_card_uses_the_same_resolution_and_payment_path() {
+        let mut game = Game::new("vanguard", 2026).unwrap();
+        game.dispatch(Command::SelectNode {
+            id: game.available_nodes()[0],
+        })
+        .unwrap();
+        game.cards.hand.push(Card {
+            id: 1,
+            kind: CardKind::Ward,
+        });
+        let mut definition = CardKind::Ward.definition();
+        definition.cost = 6;
+        game.cards.mana = 5;
+        assert!(game.resolve_card(0, Some(5), definition.clone()).is_err());
+        assert!(!game.battle.has_ward(5));
+        assert_eq!(game.cards.hand.len(), 1);
+        game.cards.mana = 6;
+        game.resolve_card(0, Some(5), definition).unwrap();
+        assert!(game.battle.has_ward(5));
+        assert_eq!(game.cards.mana, 0);
+        assert!(game.cards.hand.is_empty());
+    }
 }

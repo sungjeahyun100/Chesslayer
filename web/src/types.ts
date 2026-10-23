@@ -19,6 +19,8 @@ export interface Piece {
   royal: boolean;
   ward: boolean;
   self_defense: boolean;
+  temporary_upgrade: boolean;
+  limiter: { active: boolean; moves_left: number } | null;
 }
 export interface CardDefinition {
   kind: string;
@@ -26,6 +28,8 @@ export interface CardDefinition {
   cost: number;
   description: string;
   targeted: boolean;
+  selection_mode: "none" | "single" | "multiple" | "upgrade";
+  cost_per_target: boolean;
   exhaust: boolean;
   retain: boolean;
   innate: boolean;
@@ -37,6 +41,16 @@ export interface Card {
   targets: number[];
   disabled_reason: string | null;
 }
+export type RelicId = Character["relic"] | "kings_indian" | "queens_indian" | "hedgehog" | "initiative" | "ice_cream" | "hard_disk";
+export interface Relic {
+  id: RelicId;
+  name: string;
+  description: string;
+  status: string | null;
+}
+export type Reward =
+  | { type: "card"; definition: CardDefinition }
+  | { type: "relic"; definition: Relic };
 export interface Snapshot {
   phase: Phase;
   map: {
@@ -47,13 +61,16 @@ export interface Snapshot {
     nodes: MapNode[];
   };
   node_kind: NodeKind | null;
-  node_reward: { name: string; description: string } | null;
+  node_reward: Relic | null;
   encounter: string;
   character: string;
   turn: number;
   round: number;
   actions_left: number;
   mana: number;
+  mana_rule: string;
+  initiative_turns_left: number;
+  hard_disk_deployed: boolean;
   pieces: Piece[];
   moves: { from: number; to: number; promotion: Promotion | null }[];
   hand: Card[];
@@ -61,9 +78,9 @@ export interface Snapshot {
   discard_count: number;
   exhausted_count: number;
   deck_count: number;
-  relics: { name: string; description: string }[];
+  relics: Relic[];
   log: string[];
-  rewards: CardDefinition[];
+  rewards: Reward[];
   rest_options: RestOption[];
   upgrade_paths: UpgradePath[];
   royal_name: string;
@@ -73,6 +90,7 @@ export type Command =
   | { type: "select_node"; id: number }
   | { type: "move"; from: number; to: number; promotion?: number }
   | { type: "play_card"; id: number; target?: number }
+  | { type: "play_card_selection"; id: number; targets?: number[]; upgrades?: { id: number; target: number }[] }
   | { type: "end_turn" | "enemy_step" | "claim_treasure" | "rest_skip" }
   | { type: "choose_reward"; index: number }
   | { type: "rest_upgrade"; id: number; target: number }
@@ -117,6 +135,8 @@ export interface UpgradePath {
   to_name: string;
   effect: string;
   requirement: string;
+  required_pieces: { kind: number; name: string; owned: boolean }[];
+  unlocked: boolean;
 }
 
 export interface Promotion {

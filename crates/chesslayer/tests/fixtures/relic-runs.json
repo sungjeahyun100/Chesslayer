@@ -1,0 +1,200 @@
+[
+  {
+    "commands": [
+      {
+        "id": 0,
+        "type": "select_node"
+      },
+      {
+        "from": 50,
+        "to": 42,
+        "type": "move"
+      },
+      {
+        "from": 59,
+        "to": 32,
+        "type": "move"
+      },
+      {
+        "from": 32,
+        "to": 4,
+        "type": "move"
+      },
+      {
+        "index": 1,
+        "type": "choose_reward"
+      },
+      {
+        "id": 4,
+        "type": "select_node"
+      }
+    ],
+    "relic": "queens_indian",
+    "seed": 244
+  },
+  {
+    "commands": [
+      {
+        "id": 0,
+        "type": "select_node"
+      },
+      {
+        "from": 50,
+        "to": 42,
+        "type": "move"
+      },
+      {
+        "from": 59,
+        "to": 32,
+        "type": "move"
+      },
+      {
+        "from": 32,
+        "to": 4,
+        "type": "move"
+      },
+      {
+        "index": 1,
+        "type": "choose_reward"
+      },
+      {
+        "id": 4,
+        "type": "select_node"
+      }
+    ],
+    "relic": "hedgehog",
+    "seed": 0
+  },
+  {
+    "commands": [
+      {
+        "id": 0,
+        "type": "select_node"
+      },
+      {
+        "from": 48,
+        "to": 40,
+        "type": "move"
+      },
+      {
+        "from": 52,
+        "to": 44,
+        "type": "move"
+      },
+      {
+        "from": 59,
+        "to": 31,
+        "type": "move"
+      },
+      {
+        "index": 2,
+        "type": "choose_reward"
+      },
+      {
+        "id": 4,
+        "type": "select_node"
+      }
+    ],
+    "relic": "initiative",
+    "seed": 797
+  },
+  {
+    "commands": [
+      {
+        "id": 0,
+        "type": "select_node"
+      },
+      {
+        "from": 49,
+        "to": 41,
+        "type": "move"
+      },
+      {
+        "from": 58,
+        "to": 40,
+        "type": "move"
+      },
+      {
+        "from": 40,
+        "to": 12,
+        "type": "move"
+      },
+      {
+        "index": 0,
+        "type": "choose_reward"
+      },
+      {
+        "id": 4,
+        "type": "select_node"
+      }
+    ],
+    "relic": "ice_cream",
+    "seed": 2
+  },
+  {
+    "commands": [
+      {
+        "id": 0,
+        "type": "select_node"
+      },
+      {
+        "from": 50,
+        "to": 42,
+        "type": "move"
+      },
+      {
+        "from": 59,
+        "to": 41,
+        "type": "move"
+      },
+      {
+        "from": 41,
+        "to": 20,
+        "type": "move"
+      },
+      {
+        "index": 0,
+        "type": "choose_reward"
+      },
+      {
+        "id": 3,
+        "type": "select_node"
+      }
+    ],
+    "relic": "hard_disk",
+    "seed": 5
+  },
+  {
+    "commands": [
+      {
+        "id": 1,
+        "type": "select_node"
+      },
+      {
+        "from": 50,
+        "to": 42,
+        "type": "move"
+      },
+      {
+        "from": 59,
+        "to": 41,
+        "type": "move"
+      },
+      {
+        "from": 41,
+        "to": 20,
+        "type": "move"
+      },
+      {
+        "index": 2,
+        "type": "choose_reward"
+      },
+      {
+        "id": 5,
+        "type": "select_node"
+      }
+    ],
+    "relic": "kings_indian",
+    "seed": 6
+  }
+]

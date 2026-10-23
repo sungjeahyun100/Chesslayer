@@ -388,7 +388,7 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
     ] {
         let commands: Vec<Command> = serde_json::from_str(fixture).unwrap();
         let mut g = Game::new("vanguard", 2026).unwrap();
-        for c in commands {
+        for (index, c) in commands.into_iter().enumerate() {
             if let Command::RestUpgrade { id, .. } = c {
                 let before = serde_json::to_string(&g.snapshot()).unwrap();
                 for target in [QUEEN, TEMPEST_ROOK, BOUNCING_QUEEN] {
@@ -431,7 +431,8 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
                 }
                 assert_eq!(serde_json::to_string(&g.snapshot()).unwrap(), before);
             }
-            g.dispatch(c).unwrap();
+            g.dispatch(c)
+                .unwrap_or_else(|e| panic!("promotion fixture {family} command {index}: {e}"));
             while g.phase == RunPhase::Combat && g.battle.turn == ENEMY {
                 g.dispatch(Command::EnemyStep).unwrap();
             }
@@ -516,11 +517,11 @@ fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
         }
     }
     assert_eq!(rest.phase, RunPhase::Rest);
-    assert_eq!(rest.snapshot().upgrade_paths.len(), 9);
+    assert_eq!(rest.snapshot().upgrade_paths.len(), 23);
     for (id, source, targets) in [
         (1, ROOK, vec![TEMPEST_ROOK, BOUNCING_ROOK]),
         (3, BISHOP, vec![TEMPEST_BISHOP, BOUNCING_BISHOP]),
-        (2, KNIGHT, vec![TEMPEST_KNIGHT]),
+        (2, KNIGHT, vec![TEMPEST_KNIGHT, pieces::KNIGHTRIDER]),
         (4, QUEEN, vec![TEMPEST_QUEEN, BOUNCING_QUEEN]),
     ] {
         let snapshot = rest.snapshot();
@@ -577,18 +578,20 @@ fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
                 })
                 .is_err());
             g.dispatch(Command::SelectNode { id: 13 }).unwrap();
+            expected.position = chesslayer::content::Relic::Hedgehog.position(id);
             assert_eq!(
                 g.battle.outcome().into_iter().find(|p| p.id == id).unwrap(),
                 expected
             );
         }
     }
-    // Pawn promotion remains distinct from rest upgrades; no extra stages are implied.
+    // Pawn promotion remains distinct from rest upgrades. These are terminal kinds.
     for kind in [
         TEMPEST_PAWN,
         BOUNCING_PAWN,
-        TEMPEST_QUEEN,
-        BOUNCING_QUEEN,
+        pieces::MOVEMENT_GOD,
+        pieces::BOUNCING_TEMPEST_QUEEN,
+        pieces::TYPHOON_QUEEN,
         KING,
         AMAZON,
     ] {

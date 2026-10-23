@@ -436,6 +436,24 @@ footer span {
   box-shadow: inset 0 0 0 4px #d1a854;
   background: #b4bc81;
 }
+.square.card-staged {
+  box-shadow: inset 0 0 0 5px #d89324;
+  background: #e7c76a;
+}
+.limiter-mark {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  border-radius: 50%;
+  padding: 1px 4px;
+  background: #9e3929;
+  color: white;
+  font-size: 10px;
+  font-weight: bold;
+}
+.staged-upgrades { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.staged-upgrades button { font-size: 11px; }
+.card-upgrade-picker { max-height: 65vh; overflow: auto; }
 .square.legal {
   cursor: crosshair;
 }
@@ -739,6 +757,15 @@ footer span {
   border: 2px solid #b99b4f;
   padding: 12px 13px 13px;
   background: #fff8de;
+}
+.playing-card.relic-reward {
+  border-color: #b89b64;
+  background: #fff7e5;
+}
+.relic-reward .card-top {
+  color: #80622e;
+  min-height: 26px;
+  font-weight: 700;
 }
 .card-top {
   display: flex;
@@ -1160,6 +1187,9 @@ footer span {
   }
   .reward-cards .card-top > span:not(.cost) {
     display: none;
+  }
+  .reward-cards .relic-reward .card-top > span {
+    display: block;
   }
   .reward-cards .card-symbol {
     display: none;
@@ -2213,6 +2243,10 @@ footer span {
 .skill-requirements > strong { font-size: 10px; color: #52624d; }
 .skill-requirements p { margin-top: 6px; }
 .skill-requirements p > span { display: block; color: #3c513a; }
+.skill-requirement-path { margin-top: 8px; }
+.skill-owned { display: inline-block; margin: 5px 5px 0 0; padding: 2px 7px; border-radius: 10px; font-size: 10px; }
+.skill-owned.owned { color: #31543b; background: #dcebd9; }
+.skill-owned.missing { color: #8b4238; background: #f4e1db; }
 .skill-lock-reason { margin-top: 14px; padding: 10px 12px; border-left: 2px solid #a4b48e; background: #e8ecdf; color: #5c6e54; font-size: 12px; line-height: 1.8; }
 .skill-purchase { margin-top: 14px; padding: 13px; background: #ebefdf; border: 1px solid #c7d1b6; border-radius: 6px; }
 .skill-purchase > p { font-size: 12px; color: #35523b; line-height: 1.8; }
@@ -2265,3 +2299,68 @@ footer span {
   text-shadow: 0 1px 3px #000, 0 0 5px #000;
 }
 .self-defense-info { color: var(--gold); }
+
+.relic-status {
+  display: block;
+  color: var(--green);
+  line-height: 1.5;
+  margin-top: 5px;
+}
+.mana-orb {
+  min-width: 46px;
+  width: auto;
+  padding: 0 8px;
+  overflow-wrap: anywhere;
+}
+
+/* The art is a dedicated block above the copy, so long rules never cover it. */
+.card-symbol {
+  display: grid;
+  place-items: center;
+  height: 104px;
+  margin: 8px 0 11px;
+  border: 1px solid #d9dfd0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #294a44;
+}
+.card-art { display: block; width: 100%; height: 100%; object-fit: cover; }
+.relic-icon { display: block; object-fit: contain; flex: none; }
+.character .character-icon { width: 68px; height: 68px; margin-bottom: 12px; }
+.relic > .relic-icon { width: 42px; height: 42px; padding: 0; background: none; }
+.relic-reward .card-symbol { background: #f0e6cf; }
+.relic-reward .card-symbol > .relic-icon { width: 86px; height: 86px; }
+.relic-type { color: #88692f; font-size: 11px; font-weight: 700; }
+.treasure-relic > .relic-icon { width: 90px; height: 90px; }
+.reward-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: stretch; }
+.reward-cards .playing-card { width: 100%; min-width: 0; min-height: 344px; }
+.playing-card h3, .playing-card p { overflow-wrap: anywhere; }
+.hand { min-height: 72px; }
+.empty-hand { padding: 16px 10px; font-size: 12px; color: #7b8978; }
+.temporary-mark {
+  position: absolute; left: 4%; bottom: 3%; z-index: 1;
+  width: 19px; height: 19px; border-radius: 50%;
+  display: grid; place-items: center; font: 700 14px/1 sans-serif;
+  color: #fff8df; background: #377f79; border: 1px solid #fff0b4;
+}
+.effect-panel { padding: 12px 5px; border-top: 1px solid var(--line); }
+.effect-row { display: flex; gap: 9px; align-items: flex-start; margin-top: 10px; padding: 8px; background: #edf1e7; border-radius: 5px; }
+.effect-row > .piece-image { width: 33px; height: 38px; }
+.effect-row strong { display: block; font-size: 11px; }
+.effect-row small { display: block; font-size: 10px; line-height: 1.55; color: #536c61; margin-top: 3px; }
+.effect-note { display: block; margin-top: 5px; color: #357369; line-height: 1.5; }
+.effect-note.danger { color: #a34d37; }
+
+@media (max-width: 850px) {
+  .reward-cards { grid-template-columns: 1fr; }
+  .reward-cards .playing-card { width: 100%; min-height: 0; padding: 14px; }
+  .reward-cards .card-top { position: static; }
+  .reward-cards .card-top > span:not(.cost), .reward-cards .relic-reward .card-top > span { display: inline; }
+  .reward-cards .card-symbol { display: grid; height: 120px; }
+  .reward-cards .playing-card h3 { margin-bottom: 9px; }
+}
+@media (max-width: 420px) {
+  .hand { max-width: calc(100vw - 38px); }
+  .piles { flex-wrap: wrap; gap: 5px 13px; }
+  .card-symbol { height: 94px; }
+}

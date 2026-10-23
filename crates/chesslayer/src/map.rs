@@ -1,7 +1,7 @@
 //! One immutable, seeded Act graph. Run traversal is kept separately by Game.
 use crate::content::{
     encounters::{ELITES, HOOK_BOSS},
-    Relic, Rng, ENCOUNTERS,
+    Relic, Rng, ENCOUNTERS, RELIC_REWARD_POOL,
 };
 use serde::Serialize;
 
@@ -37,10 +37,10 @@ impl MapNode {
     pub fn description(&self) -> String {
         match self.kind {
             NodeKind::Combat => {
-                "적 로얄을 포획하고 카드 1장을 선택합니다. 아군의 위치와 손실이 이어집니다.".into()
+                "적 로얄을 쓰러뜨리고 카드·유물 보상 3개 중 하나를 선택합니다.".into()
             }
             NodeKind::Elite => format!(
-                "{} 승리하면 카드 1장과 {}을 얻습니다.",
+                "{} 승리하면 카드·유물 보상 3개 중 하나와 추가 유물 {}을 얻습니다.",
                 ENCOUNTERS[self.encounter.unwrap()].description,
                 self.relic.unwrap().name()
             ),
@@ -54,7 +54,7 @@ impl MapNode {
             ),
             NodeKind::Boss => {
                 format!(
-                    "{} 직접 포획하면 원정을 완수합니다.",
+                    "{} 승리하고 카드·유물 보상 3개 중 하나를 선택하면 원정을 완수합니다.",
                     ENCOUNTERS[HOOK_BOSS].description
                 )
             }
@@ -114,7 +114,7 @@ impl ActMap {
                     _ => None,
                 };
                 let relic = matches!(kind, NodeKind::Elite | NodeKind::Treasure)
-                    .then(|| [Relic::Haste, Relic::Whirlwind, Relic::SelfDefense][rng.index(3)]);
+                    .then(|| RELIC_REWARD_POOL[rng.index(RELIC_REWARD_POOL.len())]);
                 let id = nodes.len();
                 layer.push(id);
                 nodes.push(MapNode {

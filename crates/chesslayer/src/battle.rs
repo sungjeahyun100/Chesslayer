@@ -4,7 +4,7 @@ use crate::{
     PieceId, PieceType, PlayerId, Position, ResultReason,
 };
 use chessembly::{Error as DslError, Program};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 pub const PLAYER: PlayerId = 0;
 pub const ENEMY: PlayerId = 1;
 // Keep the existing crate-root API through battle's re-exports.
@@ -13,18 +13,23 @@ pub use crate::content::pieces::{
     KING, KNIGHT, PAWN, QUEEN, ROOK, TEMPEST_BISHOP, TEMPEST_KNIGHT, TEMPEST_PAWN, TEMPEST_QUEEN,
     TEMPEST_ROOK,
 };
-use crate::content::{pieces, Rng};
+use crate::content::{pieces, Rng, INITIATIVE_TURNS};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BattleOptions {
     pub actions_per_turn: u8,
     pub self_defense: bool,
+    pub initiative: bool,
+    /// Only a restored Hard Disk deployment reverses setup collisions.
+    pub hard_disk: bool,
 }
 impl Default for BattleOptions {
     fn default() -> Self {
         Self {
             actions_per_turn: 1,
             self_defense: false,
+            initiative: false,
+            hard_disk: false,
         }
     }
 }
@@ -101,14 +106,25 @@ pub struct Battle {
     pub royal_id: PieceId,
     pub king_id: PieceId,
     pub actions_left: u8,
+    normal_actions_used: u8,
+    limiter_turn: bool,
     pub events: Vec<String>,
     actions_per_turn: u8,
     wards: HashSet<PieceId>,
+    temporary_upgrades: HashSet<PieceId>,
+    limiter: HashMap<PieceId, LimiterState>,
     self_defense_target: Option<PieceId>,
+    initiative_turns_left: u8,
     players: Vec<PlayerPiece>,
     programs: BTreeMap<PieceType, Program>,
     initial_double_step: Program,
     moved_ids: HashSet<PieceId>,
+}
+#[derive(Clone, Copy)]
+struct LimiterState {
+    owner: PlayerId,
+    active: bool,
+    moves_left: u8,
 }
 impl Battle {
     pub fn standard_roster() -> Vec<PlayerPiece> {
@@ -186,6 +202,14 @@ impl Battle {
                 if old.owner == ENEMY {
                     return Err(Error::InvalidSetup);
                 }
+                if options.hard_disk {
+                    events.push(format!(
+                        "하드디스크: {}에 겹친 적 {}이 사망했습니다.",
+                        square(e.position),
+                        piece_name(e.kind)
+                    ));
+                    continue;
+                }
                 if let Some(p) = players.iter_mut().find(|p| p.id == old.id) {
                     p.position = None;
                     events.push(format!(
@@ -216,8 +240,17 @@ impl Battle {
         let mut battle = Self {
             events,
             wards: HashSet::new(),
+            temporary_upgrades: HashSet::new(),
+            limiter: HashMap::new(),
             self_defense_target: None,
+            initiative_turns_left: if options.initiative {
+                INITIATIVE_TURNS
+            } else {
+                0
+            },
             actions_left: options.actions_per_turn,
+            normal_actions_used: 0,
+            limiter_turn: false,
             actions_per_turn: options.actions_per_turn,
             board,
             turn: PLAYER,
@@ -230,7 +263,11 @@ impl Battle {
             initial_double_step,
             moved_ids,
         };
-        battle.update_result(ResultReason::Counterattack);
+        battle.update_result(if options.hard_disk {
+            ResultReason::HardDisk
+        } else {
+            ResultReason::Counterattack
+        });
         if options.self_defense && battle.phase == Phase::Active {
             let living: Vec<_> = battle
                 .board
@@ -249,10 +286,12 @@ impl Battle {
         Ok(battle)
     }
     /// Run boundary: keep identities, deaths and permanent growth; discard combat state.
-    pub(crate) fn reset_after_battle(&mut self) -> Result<(), Error> {
+    pub(crate) fn reset_after_battle(&mut self, keep_positions: bool) -> Result<(), Error> {
         let mut roster = self.outcome();
         for p in &mut roster {
-            p.position = p.position.map(|_| p.origin);
+            if !keep_positions {
+                p.position = p.position.map(|_| p.origin);
+            }
             p.moved = false;
         }
         self.replace_roster_at_rest(roster)
@@ -283,7 +322,10 @@ impl Battle {
             }
         }
         self.wards.clear();
+        self.temporary_upgrades.clear();
+        self.limiter.clear();
         self.self_defense_target = None;
+        self.initiative_turns_left = 0;
         self.moved_ids = roster.iter().filter(|p| p.moved).map(|p| p.id).collect();
         self.board = next;
         self.players = roster;
@@ -291,6 +333,9 @@ impl Battle {
     }
     pub fn player_pieces(&self) -> &[PlayerPiece] {
         &self.players
+    }
+    pub fn has_temporary_upgrade(&self, id: PieceId) -> bool {
+        self.temporary_upgrades.contains(&id)
     }
     pub fn outcome(&self) -> Vec<PlayerPiece> {
         self.players.clone()
@@ -302,6 +347,19 @@ impl Battle {
         let piece = self.board.piece_at(from)?.ok_or(Error::IllegalAction)?;
         if piece.owner != self.turn {
             return Err(Error::WrongTurn);
+        }
+        if self
+            .limiter
+            .get(&piece.id)
+            .is_some_and(|s| s.active && s.moves_left == 0)
+        {
+            return Ok(vec![]);
+        }
+        if self.limiter_turn
+            && !self.limiter.get(&piece.id).is_some_and(|s| s.active)
+            && self.normal_actions_used >= self.actions_per_turn
+        {
+            return Ok(vec![]);
         }
         let mut actions = self
             .programs
@@ -323,6 +381,12 @@ impl Battle {
         // No unpromoted action is offered on the final rank for these families.
         let mut result = Vec::new();
         for action in actions {
+            if piece.owner == ENEMY
+                && self.initiative_turns_left > 0
+                && self.captures_player(&action)?
+            {
+                continue;
+            }
             let destination = action.steps().last().unwrap().move_to;
             if destination.rank == last_rank && !definition.promotions.is_empty() {
                 for &kind in definition.promotions {
@@ -341,6 +405,19 @@ impl Battle {
             }
         }
         Ok(result)
+    }
+    // Inspect each step on its actual intermediate board, including remote/jump captures.
+    fn captures_player(&self, action: &DefaultAction) -> Result<bool, Error> {
+        let mut next = self.board.clone();
+        for step in action.steps() {
+            if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                && next.piece_at(step.take)?.is_some_and(|p| p.owner == PLAYER)
+            {
+                return Ok(true);
+            }
+            apply_default_action(&mut next, &DefaultAction::one(step.clone()))?;
+        }
+        Ok(false)
     }
     pub fn apply_piece_action(&mut self, action: &DefaultAction) -> Result<(), Error> {
         if self.phase != Phase::Active {
@@ -377,6 +454,13 @@ impl Battle {
             self.apply_effect(action, ActionSource::PieceMove)?;
         }
         self.moved_ids.insert(piece.id);
+        if let Some(state) = self.limiter.get_mut(&piece.id) {
+            if state.active {
+                state.moves_left = state.moves_left.saturating_sub(1);
+            }
+        } else {
+            self.normal_actions_used = self.normal_actions_used.saturating_add(1);
+        }
         if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
             p.moved = true;
         }
@@ -390,8 +474,176 @@ impl Battle {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
         }
+        let expired: Vec<_> = self
+            .limiter
+            .iter()
+            .filter(|(_, s)| s.active && s.owner == self.turn)
+            .map(|(&id, _)| id)
+            .collect();
+        if !expired.is_empty() {
+            self.remove_for_limiter(&expired)?;
+            self.events.push(format!(
+                "리미터 해제: 효과 종료로 {}기 사망했습니다.",
+                expired.len()
+            ));
+            for id in expired {
+                self.limiter.remove(&id);
+            }
+            if self.phase == Phase::Finished {
+                return Ok(());
+            }
+        }
+        if self.turn == ENEMY && self.initiative_turns_left > 0 {
+            self.initiative_turns_left -= 1;
+            if self.initiative_turns_left == 0 {
+                self.events
+                    .push("선공권: 적 턴 10회가 지나 보호가 끝났습니다.".into());
+            }
+        }
         self.turn = if self.turn == PLAYER { ENEMY } else { PLAYER };
         self.actions_left = self.actions_per_turn;
+        self.normal_actions_used = 0;
+        let mut starts = false;
+        for s in self.limiter.values_mut() {
+            if s.owner == self.turn && !s.active {
+                s.active = true;
+                s.moves_left = 3;
+                starts = true;
+            }
+        }
+        self.limiter_turn = starts;
+        if starts {
+            self.actions_left = self.actions_left.max(3);
+        }
+        Ok(())
+    }
+    pub fn limiter_status(&self, id: PieceId) -> Option<(bool, u8)> {
+        self.limiter.get(&id).map(|s| (s.active, s.moves_left))
+    }
+    pub fn grant_limiter(&mut self, id: PieceId) -> Result<(), Error> {
+        if self.phase != Phase::Active {
+            return Err(Error::Finished);
+        }
+        if self.limiter.contains_key(&id) {
+            return Err(Error::IllegalAction);
+        }
+        let piece = self
+            .board
+            .cells()
+            .iter()
+            .flatten()
+            .find(|p| p.id == id)
+            .ok_or(Error::IllegalAction)?;
+        self.limiter.insert(
+            id,
+            LimiterState {
+                owner: piece.owner,
+                active: false,
+                moves_left: 3,
+            },
+        );
+        Ok(())
+    }
+    pub fn forward_pawn_candidates(&self) -> Vec<PieceId> {
+        self.board
+            .cells()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                let piece = p.as_ref()?;
+                if piece.owner != PLAYER || !piece_name(piece.kind).contains("폰") {
+                    return None;
+                }
+                let from = Position::new(i as i32 % 8, i as i32 / 8);
+                let to = Position::new(from.file, from.rank - 1);
+                self.board
+                    .index(to)
+                    .filter(|_| self.board.piece_at(to).ok().flatten().is_none())
+                    .map(|_| piece.id)
+            })
+            .collect()
+    }
+    pub fn advance_pawns(&mut self, ids: &[PieceId]) -> Result<(), Error> {
+        if self.phase != Phase::Active || ids.is_empty() {
+            return Err(Error::IllegalAction);
+        }
+        let eligible = self.forward_pawn_candidates();
+        let mut seen = HashSet::new();
+        if ids
+            .iter()
+            .any(|id| !seen.insert(*id) || !eligible.contains(id))
+        {
+            return Err(Error::IllegalAction);
+        }
+        let moves: Vec<_> = self
+            .board
+            .cells()
+            .iter()
+            .enumerate()
+            .filter_map(|(i, p)| {
+                let piece = p.as_ref()?;
+                ids.contains(&piece.id).then(|| {
+                    let from = Position::new(i as i32 % 8, i as i32 / 8);
+                    (from, Position::new(from.file, from.rank - 1), *piece)
+                })
+            })
+            .collect();
+        let mut destinations = HashSet::new();
+        if moves.len() != ids.len() || moves.iter().any(|(_, to, _)| !destinations.insert(*to)) {
+            return Err(Error::IllegalAction);
+        }
+        let mut next = self.board.clone();
+        for (from, _, _) in &moves {
+            next.set_piece(*from, None)?;
+        }
+        for (_, to, piece) in &moves {
+            next.set_piece(*to, Some(*piece))?;
+        }
+        self.board = next;
+        self.sync_players();
+        Ok(())
+    }
+    pub fn temporary_upgrades(&mut self, choices: &[(PieceId, PieceType)]) -> Result<(), Error> {
+        if self.phase != Phase::Active || choices.is_empty() {
+            return Err(Error::IllegalAction);
+        }
+        let mut seen = HashSet::new();
+        let mut changes = vec![];
+        for &(id, target) in choices {
+            if !seen.insert(id) {
+                return Err(Error::IllegalAction);
+            }
+            let (i, piece) = self
+                .board
+                .cells()
+                .iter()
+                .enumerate()
+                .find_map(|(i, p)| p.filter(|p| p.id == id).map(|p| (i, p)))
+                .ok_or(Error::IllegalAction)?;
+            if piece.owner != PLAYER
+                || !pieces::definition(piece.kind)
+                    .is_some_and(|d| d.upgrades.iter().any(|u| u.target == target))
+                || !pieces::required_owned(target)
+                    .iter()
+                    .all(|&kind| self.players.iter().any(|owned| owned.kind == kind))
+            {
+                return Err(Error::IllegalAction);
+            }
+            changes.push((
+                Position::new(i as i32 % 8, i as i32 / 8),
+                Piece {
+                    kind: target,
+                    ..piece
+                },
+            ));
+        }
+        let mut next = self.board.clone();
+        for (at, piece) in changes {
+            next.set_piece(at, Some(piece))?;
+        }
+        self.board = next;
+        self.temporary_upgrades
+            .extend(choices.iter().map(|(id, _)| *id));
         Ok(())
     }
     /// Applies a resolved card action atomically, preserving both royal identities and the turn.
@@ -407,6 +659,9 @@ impl Battle {
     pub fn has_self_defense(&self, id: PieceId) -> bool {
         self.self_defense_target == Some(id)
     }
+    pub fn initiative_turns_left(&self) -> u8 {
+        self.initiative_turns_left
+    }
     pub fn grant_ward(&mut self, id: PieceId) -> Result<(), Error> {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
@@ -419,6 +674,14 @@ impl Battle {
     }
     /// Non-capture removal always protects both royals. Counterattacks only occur in setup.
     pub fn remove_nonroyals(&mut self, ids: &[PieceId]) -> Result<usize, Error> {
+        self.remove_pieces(ids, false)
+    }
+    fn remove_for_limiter(&mut self, ids: &[PieceId]) -> Result<(), Error> {
+        self.remove_pieces(ids, true)?;
+        self.update_result(ResultReason::RoyalCaptured);
+        Ok(())
+    }
+    fn remove_pieces(&mut self, ids: &[PieceId], include_royals: bool) -> Result<usize, Error> {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
         }
@@ -428,11 +691,12 @@ impl Battle {
                 let pos = Position::new(file, rank);
                 if let Some(piece) = self.board.piece_at(pos)? {
                     if ids.contains(&piece.id)
-                        && piece.id != self.king_id
-                        && piece.id != self.royal_id
+                        && (include_royals
+                            || (piece.id != self.king_id && piece.id != self.royal_id))
                     {
                         self.board.set_piece(pos, None)?;
                         self.wards.remove(&piece.id);
+                        self.limiter.remove(&piece.id);
                         removed += 1;
                     }
                 }
@@ -444,6 +708,7 @@ impl Battle {
     fn apply_effect(&mut self, action: &DefaultAction, source: ActionSource) -> Result<(), Error> {
         let mut next = self.board.clone();
         let mut retaliation = None;
+        let mut player_captured = false;
         if source == ActionSource::ResolvedCardEffect {
             apply_default_action(&mut next, action)?;
             for id in [self.king_id, self.royal_id] {
@@ -460,6 +725,10 @@ impl Battle {
                     && captor.is_some_and(|p| p.owner == ENEMY)
                     && victim.is_some_and(|p| p.owner == PLAYER && self.has_self_defense(p.id));
                 apply_default_action(&mut next, &DefaultAction::one(step.clone()))?;
+                player_captured |=
+                    !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                        && captor.is_some_and(|p| p.owner == PLAYER)
+                        && victim.is_some_and(|p| p.owner == ENEMY);
                 if retaliates {
                     let captor = captor.unwrap();
                     if let Some(index) = next
@@ -476,8 +745,15 @@ impl Battle {
             }
         }
         self.board = next;
+        if player_captured && self.initiative_turns_left > 0 {
+            self.initiative_turns_left = 0;
+            self.events
+                .push("선공권: 아군의 포획이 성공해 보호가 끝났습니다.".into());
+        }
         self.wards
             .retain(|id| self.board.cells().iter().flatten().any(|p| p.id == *id));
+        self.limiter
+            .retain(|id, _| self.board.cells().iter().flatten().any(|p| p.id == *id));
         self.sync_players();
         if let Some(captor) = retaliation {
             self.events.push(format!(
@@ -546,6 +822,8 @@ impl Battle {
         };
         if self.phase == Phase::Finished {
             self.self_defense_target = None;
+            self.initiative_turns_left = 0;
+            self.limiter.clear();
         }
     }
 }

@@ -3,41 +3,16 @@ pub mod cards;
 pub mod characters;
 pub mod encounters;
 pub mod pieces;
+pub mod relics;
 pub use cards::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
 pub use characters::{characters, Character};
 pub use encounters::{encounter, ENCOUNTERS};
+pub use relics::{Relic, INITIATIVE_TURNS, RELIC_REWARD_POOL};
 
-use serde::Serialize;
-
-pub const BASE_MANA: u8 = 3;
-pub const DRAW_PER_TURN: usize = 5;
+pub const BASE_MANA: u32 = 3;
+pub const DRAW_PER_TURN: usize = 1;
 pub const HAND_LIMIT: usize = 10;
 pub const HASTE_ACTIONS: u8 = 2;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub enum Relic {
-    Haste,
-    Whirlwind,
-    SelfDefense,
-}
-impl Relic {
-    pub fn name(self) -> &'static str {
-        match self {
-            Self::Haste => "가속",
-            Self::Whirlwind => "소용돌이",
-            Self::SelfDefense => "호신용품",
-        }
-    }
-    pub fn description(self) -> &'static str {
-        match self {
-            Self::Haste => "양 진영이 턴마다 최대 2회 이동합니다.",
-            Self::Whirlwind => "전투 시작 시 적들끼리 시작 위치를 무작위로 교환합니다.",
-            Self::SelfDefense => {
-                "전투 시작 시 무작위 아군 하나를 보호합니다. 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다."
-            }
-        }
-    }
-}
 /// Small deterministic generator: the same seed and commands yield the same run, including WASM.
 #[derive(Clone)]
 pub struct Rng(u64);

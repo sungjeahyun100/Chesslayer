@@ -16,12 +16,13 @@ async function loadRest(page: Page, casualties = false) {
       const { default: init, WebGame } = await import(url);
       await init();
       const game = new WebGame("vanguard", 2026);
-      for (const command of commands) {
+      for (const [index, command] of commands.entries()) {
         let s = JSON.parse(game.snapshot());
         while (s.phase === "combat" && s.turn === 1)
           s = JSON.parse(game.dispatch(JSON.stringify({ type: "enemy_step" })));
         if (s.phase === "rest") break;
-        game.dispatch(JSON.stringify(command));
+        try { game.dispatch(JSON.stringify(command)); }
+        catch (e) { throw new Error(`fixture command ${index}: ${String(e)}`); }
       }
       localStorage.setItem(saveKey, game.save());
       game.free();
@@ -59,6 +60,47 @@ async function allImagesLoaded(page: Page) {
       ),
   ).toBe(true);
 }
+
+test("휴식 트리: 신규 후속 행마가 잠긴 가지와 SVG로 표시된다", async ({ page }) => {
+  await loadRest(page);
+  const paths = (await restoreSnapshot(page)).upgrade_paths;
+  for (const [from, to] of [[2, 18], [18, 19], [18, 20], [14, 17], [15, 21], [15, 22]])
+    expect(paths.some((p: any) => p.from === from && p.to === to)).toBe(true);
+  for (const [square, expected] of [
+    ["b1", [[18, "available"], [19, "locked"], [20, "locked"]]],
+    ["a1", [[17, "locked"]]],
+    ["c1", [[21, "locked"], [22, "locked"]]],
+  ] as const) {
+    await page.locator(`[data-square="${square}"]`).click();
+    for (const [kind, status] of expected) {
+      const node = page.locator(`.skill-node[data-kind="${kind}"]`);
+      await expect(node).toHaveClass(new RegExp(`\\b${status}\\b`));
+      await node.click();
+      await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", paths.find((p: any) => p.to === kind).to_key);
+    }
+    await allImagesLoaded(page);
+  }
+});
+
+test("휴식 트리: 상위 복합 기물의 잠금 조건과 미리보기를 표시한다", async ({ page }) => {
+  await loadRest(page);
+  const paths = (await restoreSnapshot(page)).upgrade_paths;
+  for (const [from, to] of [[16, 23], [12, 24], [9, 25], [10, 26], [12, 27], [9, 28], [10, 29], [11, 30]]) {
+    expect(paths.some((p: any) => p.from === from && p.to === to)).toBe(true);
+  }
+  await page.locator('[data-square="d1"]').click();
+  const god = page.locator('.skill-node[data-kind="23"]');
+  await expect(god).toHaveClass(/\blocked\b/);
+  await expect(god).toHaveAttribute("title", /구행: 미보유[\s\S]*텐쿠\(天狗\): 미보유/);
+  await god.click();
+  await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", "movement_god");
+  await expect(page.locator(".skill-owned.missing")).toHaveCount(2);
+  const bouncingTempest = page.locator('.skill-node[data-kind="24"]');
+  await bouncingTempest.click();
+  await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", "bouncing_tempest_queen");
+  await expect(page.locator(".skill-owned.missing")).toHaveCount(2);
+  await allImagesLoaded(page);
+});
 
 test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음 전투", async ({
   page,
@@ -146,8 +188,8 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
     "data-piece-key",
     "tempest_pawn",
   );
-  await page.locator('[data-square="a2"]').click();
-  await expect(page.locator('[data-square="a3"]')).toHaveAttribute(
+  await page.locator('[data-square="a3"]').click();
+  await expect(page.locator('[data-square="a4"]')).toHaveAttribute(
     "data-legal",
     "true",
   );
@@ -159,18 +201,18 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   await page.setViewportSize({ width: 390, height: 844 });
   await loadRest(page, true);
   const before = await saved(page);
-  await page.locator('[data-square="a1"]').click();
+  await page.locator('[data-square="f1"]').click();
   await expect(page.getByText("이 기물을 되살리시겠습니까?")).toBeVisible();
   await expect(page.locator(".rest-portrait img")).toHaveAttribute(
     "data-piece-key",
-    "rook",
+    "bishop",
   );
   await expect(page.locator(".rest-ghost")).toHaveCount(1);
   await expect(page.locator(".rest-ghost img")).toBeVisible();
   expect(await saved(page)).toBe(before);
   await page.keyboard.press("Escape");
   await expect(page.locator(".rest-ghost")).toHaveCount(0);
-  await page.locator('[data-square="a1"]').click();
+  await page.locator('[data-square="f1"]').click();
   await allImagesLoaded(page);
   expect(
     await page.evaluate(
@@ -189,22 +231,19 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   await page.getByRole("button", { name: "부활 확정" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
   let snapshot = await restoreSnapshot(page);
-  expect(snapshot.pieces.find((p: any) => p.id === 1)).toMatchObject({
-    key: "rook",
-    cell: 56,
+  expect(snapshot.pieces.find((p: any) => p.id === 6)).toMatchObject({
+    key: "bishop",
+    cell: 61,
   });
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
-  await page.locator('[data-node-id="13"]').click();
-  await expect(page.locator('[data-square="a1"]')).toHaveAccessibleName(
-    "a1 백 룩",
-  );
+  await page.locator('[data-node-id="14"]').click();
   snapshot = await restoreSnapshot(page);
   expect(snapshot.phase).toBe("combat");
-  expect(snapshot.pieces.find((p: any) => p.id === 1).cell).toBe(56);
+  expect(snapshot.pieces.find((p: any) => p.id === 6)?.key).toBe("bishop");
 });
 
-test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진형 계승", async ({ page }) => {
+test("휴식: 룩·비숍·나이트·퀸의 분기 강화와 저장·진형 계승", async ({ page }) => {
   await loadRest(page);
   const original = (await saved(page))!;
   const before = await restoreSnapshot(page);
@@ -213,7 +252,7 @@ test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진�
   const pieces = [
     { id: 1, square: "a1", name: "룩", key: "rook", families: ["tempest", "bouncing"] },
     { id: 3, square: "c1", name: "비숍", key: "bishop", families: ["tempest", "bouncing"] },
-    { id: 2, square: "b1", name: "나이트", key: "knight", families: ["tempest"] },
+    { id: 2, square: "b1", name: "나이트", key: "knight", families: ["tempest", "knightrider"] },
     { id: 4, square: "d1", name: "퀸", key: "queen", families: ["tempest", "bouncing"] },
   ];
   for (const piece of pieces) {
@@ -226,8 +265,8 @@ test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진�
       await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
       await page.locator(`[data-square="${piece.square}"]`).click();
       await expect(page.locator(".skill-node.available")).toHaveCount(piece.families.length);
-      const name = `${family === "tempest" ? "템페스트" : "바운싱"} ${piece.name}`;
-      const key = `${family}_${piece.key}`;
+      const name = family === "knightrider" ? "나이트라이더" : `${family === "tempest" ? "템페스트" : "바운싱"} ${piece.name}`;
+      const key = family === "knightrider" ? "knightrider" : `${family}_${piece.key}`;
       await page.getByRole("button", { name: `${name} · 선택 가능 · 상세 보기` }).click();
       await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", key);
       await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
@@ -255,10 +294,12 @@ test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진�
       await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
       const next = await restoreSnapshot(page);
       expect(next.rest_options.find((p: any) => p.id === piece.id)).toMatchObject({
-        key, cell: prior.cell, ward: prior.ward, upgrades: [...prior.upgrades, family],
+        key, cell: ({ 1: 58, 2: 51, 3: 49, 4: 50 } as Record<number, number>)[piece.id], origin: prior.origin, ward: prior.ward, upgrades: [...prior.upgrades, family],
       });
-      await page.locator(`[data-square="${piece.square}"]`).click();
-      const destinations = new Set(next.moves.filter((m: any) => m.from === prior.cell).map((m: any) => m.to));
+      const deployedCell = next.pieces.find((p: any) => p.id === piece.id).cell;
+      const deployedSquare = `${"abcdefgh"[deployedCell % 8]}${8 - Math.floor(deployedCell / 8)}`;
+      await page.locator(`[data-square="${deployedSquare}"]`).click();
+      const destinations = new Set(next.moves.filter((m: any) => m.from === deployedCell).map((m: any) => m.to));
       await expect(page.locator('[data-legal="true"]')).toHaveCount(destinations.size);
     }
   }

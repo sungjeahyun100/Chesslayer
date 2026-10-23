@@ -4,33 +4,23 @@
     "id": 2
   },
   {
-    "type": "play_card",
-    "id": 10,
-    "target": 5
-  },
-  {
-    "type": "play_card",
-    "id": 5,
-    "target": 4
+    "type": "move",
+    "from": 50,
+    "to": 42
   },
   {
     "type": "move",
-    "from": 51,
-    "to": 35
+    "from": 59,
+    "to": 32
   },
   {
     "type": "move",
-    "from": 58,
-    "to": 30
-  },
-  {
-    "type": "move",
-    "from": 30,
-    "to": 12
+    "from": 32,
+    "to": 4
   },
   {
     "type": "choose_reward",
-    "index": 0
+    "index": 1
   },
   {
     "type": "select_node",
@@ -44,19 +34,14 @@
     "id": 8
   },
   {
-    "type": "play_card",
-    "id": 1,
-    "target": null
+    "type": "move",
+    "from": 40,
+    "to": 32
   },
   {
     "type": "move",
-    "from": 52,
-    "to": 44
-  },
-  {
-    "type": "move",
-    "from": 61,
-    "to": 52
+    "from": 44,
+    "to": 36
   },
   {
     "type": "move",

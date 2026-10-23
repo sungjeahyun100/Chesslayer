@@ -33,7 +33,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                     assert!(encounters::ELITES.contains(&n.encounter.unwrap()));
                     elites.insert(n.encounter.unwrap());
                     assert!(n.relic.is_some());
-                    assert!(n.description().contains("카드 1장"));
+                    assert!(n.description().contains("카드·유물 보상 3개"));
                 }
                 NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::HOOK_BOSS)),
                 NodeKind::Combat => assert!(n.encounter.unwrap() < 4),
@@ -122,7 +122,7 @@ fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
     assert_eq!(game.map, original);
     assert_eq!(game.available_nodes().len(), 2);
     assert_eq!(game.battle.outcome()[3].position, Some(Position::new(3, 7)));
-    assert_eq!(game.deck.len(), 11);
+    assert_eq!(game.deck.len() + game.relics.len(), 2);
     let snapshot = serde_json::to_string(&game.snapshot()).unwrap();
     for id in [start, invalid, usize::MAX] {
         assert!(game.dispatch(Command::SelectNode { id }).is_err());

@@ -51,6 +51,7 @@ fn protected_scene(kind: PieceType, royal: bool, king: bool) -> Battle {
                 BattleOptions {
                     actions_per_turn: 1,
                     self_defense: true,
+                    ..BattleOptions::default()
                 },
                 &mut Rng::new(seed),
             )
@@ -297,6 +298,7 @@ fn each_battle_selects_one_living_ally_including_king_with_seeded_replay() {
         let options = BattleOptions {
             actions_per_turn: 1,
             self_defense: true,
+            ..BattleOptions::default()
         };
         for _ in 0..2 {
             let b = Battle::with_options(start.clone(), options, &mut rng).unwrap();

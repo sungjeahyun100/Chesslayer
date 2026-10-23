@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 180" role="img">
+<defs><linearGradient id="bg" x2="1" y2="1"><stop stop-color="#2a5255"/><stop offset="1" stop-color="#8a9e78"/></linearGradient><radialGradient id="light"><stop stop-color="#d5edd0" stop-opacity=".75"/><stop offset="1" stop-color="#d5edd0" stop-opacity="0"/></radialGradient></defs>
+<rect width="320" height="180" fill="url(#bg)"/><circle cx="185" cy="69" r="136" fill="url(#light)"/>
+<g opacity=".13" stroke="#fff3cf" stroke-width="1"><path d="M0 150H320M0 110H320M0 70H320M40 0V180M120 0V180M200 0V180M280 0V180"/></g>
+<path d="M160 24l69 28v50q-3 41-69 63-67-22-69-63V52Z" fill="#5b8a7b" stroke="#f7e5ae" stroke-width="4" stroke-dasharray="23 10"/><g transform="translate(160 108) scale(1.25)" fill="#f7e7bd" stroke="#243f3b" stroke-width="2.5"><circle cx="0" cy="-18" r="9"/><path d="M-9 -7H9L13 10H-13Z"/><path d="M-18 10H18V16H-18Z"/></g><path d="M25 140l37-28m199 28 35-32M158 5v25" stroke="#f7e5ae" stroke-width="4"/></svg>

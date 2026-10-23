@@ -1,32 +1,42 @@
 [
   {
-    "from": 51,
-    "to": 35,
-    "type": "move"
+    "type": "move",
+    "from": 52,
+    "to": 44
   },
   {
+    "type": "move",
     "from": 60,
-    "to": 51,
-    "type": "move"
+    "to": 52
   },
   {
-    "from": 51,
-    "to": 44,
-    "type": "move"
+    "type": "move",
+    "from": 52,
+    "to": 43
   },
   {
-    "from": 44,
-    "to": 37,
-    "type": "move"
+    "type": "move",
+    "from": 43,
+    "to": 36
   },
   {
-    "from": 37,
-    "to": 30,
-    "type": "move"
+    "type": "move",
+    "from": 36,
+    "to": 28
   },
   {
-    "from": 30,
-    "to": 21,
-    "type": "move"
+    "type": "move",
+    "from": 28,
+    "to": 20
+  },
+  {
+    "type": "move",
+    "from": 20,
+    "to": 12
+  },
+  {
+    "type": "move",
+    "from": 12,
+    "to": 3
   }
 ]

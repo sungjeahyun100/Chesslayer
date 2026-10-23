@@ -14,7 +14,7 @@ pub struct CardCombat {
     pub hand: Vec<Card>,
     pub discard: Vec<Card>,
     pub exhausted: Vec<Card>,
-    pub mana: u8,
+    pub mana: u32,
 }
 impl CardCombat {
     pub fn start(deck: &[Card], rng: &mut Rng) -> Self {
@@ -26,11 +26,15 @@ impl CardCombat {
             draw,
             ..Self::default()
         };
-        state.begin_turn(rng);
+        state.begin_turn(rng, false);
         state
     }
-    pub fn begin_turn(&mut self, rng: &mut Rng) {
-        self.mana = BASE_MANA;
+    pub fn begin_turn(&mut self, rng: &mut Rng, accumulate_mana: bool) {
+        self.mana = if accumulate_mana {
+            self.mana.saturating_add(BASE_MANA)
+        } else {
+            BASE_MANA
+        };
         for _ in 0..DRAW_PER_TURN {
             if self.hand.len() >= HAND_LIMIT {
                 break;
@@ -47,12 +51,14 @@ impl CardCombat {
         }
     }
     pub fn end_turn(&mut self) {
+        // Count the original hand, before ethereal cards are exhausted.
+        let discard_hand = self.hand.len() >= 5;
         let mut retained = vec![];
         for card in self.hand.drain(..) {
             let d = card.kind.definition();
             if d.ethereal {
                 self.exhausted.push(card);
-            } else if d.retain {
+            } else if d.retain || !discard_hand {
                 retained.push(card);
             } else {
                 self.discard.push(card);
@@ -60,14 +66,16 @@ impl CardCombat {
         }
         self.hand = retained;
     }
-    pub fn spend(&mut self, index: usize) {
+    pub fn spend_with_cost(&mut self, index: usize, definition: &CardDefinition, cost: u32) {
         let card = self.hand.remove(index);
-        let d = card.kind.definition();
-        self.mana -= d.cost;
-        if d.exhaust {
+        self.mana -= cost;
+        if definition.exhaust {
             self.exhausted.push(card);
         } else {
             self.discard.push(card);
         }
+    }
+    pub fn spend(&mut self, index: usize, definition: &CardDefinition) {
+        self.spend_with_cost(index, definition, definition.cost);
     }
 }

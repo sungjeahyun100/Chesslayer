@@ -15,7 +15,8 @@ chesslayer
   battle.rs   기존 Battle 기반 이동·턴·가호·로얄 보호·역습·outcome
   cards.rs    영구 덱과 별개인 전투 더미, 마나·키워드 처리
   content/    카드·기물·캐릭터별 정의, 명시적 등록 목록
-    mod.rs    몬스터 편성, 유물 정보, 임시 규칙 상수, 결정적 RNG
+    mod.rs    콘텐츠 재노출, 임시 규칙 상수, 결정적 RNG
+    relics.rs 유물 식별자·설명·후보 풀·ID별 명시적 진형 좌표
   map.rs      한 번 생성하는 제1막 그래프, 노드 콘텐츠와 표시 자료형
   game.rs     명령 검증, AI, 보상, 휴식, 원정 상태와 UI 스냅샷
   ↓
@@ -34,7 +35,7 @@ chessembly (보드, 액션, 파서와 이동 후보 계산)
 
 ## 맵과 진행 상태
 
-`Game::new()`에서 `ActMap::generate(seed)`를 한 번 호출합니다. 노드 유형·전투 편성·유물·연결 목록은 원정 중 바꾸지 않습니다. 지도 RNG는 전투/덱 RNG와 별도 스트림을 사용합니다. 브라우저는 새 런마다 난수 시드 하나를 전달하며 지도 생성과 이동 허가는 Rust가 담당합니다.
+`Game::new()`에서 `ActMap::generate(seed)`를 한 번 호출합니다. 노드 유형·전투 편성·유물·연결 목록은 원정 중 바꾸지 않습니다. 지도 RNG는 전투/덱/보상 RNG와 별도 스트림을 사용합니다. 브라우저는 새 런마다 난수 시드 하나를 전달하며 지도 생성과 이동 허가는 Rust가 담당합니다.
 
 `Game.current_node`, `path`, `completed`가 탐험 상태입니다. `available_nodes()`는 맵 단계에서만 시작점 또는 완료된 현재 노드의 직접 후속 노드를 반환합니다. 잘못된 선택은 상태 변경 전에 거부합니다. UI는 스냅샷의 `available/visited/current/skipped`를 표시하며 별도의 진행 규칙을 계산하지 않습니다.
 
@@ -43,7 +44,7 @@ chessembly (보드, 액션, 파서와 이동 후보 계산)
   일반/엘리트 → Combat → Reward → choose_reward → Map
   휴식 → Rest → 강화/부활/건너뛰기 → Map
   보물 → Treasure → claim_treasure → Map
-  보스 → Combat → Victory
+  보스 → Combat → Reward → choose_reward → Victory
   전투 중 킹 사망 → Defeat
 ```
 
@@ -51,7 +52,7 @@ chessembly (보드, 액션, 파서와 이동 후보 계산)
 
 ## 상태 계승
 
-`PlayerPiece`의 ID·`origin`은 영구 시작 칸을, `kind`·`upgrades`·`persistent`는 영구 진화·성장을 나타냅니다. 전투 보드의 종류는 일시 승격을 포함하며 `sync_players()`는 영구 종류를 덮어쓰지 않습니다. `Game::check_finish()`에서 `Battle::reset_after_battle()`을 한 번 호출해 생존 기물은 `origin`으로 복귀시키고 사망 기물은 `position: None`으로 보존합니다. `moved`·가호·호신용품 대상은 초기화하며 보드에만 있는 임시 기물은 제거합니다. 휴식·보상·맵 및 다음 전투는 이 동일한 목록과 보드를 사용합니다. 부활도 표준 진형을 재조회하지 않고 해당 ID의 `origin`을 사용합니다. 새 전투는 적의 기존 고유 편성과 역습 배치 절차를 사용합니다. 영구 덱은 `Game.deck`에, 전투 중 상태는 `CardCombat`에 분리합니다. 종료 시 `CardCombat`을 비우므로 소멸한 카드도 다음 전투에서는 영구 덱에서 다시 만들어집니다.
+`PlayerPiece`의 ID·`origin`은 영구 시작 칸을, `kind`·`upgrades`·`persistent`는 영구 진화·성장을 나타냅니다. 전투 보드의 종류는 일시 승격을 포함하며 `sync_players()`는 영구 종류를 덮어쓰지 않습니다. `Game::check_finish()`에서 `Battle::reset_after_battle()`을 한 번 호출해 종료 위치를 별도 기록한 뒤 생존 기물은 `origin`으로 복귀시키고(하드디스크 보유 시 위치 유지) 사망 기물은 `position: None`으로 보존합니다. `moved`·가호·호신용품 대상·선공권은 초기화하며 보드에만 있는 임시 기물은 제거합니다. 휴식·보상·맵 및 다음 전투는 이 동일한 목록과 보드를 사용합니다. 부활도 표준 진형을 재조회하지 않고 해당 ID의 `origin`을 사용합니다. 새 전투는 적의 기존 고유 편성과 역습 배치 절차를 사용합니다. 영구 덱은 `Game.deck`에, 전투 중 상태는 `CardCombat`에 분리합니다. 종료 시 `CardCombat`을 비우므로 소멸한 카드도 다음 전투에서는 영구 덱에서 다시 만들어집니다.
 
 카드의 비포획 제거는 `remove_nonroyals()`를 통하며 양측 로얄을 보호합니다. 호신용품은 전투 배치 후 살아 있는 아군(킹 포함) 한 기를 런 RNG로 선택합니다. `apply_effect()`가 직접 기물 액션의 각 단계에서 실제 포획자·피해자를 확인하고, 보호 대상의 사망 직후 포획자를 로얄 여부와 무관하게 제거합니다. 모든 연쇄 사망 후 승패를 판정하며 양측 로얄 동시 사망은 기존 킹 사망 우선 규칙으로 패배합니다. 결과 원인은 `SelfDefense`로 구분합니다. 이 임시 지정은 영구 강화에 저장하지 않습니다. 기존 `apply_resolved_card_effect()`에도 결과 보드를 검사하는 원자적 보호를 넣었습니다. 로얄을 없애는 효과라면 보드를 적용하지 않습니다. 직접 기물 포획은 `RoyalCaptured`, 시작 배치의 킹 역습 사망은 `Counterattack`으로 구분합니다.
 
@@ -62,3 +63,15 @@ AI는 기존 합법 후보에서 킹 포획을 최우선으로, 그다음 포획
 - 기물 정의의 `description`, `upgrades`, `promotions`가 스냅샷과 실제 강화 명령을 함께 구동한다. 행마는 공통 Chesssembly를 사용하며, 체인별 반사벽 설정만 확장한다. [템페스트·바운싱 연결](VARIANTS.md)을 참고한다.
 - `PieceImage.tsx`가 key·진영으로 사용 중인 SVG만 조회한다. `RestPanel.tsx`는 로컬 선택/미리보기만 관리하고 확정할 때 기존 명령을 전송한다.
 - `WebGame.save/restore`는 버전·캐릭터 ID·시드·성공한 명령(적 행동 포함)을 JSON으로 저장/재생한다. UI는 매 확정 행동 후 localStorage에 쓴다. 별도 보드 복제나 임의 상태 주입 API가 아니다. 게임 규칙 변경으로 재생 결과가 달라지면 저장 버전도 변경해야 한다.
+
+## 덱·혼합 보상 (저장 v6)
+
+시작 영구 덱은 비어 있다. `CardCombat`이 첫 턴을 포함해 턴당 1장 드로우, 손패 10장 상한, 종료 직전 손패 5장 기준의 일반 카드 버리기를 처리한다. 휘발성과 보존은 기존 우선순위를 유지한다.
+
+`Game::check_finish()`는 모든 전투 승리 때 `Reward::Card(CardKind)` / `Reward::Relic(Relic)` 세 칸을 원정 RNG로 생성하고 `Game.rewards`에 보관한다. `snapshot()`은 이를 태그가 있는 `RewardView`로 변환할 뿐 추첨하지 않는다. `choose_reward.index`는 이 보관 목록의 슬롯이며 선택 후 목록을 비운다. 카드·유물 획득과 중복 유물의 가호 대체는 Rust에서 처리한다. React는 타입별 화면과 슬롯 명령만 담당한다.
+
+저장은 시드·성공한 명령의 재생 방식을 유지한다. v6 재개 시 같은 승리 명령에서 같은 보상을 생성하며, 규칙과 RNG 소비가 다른 v1~5는 재생 전에 거부한다. 자세한 검증은 [덱·보상 개편](DECK_REWARDS.md)에 있다.
+
+## 시작 진형과 전투 유물
+
+`Game.relics`의 획득 순서와 `last_battle_positions`를 분리한다. 다음 전투에서 유효한 하드디스크 기록 → 최신 시작 진형 → 영구 origin 순서로 살아 있는 ID만 배치한다. 소용돌이 후 하드디스크 충돌을 처리하고 승패/호신용품 대상을 확정한다. 선공권은 `Battle::legal_actions`와 실제 포획 해결에서, 아이스크림은 공통 플레이어 턴 시작에서 처리한다. 코스트는 포화 증가하는 u32다. React가 소비하는 상태 문구도 Rust에서 생성한다. 좌표·경계 규칙·저장 재현성은 [신규 유물](RELICS.md)에 정리했다.

@@ -46,10 +46,10 @@ fn catalog_entries_are_unique_and_connected() {
         battle.legal_actions(Position::new(4, 0)).unwrap();
     }
 
-    for kind in starter_deck()
-        .into_iter()
-        .map(|card| card.kind)
-        .chain(content::cards::REWARD_POOL.iter().copied())
+    for kind in content::cards::REWARD_POOL
+        .iter()
+        .copied()
+        .chain([CardKind::FleetingWard])
     {
         assert_eq!(kind.definition().kind, kind, "miswired card registration");
     }

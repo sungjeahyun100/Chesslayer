@@ -3,7 +3,7 @@ import { PieceImage } from "./PieceImage";
 import { buildUpgradeTree } from "./upgradeTree";
 import type { RestOption, UpgradePath } from "./types";
 
-export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConfirm, onCancel, completed }: {
+export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConfirm, onCancel, completed, selectionOnly = false }: {
   piece: RestOption;
   paths: UpgradePath[];
   acquired: number[];
@@ -12,6 +12,7 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
   onConfirm: (target: number) => void;
   onCancel: () => void;
   completed: boolean;
+  selectionOnly?: boolean;
 }) {
   const tree = useMemo(() => buildUpgradeTree(paths, piece), [paths, piece]);
   const active = tree.nodes.find((n) => n.kind === selected) ?? tree.nodes.find((n) => n.kind === piece.kind)!;
@@ -39,7 +40,7 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
   const attained = new Set([piece.kind, ...acquired, ...[...completedEdges].map((e) => e.from)]);
   const status = (kind: number) => attained.has(kind)
     ? "acquired"
-    : piece.can_upgrade && paths.some((p) => p.from === piece.kind && p.to === kind)
+    : piece.can_upgrade && paths.some((p) => p.from === piece.kind && p.to === kind && p.unlocked)
       ? "available" : "locked";
   const statusText = (kind: number) => kind === piece.kind ? "현재 기물"
     : acquired.includes(kind) ? "획득 완료"
@@ -56,6 +57,7 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
     ? active.kind === piece.kind ? "현재 기물에 적용된 능력입니다." : "이미 획득한 강화입니다."
     : !active.incoming.length ? "이 계열의 시작점입니다. 이전 종류로 되돌리는 강화는 없습니다."
         : !reachable.has(active.kind) ? `현재 ${piece.name}에서 이 가지로 변경하는 강화 경로는 없습니다.`
+          : direct && !direct.unlocked ? `영구 로스터 필요: ${direct.required_pieces.filter((p) => !p.owned).map((p) => p.name).join(", ")}`
           : completed ? "이번 쉼터의 행동을 사용했습니다. 다음 쉼터에서 다시 살펴보세요."
           : `선행 기물 ${active.incoming.map((p) => p.from_name).join(" 또는 ")} 상태가 필요합니다.`;
 
@@ -93,7 +95,7 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
                     // Only actual rest commands activate a path. A promoted piece
                     // must not claim an upgrade from the ordinary piece of its new kind.
                     const done = completedEdges.has(edge);
-                    const state = done ? "acquired" : piece.can_upgrade && edge.from === piece.kind ? "available" : "locked";
+                    const state = done ? "acquired" : piece.can_upgrade && edge.from === piece.kind && edge.unlocked ? "available" : "locked";
                     return <g key={`${edge.from}-${edge.to}`} className={`skill-connection ${state}`} data-from={edge.from} data-to={edge.to}>
                       <path className="skill-line-bed" d={edge.d} /><path className="skill-line" d={edge.d} />
                     </g>;
@@ -105,6 +107,7 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
                     style={{ left: node.x, top: node.y }}
                     aria-pressed={active.kind === node.kind}
                     aria-label={`${node.name} · ${statusText(node.kind)} · 상세 보기`}
+                    title={`${node.name} · ${statusText(node.kind)}${node.incoming.flatMap((p) => p.required_pieces.map((r) => `\n${r.name}: ${r.owned ? "보유" : "미보유"}`)).join("")}`}
                     aria-controls="skill-inspector"
                     onClick={() => onSelect(node.kind)}
                     onFocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
@@ -133,13 +136,15 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
         <p className="skill-effect">{active.description}</p>
         {active.incoming.length > 0 && <div className="skill-requirements">
           <strong>비용 · 선행 조건{active.incoming.length > 1 ? " (진입 경로별)" : ""}</strong>
-          {active.incoming.map((p) => <p key={p.from}><span>{p.from_name} → {p.to_name}</span>{p.requirement}</p>)}
+          {active.incoming.map((p) => <div key={p.from} className="skill-requirement-path"><p><span>{p.from_name} → {p.to_name}</span>{selectionOnly ? "전투 중 한 단계 · 카드 확정 시 마나 1" : p.requirement}</p>
+            {p.required_pieces.map((r) => <span className={`skill-owned ${r.owned ? "owned" : "missing"}`} key={r.kind}>{r.name} · {r.owned ? "보유" : "미보유"}</span>)}
+          </div>)}
         </div>}
         {!tree.edges.length && <p className="rest-note">이 기물에 정의된 강화 경로가 없습니다.</p>}
         {available && direct ? <div className="skill-purchase">
-          <p>{piece.name} → {active.name}<br /><small>확정하면 쉼터 행동 1회를 사용합니다.</small></p>
+          <p>{piece.name} → {active.name}<br /><small>{selectionOnly ? "경로를 고른 뒤 카드 사용을 확정하세요." : "확정하면 쉼터 행동 1회를 사용합니다."}</small></p>
           <div className="rest-confirm">
-            <button className="primary" onClick={() => onConfirm(active.kind)}>강화 확정</button>
+            <button className="primary" onClick={() => onConfirm(active.kind)}>{selectionOnly ? "경로 선택" : "강화 확정"}</button>
             <button onClick={onCancel}>취소</button>
           </div>
         </div> : <p className="skill-lock-reason">{reason}</p>}

@@ -1,6 +1,6 @@
 # 기물 추가
 
-정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 현재 17종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시 이름·능력 설명, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
+정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 현재 22종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시 이름·능력 설명, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
 
 ## 1. 완전한 정의 파일 만들기
 
@@ -12,7 +12,7 @@
 use super::{movement, PieceDefinition};
 use crate::PieceType;
 
-pub const DANCER: PieceType = 18;
+pub const DANCER: PieceType = 23;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 30,

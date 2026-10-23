@@ -736,5 +736,239 @@
         }
       ]
     }
+  },
+  {
+    "key": "knightrider",
+    "side": "white",
+    "file": "knightrider-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "f1c882b82b449a2f1b14f7be748f8a645aa41261da89194ca896502132ff154a",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "knightrider",
+    "side": "black",
+    "file": "knightrider-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "d2640265b5f32e22a960e476d2dd67b936a6e1c308730d47bceeb54a598456dd",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "unicorn",
+    "side": "white",
+    "file": "unicorn-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "68364bd78a6d7ccbf46536eb1d39983ddf5b5ae130d863c924367cbd22e07686",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "unicorn",
+    "side": "black",
+    "file": "unicorn-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "fa85abd5e5c6957642f48073c0da116bdc7e3dc80f692f5185bd95f907cd418e",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_knightrider",
+    "side": "white",
+    "file": "bouncing_knightrider-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "c1e2c9eb4c19e8d5a063c1e74cfea3c5263757994b78abb2a833ceefe470ca78",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_knightrider",
+    "side": "black",
+    "file": "bouncing_knightrider-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "a1c96aa917d7eb9445a43fa29d54a1be3abe4c5ab267f9f17866417c1f1562d0",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "tengu",
+    "side": "white",
+    "file": "tengu-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "c0446ab3693ff684248db7c978857645c5096acb9f97626844c210f9587b5c33",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "tengu",
+    "side": "black",
+    "file": "tengu-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "fa0926f567df784621fe917cdf3a5fc4087619f6eab20423dc6102fc25385b38",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "cardinal",
+    "side": "white",
+    "file": "cardinal-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "87ff2d4865ab4154d23256194af4d7a07809f914167510e3671387fcd172cec8",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "cardinal",
+    "side": "black",
+    "file": "cardinal-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "fc224495bd04979b8b6231c6a9f27f277a6e3b502c0d81e3ac636ab8c9e9d8e6",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "movement_god",
+    "side": "white",
+    "file": "movement_god-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "789df6a54fe4e23c5a5c2474da4f376ea64236e3422d9f985c67c815cb548332",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "movement_god",
+    "side": "black",
+    "file": "movement_god-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "9a796a447bf82dea71ad0b90ba8126e44810099b71f39e3f132a7602a9956700",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_tempest_queen",
+    "side": "white",
+    "file": "bouncing_tempest_queen-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "50adb969bb794ac37d144fea684546f78c9c442e5b68c2dd07e779f8a846e7fc",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_tempest_queen",
+    "side": "black",
+    "file": "bouncing_tempest_queen-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "2351b884ff7f1127bd6458c71cc5d6f6d8c7088e2600d87ef38605c226ec6c31",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_tempest_rook",
+    "side": "white",
+    "file": "bouncing_tempest_rook-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "19a271e47271b6a9787075e890031d0a97b55f0e9d2632eb3306356a32afd935",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_tempest_rook",
+    "side": "black",
+    "file": "bouncing_tempest_rook-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "d865c11cce56f050311ceb91966a68262e9033fd7135788fbb75dbce0bbea156",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_tempest_bishop",
+    "side": "white",
+    "file": "bouncing_tempest_bishop-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "eddc54f3376c53816cc9986d4e178c7eac9eda241c66eb505c2f49846f84d625",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "bouncing_tempest_bishop",
+    "side": "black",
+    "file": "bouncing_tempest_bishop-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "791c8d58a480d8df632812817e35349989366cfd0d9b23c7775401b21f15d44e",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_queen",
+    "side": "white",
+    "file": "typhoon_queen-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "de246357af97fb1cf07d00eef2250c7c45c748a96ec949d4d92ea7f4b3e6bbff",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_queen",
+    "side": "black",
+    "file": "typhoon_queen-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "f249bd07cb014b41b07465ba10a969bcbc446a4d5ecd04f89d1d74948dbe7585",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_rook",
+    "side": "white",
+    "file": "typhoon_rook-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "5814ee841aa1ff309adad0b4b72b8616e9fa5eee0d1c536437888c406a4195b1",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_rook",
+    "side": "black",
+    "file": "typhoon_rook-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "a660c34428716680aae2285d3b85fd47dcb806df3d85745a667f3e9784ce8cbc",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_bishop",
+    "side": "white",
+    "file": "typhoon_bishop-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "af254e8035aa69855b897e9d0df6d9a90da7d3020d02d63923623351caff48d5",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_bishop",
+    "side": "black",
+    "file": "typhoon_bishop-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "49dbb0c4d533e08a48b13281d222794c77d3f7d099d1257753688d60e43deb73",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_knight",
+    "side": "white",
+    "file": "typhoon_knight-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "66568ec9bb696f9c82c7c2a0cf6a1984e41cb07d60d4e684e8ad542c9d9020ed",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
+  },
+  {
+    "key": "typhoon_knight",
+    "side": "black",
+    "file": "typhoon_knight-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "49dea522266a9a131b4bf559cfc3c1faac1cda4bb217e33f89332c67385ae8d8",
+    "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
+    "license": "original"
   }
 ]

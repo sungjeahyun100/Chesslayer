@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { Command, Snapshot } from "../src/types";
-const saveKey = "chesslayer.run.v1"; // Storage slot is retained; the payload carries version 4.
+const saveKey = "chesslayer.run.v1"; // Storage slot is retained; the payload carries version 6.
 const square = (cell: number) => `\"${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}\"`;
 const saved = (page: Page) => page.evaluate((key) => localStorage.getItem(key)!, saveKey);
 
@@ -122,7 +122,7 @@ for (const family of ["tempest", "bouncing"] as const) {
     await resume(page);
     const final = await snapshot(page);
     expect(final.map.current).toBe(15);
-    expect(final.rest_options.find((p) => p.id === 9)).toMatchObject({ key: `${family}_pawn`, cell: 48, origin: 48, upgrades: [family], dead: false });
+    expect(final.rest_options.find((p) => p.id === 9)).toMatchObject({ key: `${family}_pawn`, cell: 40, origin: 48, upgrades: [family], dead: false });
     await imagesLoaded(page);
     expect(errors).toEqual([]);
   });
@@ -130,12 +130,12 @@ for (const family of ["tempest", "bouncing"] as const) {
 
 test("이전 저장 버전은 설명을 표시하고 원본 기록을 보존한다", async ({ page }) => {
   await page.goto("/");
-  for (const version of [1, 2, 3]) {
+  for (const version of [1, 2, 3, 4, 5, 6]) {
     const legacy = JSON.stringify({ version, character: "vanguard", seed: 2026, commands: [{ type: "rest_upgrade", id: 9, ...(version >= 2 ? { target: 8 } : {}) }] });
     await page.evaluate(({ saveKey, legacy }) => localStorage.setItem(saveKey, legacy), { saveKey, legacy });
     await resume(page);
     await expect(page.getByRole("alert")).toContainText("이전 규칙으로 저장된 원정입니다");
-    await expect(page.getByRole("alert")).toContainText("전투 간 시작 진형 복귀와 호신용품");
+    await expect(page.getByRole("alert")).toContainText("카드 보상 풀과 전투 규칙");
     expect(await saved(page)).toBe(legacy);
   }
 });

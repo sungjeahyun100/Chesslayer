@@ -1,6 +1,6 @@
 # 콘텐츠 정의와 확장 안내
 
-카드 4종, 기물 17종, 캐릭터 3종은 `crates/chesslayer/src/content/`에서 각각 한 파일로 관리한다. 정의 파일을 만들고 같은 디렉터리의 `mod.rs`에 등록하면 기존 조회·실행 경로에 연결된다. 카드와 기물은 **등록과 실제 획득·등장 경로 지정이 별도**다. 캐릭터는 등록하면 선택 화면에 바로 나온다.
+기물 22종과 카드·캐릭터 정의는 `crates/chesslayer/src/content/`에서 각각 한 파일로 관리한다. 정의 파일을 만들고 같은 디렉터리의 `mod.rs`에 등록하면 기존 조회·실행 경로에 연결된다. 카드와 기물은 **등록과 실제 획득·등장 경로 지정이 별도**다. 캐릭터는 등록하면 선택 화면에 바로 나온다.
 
 모든 경로는 저장소 루트 기준이다.
 
@@ -76,7 +76,7 @@ crates/chesslayer/src/
 
 ## 등록·초기화·조회·실행
 
-1. **카드**: `CardKind::definition()`의 명시적 `match`가 각 파일의 `definition()`을 호출한다. `starter_deck()`와 `REWARD_POOL`은 획득 경로다. `Game::play_card()`는 공통 검증 뒤 `definition.effect`를 호출하고 성공한 경우에만 비용과 더미를 처리한다. 스냅샷은 `target_candidates`를 호출한다. 함수 포인터는 직렬화하지 않으므로 브라우저는 데이터만 받는다.
+1. **카드**: `CardKind::definition()`의 명시적 `match`가 각 파일의 `definition()`을 호출한다. `starter_deck()`은 빈 덱을 반환하고 `REWARD_POOL`은 혼합 보상의 카드 후보 풀이다. `Game`이 실제 보상 슬롯을 생성·보관한다. `Game::play_card()`는 공통 검증 뒤 `definition.effect`를 호출하고 성공한 경우에만 비용과 더미를 처리한다. 스냅샷은 `target_candidates`를 호출한다. 함수 포인터는 직렬화하지 않으므로 브라우저는 데이터만 받는다.
 2. **기물**: `pieces::ALL` → 숫자 ID로 인덱싱한 보드 이름 카탈로그 → 전투 시작 시 모든 행마를 `Program::parse()` → ID별 프로그램 보관 → `Battle::legal_actions()` → 공통 규칙 적용 순서다. `pieces::definition(kind)`는 이름·AI·표시에도 사용한다. React는 Rust가 제공하는 `key`와 진영으로 공통 `PieceImage`를 통해 SVG를 그린다. 강화 UI와 실행은 같은 `upgrades` 정의를 사용한다.
 3. **캐릭터**: `characters::ALL` → `characters()` → WASM `catalog()` → 선택 화면이다. `Game::new(id, seed)`도 같은 목록에서 ID를 찾고 `relic`을 런에 넣는다. 기존 유물 발동은 `Game::start_battle()`와 `BattleOptions`를 통해 유지한다.
 
@@ -93,7 +93,7 @@ crates/chesslayer/src/
 ## 유지한 ID와 의존 관계
 
 - 카드 직렬화 키: `jeans`, `ward`, `gun`, `fleeting_ward`. 인스턴스 `Card.id`와 카드 종류는 별개다. 시작 덱의 기존 순서와 ID 1~10을 유지했다. 이후 획득 ID는 시작 덱의 최댓값 다음부터 할당한다.
-- 기물 종류: 폰 1, 나이트 2, 비숍 3, 룩 4, 퀸 5, 킹 6, 아마존 7, 템페스트 폰 8, 템페스트 룩/비숍/나이트/퀸 9~12, 바운싱 폰/룩/비숍/퀸 13~16, 구행 17. 기존 DSL 이름은 유지한다. 0은 예약되어 있다.
+- 기물 종류: 폰 1, 나이트 2, 비숍 3, 룩 4, 퀸 5, 킹 6, 아마존 7, 템페스트 폰 8, 템페스트 룩/비숍/나이트/퀸 9~12, 바운싱 폰/룩/비숍/퀸 13~16, 구행 17, 나이트라이더/유니콘/바운싱 나이트라이더/텐쿠/추기경 18~22. 기존 DSL 이름은 유지한다. 0은 예약되어 있다.
 - 캐릭터 ID와 순서: `vanguard`, `wanderer`, `guardian`. 시작 유물: `Haste`, `Whirlwind`, `SelfDefense`.
 - 보상 인덱스: 가호 0, 청바지 1, 총 2. 기존 명령 기보가 이 순서를 참조한다. 새 보상은 보통 뒤에 추가한다.
 - 청바지는 정확히 `ROOK | QUEEN`, 총 진형은 정확히 `ROOK, ROOK, QUEEN`을 검사한다. 퀸 행마를 가진 아마존이 자동으로 퀸 취급을 받지 않는다.
@@ -106,3 +106,5 @@ crates/chesslayer/src/
 모든 캐릭터는 같은 시작 덱과 표준 16기 진형을 사용하고 유물 한 개만 다르다. 유물 자체는 캐릭터 정의로 옮기지 않았다. 새로운 능력의 이벤트 구독 시스템은 없다. 카드 효과에는 `Battle`과 선택 기물 ID만 전달하며 덱·마나·원정 RNG를 직접 조작하는 인터페이스는 없다.
 
 1차 폴리싱에서 로컬 저장/이어하기를 추가했다. 기존 JSON 명령·ID·기보 참조는 유지했으며 스냅샷의 `glyph`, `badge`는 이미지 조회용 `key`와 능력 `description`으로 교체했다. 새로 추가한 콘텐츠가 결정적 재생 결과를 바꾸면 저장 버전 호환성도 검토한다. 시작 덱 장수를 바꾸면 UI의 고정 문구와 장수에 의존하는 기존 테스트도 검토해야 한다. 기물 등록 누락이나 중복 ID는 [등록 테스트](validation.md)로 확인한다.
+
+유물 정의·이름·식별자·후보 풀·시작 진형 좌표는 `crates/chesslayer/src/content/relics.rs`에서 관리합니다. 적용/전투 경계는 [유물 규칙](../RELICS.md)을 참고하세요.

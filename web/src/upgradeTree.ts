@@ -96,9 +96,15 @@ export function buildUpgradeTree(paths: UpgradePath[], piece: RestOption) {
   return {
     nodes, width, height,
     edges: routes.map(({ edge, ids }) => {
+      const outgoing = edges.filter((candidate) => candidate.from === edge.from).sort((a, b) => a.to - b.to);
+      const incoming = edges.filter((candidate) => candidate.to === edge.to).sort((a, b) => a.from - b.from);
+      const port = (index: number, count: number) => Math.max(-23, Math.min(23, (index - (count - 1) / 2) * 11));
+      const exitY = byKind.get(edge.from)!.y + port(outgoing.indexOf(edge), outgoing.length);
+      const entryY = byKind.get(edge.to)!.y + port(incoming.indexOf(edge), incoming.length);
       const points = ids.map((id, i) => {
         const v = byId.get(id)!;
-        return { x: v.x + (i === 0 ? 39 : i === ids.length - 1 ? -39 : 0), y: v.y };
+        return { x: v.x + (i === 0 ? 39 : i === ids.length - 1 ? -39 : 0),
+          y: i === 0 ? exitY : i === ids.length - 1 ? entryY : v.y };
       });
       let d = `M ${points[0].x} ${points[0].y}`;
       for (let i = 1; i < points.length; i++) {

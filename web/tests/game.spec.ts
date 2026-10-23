@@ -47,7 +47,7 @@ async function layout(page: import("@playwright/test").Page) {
   );
 }
 
-test("실제 WASM: 초기 진형, 합법 수, 카드 사용, 적 행동", async ({ page }) => {
+test("실제 WASM: 빈 초기 덱, 합법 수, 적 행동", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await start(page);
@@ -55,17 +55,11 @@ test("실제 WASM: 초기 진형, 합법 수, 카드 사용, 적 행동", async 
   await expect(page.locator('[data-square="e8"]')).toHaveAccessibleName(
     "e8 흑 킹 로얄",
   );
-  await expect(page.getByRole("heading", { name: "손패 5/10" })).toBeVisible();
-  await page
-    .getByRole("button", { name: /^1 전술 카드 가호/ })
-    .first()
-    .click();
-  await page.locator('[data-square="e1"]').click();
-  await expect(page.locator(".mana-orb")).toHaveText("2");
+  await expect(page.getByRole("heading", { name: "손패 0/10" })).toBeVisible();
+  await expect(page.getByTestId("deck-count")).toHaveText("0");
+  await expect(page.getByTestId("draw-count")).toHaveText("0");
+  await expect(page.locator(".mana-orb")).toHaveText("3");
   await expect(page.getByTestId("turn")).toContainText("2회 행동");
-  await expect(page.locator('[data-square="e1"]')).toHaveAccessibleName(
-    "e1 백 킹 로얄 가호",
-  );
   await page.locator('[data-square="e2"]').click();
   await expect(page.locator('[data-square="e4"]')).toHaveAttribute(
     "data-legal",
@@ -78,6 +72,8 @@ test("실제 WASM: 초기 진형, 합법 수, 카드 사용, 적 행동", async 
   await expect(page.getByTestId("turn")).toContainText("적의 턴");
   await expect(page.getByTestId("turn")).toContainText("나의 턴");
   await expect(page.getByRole("log")).toContainText("흑 킹");
+  await expect(page.getByRole("heading", { name: "손패 0/10" })).toBeVisible();
+  await expect(page.getByTestId("deck-count")).toHaveText("0");
   await expect(page.locator(".mana-orb")).toHaveText("3");
   await page.screenshot({
     path: "test-results/battle-desktop.png",
@@ -86,7 +82,7 @@ test("실제 WASM: 초기 진형, 합법 수, 카드 사용, 적 행동", async 
   expect(errors).toEqual([]);
 });
 
-test("모바일 보드와 카드가 화면 안에서 조작된다", async ({ page }) => {
+test("모바일 빈 덱 전투 보드가 화면 안에서 조작된다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await start(page, "수호자");
   await page.locator('[data-square="e2"]').click();
@@ -177,11 +173,16 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
         await expect(
           page.getByRole("heading", { name: "구행", exact: true }),
         ).toBeVisible();
-        const hook = page.locator('[data-piece-id="100"] img');
-        await expect(hook).toHaveAttribute("data-piece-key", "hook");
-        await expect(hook).toBeVisible();
-        await expect.poll(() => hook.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-        await page.screenshot({ path: "test-results/hook-boss.png", fullPage: true });
+        if (await page.locator("main").getAttribute("data-phase") === "combat") {
+          const hook = page.locator('[data-piece-id="100"] img');
+          await expect(hook).toHaveAttribute("data-piece-key", "hook");
+          await expect(hook).toBeVisible();
+          await expect.poll(() => hook.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+          await page.screenshot({ path: "test-results/hook-boss.png", fullPage: true });
+        } else {
+          await expect(page.locator("main")).toHaveAttribute("data-phase", "reward");
+          await expect(page.getByRole("log")).toContainText("하드디스크");
+        }
       }
     } else if (cmd.type === "move") {
       const from = page.locator(`[data-square="${square(cmd.from)}"]`);
@@ -191,6 +192,17 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
         page.locator(`[data-square="${square(cmd.to)}"]`),
       ).toHaveAttribute("data-legal", "true");
       await page.locator(`[data-square="${square(cmd.to)}"]`).click();
+      if (cmd.promotion) {
+        const name = await page.evaluate(async (kind) => {
+          const url = "/src/wasm/chesslayer_web.js";
+          const { WebGame } = await import(url);
+          const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
+          try {
+            return JSON.parse(game.snapshot()).moves.find((m: any) => m.promotion?.kind === kind).promotion.name;
+          } finally { game.free(); }
+        }, cmd.promotion);
+        await page.getByRole("button", { name: `${name}으로 승격`, exact: true }).click();
+      }
     } else if (cmd.type === "play_card") {
       await page.locator(`[data-card-id="${cmd.id}"]`).click();
       const target = Number(
@@ -203,11 +215,10 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
       await expect(
         page.getByRole("heading", { name: "전투 승리", exact: true }),
       ).toBeVisible();
-      await page
-        .getByRole("button", { name: "보상 가호", exact: true })
-        .click();
-      await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
-      await expect(page.locator(".map-supplies")).toContainText("덱");
+      await expect(page.locator(".reward-cards button")).toHaveCount(3);
+      await page.locator(".reward-cards button").nth(cmd.index).click();
+      await expect(page.locator("main")).toHaveAttribute("data-phase", visitedKinds.has("boss") ? "victory" : "map");
+      if (!visitedKinds.has("boss")) await expect(page.locator(".map-supplies")).toContainText("덱");
     } else if (cmd.type === "rest_upgrade") {
       await page.locator('[data-square="a2"]').click();
       await page

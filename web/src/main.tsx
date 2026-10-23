@@ -15,11 +15,15 @@ import { ActMap, nodeTypes } from "./ActMap";
 import { PieceImage } from "./PieceImage";
 import { RestPanel, type RestChoice } from "./RestPanel";
 import { PromotionPicker } from "./PromotionPicker";
+import { UpgradeTree } from "./UpgradeTree";
+import { CardArt, RelicIcon } from "./ContentArt";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
 const SAVE_KEY = "chesslayer.run.v1";
+const starterRelicNames: Record<Character["relic"], string> = {
+  haste: "가속", whirlwind: "소용돌이", self_defense: "호신용품",
+};
 
-const relicIcons = { haste: "»", whirlwind: "◎", self_defense: "◇" };
 function Tags({ card }: { card: CardDefinition }) {
   return (
     <div className="tags">
@@ -30,28 +34,16 @@ function Tags({ card }: { card: CardDefinition }) {
     </div>
   );
 }
-function CardFace({ card }: { card: CardDefinition }) {
+function CardFace({ card, selectedCount = 0 }: { card: CardDefinition; selectedCount?: number }) {
   return (
     <>
       <div className="card-top">
-        <span className="cost">{card.cost}</span>
+        <span className="cost" aria-label={card.cost_per_target ? `선택 비용 ${selectedCount}` : `비용 ${card.cost}`}>
+          {card.cost_per_target ? (selectedCount || "N") : card.cost}
+        </span>
         <span>전술 카드</span>
       </div>
-      <div className="card-symbol" aria-hidden="true">
-        {card.kind === "jeans" || card.kind === "gun" ? (
-          <>
-            <PieceImage pieceKey="rook" />
-            {card.kind === "gun" ? (
-              <PieceImage pieceKey="rook" />
-            ) : (
-              <span>×</span>
-            )}
-            <PieceImage pieceKey="queen" />
-          </>
-        ) : (
-          <span>◇</span>
-        )}
-      </div>
+      <div className="card-symbol"><CardArt kind={card.kind} name={card.name} /></div>
       <h3>{card.name}</h3>
       <p>{card.description}</p>
       <Tags card={card} />
@@ -80,8 +72,10 @@ function BoardPiece({
     >
       <PieceImage pieceKey={previewKey || piece.key} owner={piece.owner} />
       {piece.royal && <span className="royal-mark">★</span>}
-      {piece.ward && <span className="ward-mark">◇</span>}
+      {piece.ward && <span className="ward-mark" title="가호">✦</span>}
+      {piece.temporary_upgrade && <span className="temporary-mark" title="일시 강화 · 이번 전투 한정">↑</span>}
       {piece.self_defense && <span className="self-defense-mark">◆</span>}
+      {piece.limiter && <span className="limiter-mark" title={`리미터 해제: ${piece.limiter.active ? `남은 이동 ${piece.limiter.moves_left}회` : "다음 소속 턴에 3회"} · 턴 종료 후 사망`}>{piece.limiter.active ? piece.limiter.moves_left : "!"}</span>}
     </span>
   );
 }
@@ -104,6 +98,10 @@ function App() {
   const [hasSave, setHasSave] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
   const [targetCard, setTargetCard] = useState<Card | null>(null);
+  const [cardTargets, setCardTargets] = useState<number[]>([]);
+  const [cardUpgrades, setCardUpgrades] = useState<{ id: number; target: number }[]>([]);
+  const [upgradeFocus, setUpgradeFocus] = useState<number | null>(null);
+  const [upgradePreview, setUpgradePreview] = useState<number | undefined>();
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
@@ -168,6 +166,9 @@ function App() {
       setPromotion(null);
       setSelected(null);
       setTargetCard(null);
+      setCardTargets([]);
+      setCardUpgrades([]);
+      setUpgradeFocus(null);
       setMapOpen(false);
       setError("");
     } catch (e) {
@@ -194,6 +195,9 @@ function App() {
         setRestCompleted(false);
         setPromotion(null);
         setTargetCard(null);
+        setCardTargets([]);
+        setCardUpgrades([]);
+        setUpgradeFocus(null);
         setError("");
       }
     };
@@ -230,6 +234,9 @@ function App() {
       setPromotion(null);
       setSelected(null);
       setTargetCard(null);
+      setCardTargets([]);
+      setCardUpgrades([]);
+      setUpgradeFocus(null);
       setMapOpen(false);
       setError("");
       setScreen("game");
@@ -251,6 +258,9 @@ function App() {
       setPromotion(null);
       setSelected(null);
       setTargetCard(null);
+      setCardTargets([]);
+      setCardUpgrades([]);
+      setUpgradeFocus(null);
       setMapOpen(false);
       setError("");
       setScreen("game");
@@ -266,6 +276,9 @@ function App() {
     }
     setError("");
     setSelected(null);
+    setCardTargets([]);
+    setCardUpgrades([]);
+    setUpgradeFocus(null);
     if (card.definition.targeted) setTargetCard(card);
     else send({ type: "play_card", id: card.id });
   }
@@ -284,8 +297,22 @@ function App() {
     if (state.phase !== "combat" || state.turn !== 0) return;
     const piece = state.pieces.find((p) => p.cell === cell);
     if (targetCard) {
-      if (piece && targetCard.targets.includes(piece.id))
-        send({ type: "play_card", id: targetCard.id, target: piece.id });
+      if (piece && targetCard.targets.includes(piece.id)) {
+        if (targetCard.definition.selection_mode === "upgrade") {
+          if (!cardUpgrades.some((u) => u.id === piece.id) && cardUpgrades.length >= state.mana) {
+            setError("남은 마나보다 많은 기물을 선택할 수 없습니다.");
+            return;
+          }
+          setUpgradeFocus(piece.id);
+          setUpgradePreview(cardUpgrades.find((u) => u.id === piece.id)?.target);
+        } else if (targetCard.definition.selection_mode === "multiple") {
+          setCardTargets((ids) => ids.includes(piece.id) ? ids.filter((id) => id !== piece.id) : [...ids, piece.id]);
+        } else if (["limiter_release", "sacred_domain"].includes(targetCard.definition.kind)) {
+          setCardTargets([piece.id]);
+        } else {
+          send({ type: "play_card", id: targetCard.id, target: piece.id });
+        }
+      }
       return;
     }
     if (
@@ -315,6 +342,27 @@ function App() {
   );
   const previewKey = restPath?.to_key;
   const selectedPiece = state?.pieces.find((p) => p.cell === selected);
+  const activeEffects = state?.pieces.filter((p) => p.limiter || p.temporary_upgrade || p.ward) ?? [];
+  const focusedUpgrade = state?.pieces.find((p) => p.id === upgradeFocus);
+  const stagedCount = targetCard?.definition.selection_mode === "upgrade" ? cardUpgrades.length : cardTargets.length;
+  const stagedCost = targetCard?.definition.cost_per_target ? stagedCount : targetCard?.definition.cost ?? 0;
+  function cancelCard() {
+    setTargetCard(null);
+    setCardTargets([]);
+    setCardUpgrades([]);
+    setUpgradeFocus(null);
+    setError("");
+  }
+  function confirmCard() {
+    if (!targetCard || stagedCount < 1 || !state || stagedCost > state.mana) return;
+    if (targetCard.definition.selection_mode === "multiple" || targetCard.definition.selection_mode === "upgrade") {
+      send({ type: "play_card_selection", id: targetCard.id,
+        targets: targetCard.definition.selection_mode === "multiple" ? cardTargets : [],
+        upgrades: targetCard.definition.selection_mode === "upgrade" ? cardUpgrades : [] });
+    } else {
+      send({ type: "play_card", id: targetCard.id, target: cardTargets[0] });
+    }
+  }
   return (
     <>
       <header className="topbar">
@@ -446,7 +494,7 @@ function App() {
                 onClick={() => setCharacter(c.id)}
                 aria-pressed={character === c.id}
               >
-                <span className="character-icon">{relicIcons[c.relic]}</span>
+                <RelicIcon id={c.relic} name={starterRelicNames[c.relic]} className="character-icon" />
                 <span className="eyebrow">{c.title}</span>
                 <h2>{c.name}</h2>
                 <p>{c.description}</p>
@@ -458,7 +506,7 @@ function App() {
           </div>
           <div className="launch">
             <span className="muted">
-              카드 10장 · 기본 마나 3 · 영구적인 기물 손실
+              빈 시작 덱 · 턴마다 1장 드로우 · 기본 마나 3
             </span>
             <button className="primary large" onClick={start} disabled={!ready}>
               런 시작 <span>→</span>
@@ -523,20 +571,21 @@ function App() {
                         );
                       const target =
                         piece && targetCard?.targets.includes(piece.id);
+                      const staged = piece && (cardTargets.includes(piece.id) || cardUpgrades.some((u) => u.id === piece.id));
                       const square = `${"abcdefgh"[i % 8]}${8 - Math.floor(i / 8)}`;
                       return (
                         <button
                           key={i}
                           data-square={square}
                           data-legal={legal || undefined}
-                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(state.phase === "rest" ? restChoice?.cell : selected) === i ? "selected" : ""} ${state.phase === "rest" && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""}`}
+                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(state.phase === "rest" ? restChoice?.cell : selected) === i ? "selected" : ""} ${state.phase === "rest" && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""}`}
                           title={piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined}
                           onClick={() => clickSquare(i)}
                           disabled={
                             state.phase !== "rest" &&
                             (state.phase !== "combat" || !turn || !!promotion)
                           }
-                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}`}
+                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 효과 종료 후 사망` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
                           aria-pressed={
                             (state.phase === "rest"
                               ? restChoice?.cell
@@ -606,7 +655,9 @@ function App() {
                   <span>
                     {restView
                       ? "강화 · 부활은 확정 후 적용"
-                      : `★ 적 로얄: ${state.royal_name}`}
+                      : state.phase === "combat" && state.hard_disk_deployed
+                        ? "하드디스크 · 직전 전투 종료 배치 적용"
+                        : `★ 적 로얄: ${state.royal_name}`}
                   </span>
                 </div>
                 {state.phase === "combat" && (
@@ -616,11 +667,14 @@ function App() {
                   >
                     {targetCard ? (
                       <>
-                        <strong>{targetCard.definition.name}</strong> · 표시된
-                        기물을 선택하세요.
+                        <strong>{targetCard.definition.name}</strong> · 표시된 기물을 선택하세요.
+                        {targetCard.definition.kind === "limiter_release" && <span>효과 종료 후 대상 사망</span>}
+                        <span>선택 {stagedCount}기 · 현재 코스트 {stagedCost} / 마나 {state.mana}</span>
+                        {targetCard.definition.selection_mode === "upgrade" && cardUpgrades.length > 0 && <span className="staged-upgrades">{cardUpgrades.map((choice) => <button key={choice.id} onClick={() => setCardUpgrades((old) => old.filter((u) => u.id !== choice.id))}>{state.pieces.find((p) => p.id === choice.id)?.name} ×</button>)}</span>}
+                        {["multiple", "upgrade"].includes(targetCard.definition.selection_mode) || ["limiter_release", "sacred_domain"].includes(targetCard.definition.kind) ? <button className="primary" onClick={confirmCard} disabled={stagedCount < 1 || stagedCost > state.mana}>확인</button> : null}
                         <button
                           className="text-button"
-                          onClick={() => setTargetCard(null)}
+                          onClick={cancelCard}
                         >
                           취소 Esc
                         </button>
@@ -649,6 +703,13 @@ function App() {
                   />
                 ) : (
                   <>
+                    {targetCard?.definition.selection_mode === "upgrade" && focusedUpgrade && <section className="card-upgrade-picker">
+                      <p>일시 강화 경로 선택 · {focusedUpgrade.name}</p>
+                      <UpgradeTree key={focusedUpgrade.id} piece={{ ...focusedUpgrade, origin: focusedUpgrade.cell, upgrades: [], can_upgrade: true, can_revive: false, dead: false }} paths={state.upgrade_paths} acquired={[]} selected={upgradePreview}
+                        onSelect={setUpgradePreview}
+                        onConfirm={(target) => { setCardUpgrades((old) => [...old.filter((u) => u.id !== focusedUpgrade.id), { id: focusedUpgrade.id, target }]); setUpgradeFocus(null); }}
+                        onCancel={() => setUpgradeFocus(null)} completed={false} selectionOnly />
+                    </section>}
                     {selectedPiece && (
                       <section className="selected-piece-info">
                         <PieceImage
@@ -660,6 +721,9 @@ function App() {
                             {selectedPiece.name} · {selectedPiece.square}
                           </strong>
                           <p>{selectedPiece.description}</p>
+                          {selectedPiece.temporary_upgrade && <small className="effect-note">일시 강화 · 현재 전투에서만 유지</small>}
+                          {selectedPiece.ward && <small className="effect-note">가호 · 다음 포획 시 공격 무효</small>}
+                          {selectedPiece.limiter && <small className="effect-note danger">리미터 해제 · {selectedPiece.limiter.active ? `남은 이동 ${selectedPiece.limiter.moves_left}회` : "다음 소속 턴에 최대 3회 이동"} · 턴 종료 후 사망</small>}
                         </div>
                       </section>
                     )}
@@ -672,7 +736,7 @@ function App() {
                         <span className="mana-orb">{state.mana}</span>
                         <div>
                           <strong>사용 가능한 마나</strong>
-                          <small>내 턴 시작 시 회복됩니다.</small>
+                          <small>{state.mana_rule}</small>
                         </div>
                       </div>
                       <button
@@ -683,16 +747,28 @@ function App() {
                         턴 종료 <span>→</span>
                       </button>
                     </section>
+                    {state.phase === "combat" && activeEffects.length > 0 && <section className="effect-panel" aria-label="전투 효과">
+                      <div className="section-label">전투 효과 <span>{activeEffects.length}기</span></div>
+                      {activeEffects.map((p) => <div className="effect-row" key={p.id}>
+                        <PieceImage pieceKey={p.key} owner={p.owner} name={p.name} />
+                        <div><strong>{p.owner === 0 ? "아군" : "적"} {p.name} · {p.square}</strong>
+                          {p.limiter && <small>리미터 · {p.limiter.active ? `남은 이동 ${p.limiter.moves_left}회` : "다음 소속 턴 최대 3회"} · 종료 후 사망</small>}
+                          {p.temporary_upgrade && <small>일시 강화 · 전투 한정</small>}
+                          {p.ward && <small>가호 · 다음 포획 무효</small>}
+                        </div>
+                      </div>)}
+                    </section>}
                     <section className="relic-panel">
                       <div className="section-label">
                         보유 유물 <span>{state.relics.length}</span>
                       </div>
                       {state.relics.map((r) => (
-                        <div className="relic" key={r.name}>
-                          <span>◇</span>
+                        <div className="relic" key={r.id}>
+                          <RelicIcon id={r.id} name={r.name} />
                           <div>
                             <strong>{r.name}</strong>
                             <p>{r.description}</p>
+                            {r.status && <small className="relic-status" role="status">{r.status}</small>}
                           </div>
                         </div>
                       ))}
@@ -734,7 +810,7 @@ function App() {
                   <h2>
                     손패 <span>{state.hand.length}/10</span>
                   </h2>
-                  <small>카드 사용은 기물 이동 횟수를 소모하지 않습니다.</small>
+                  <small>턴마다 1장 드로우 · 종료 시 손패 5장 이상이면 일반 카드를 버립니다.</small>
                 </div>
                 <div className="piles">
                   <span>
@@ -752,6 +828,7 @@ function App() {
                 </div>
               </div>
               <div className="hand">
+                {state.hand.length === 0 && <p className="empty-hand">손패가 비어 있습니다. 다음 턴에 덱에서 1장을 뽑습니다.</p>}
                 {state.hand.map((card) => (
                   <button
                     data-card-id={card.id}
@@ -761,7 +838,7 @@ function App() {
                     disabled={!!card.disabled_reason || !!promotion}
                     title={card.disabled_reason || card.definition.description}
                   >
-                    <CardFace card={card.definition} />
+                    <CardFace card={card.definition} selectedCount={targetCard?.id === card.id ? stagedCount : 0} />
                     {card.disabled_reason && (
                       <span className="card-unavailable">
                         {card.disabled_reason}
@@ -779,27 +856,40 @@ function App() {
                   <p className="eyebrow">ROYAL DEFEATED</p>
                   <h2>전투 승리</h2>
                   <p>
-                    생존 기물은 시작 칸으로 돌아가며 영구 강화는 유지됩니다. 덱에 추가할 카드 한
-                    장을 선택하세요.
+                    생존 기물은 시작 칸으로 돌아가며(하드디스크 보유 시 종료 위치 유지) 영구 강화는 유지됩니다. 카드 또는 유물 보상
+                    3개 중 하나를 선택하세요.
                   </p>
                   {state.node_kind === "elite" && state.node_reward && (
                     <p className="elite-reward">
                       추가 보상: {state.node_reward.name} ·{" "}
                       {state.node_reward.description}
+                      {" "}선택 보상과 유물이 중복되면 가호 카드로 대체됩니다.
                     </p>
                   )}
                   <div className="reward-cards">
-                    {state.rewards.map((card, i) => (
+                    {state.rewards.map((reward, i) => (
                       <button
-                        className="playing-card"
-                        key={card.kind}
+                        className={`playing-card ${reward.type === "relic" ? "relic-reward" : ""}`}
+                        key={i}
+                        data-reward-type={reward.type}
                         onClick={() =>
                           send({ type: "choose_reward", index: i })
                         }
-                        aria-label={`보상 ${card.name}`}
+                        aria-label={`${reward.type === "card" ? "카드" : "유물"} 보상 ${reward.definition.name}`}
                       >
-                        <CardFace card={card} />
-                        <span className="reward-select">덱에 추가 +</span>
+                        {reward.type === "card" ? (
+                          <CardFace card={reward.definition} />
+                        ) : (
+                          <>
+                            <div className="card-top"><span className="relic-type">유물</span><span>영구 효과</span></div>
+                            <div className="card-symbol"><RelicIcon id={reward.definition.id} name={reward.definition.name} /></div>
+                            <h3>{reward.definition.name}</h3>
+                            <p>{reward.definition.description}</p>
+                          </>
+                        )}
+                        <span className="reward-select">
+                          {reward.type === "card" ? "덱에 추가 +" : "유물 획득 +"}
+                        </span>
                       </button>
                     ))}
                   </div>
@@ -809,7 +899,7 @@ function App() {
                 <>
                   <p className="eyebrow">A GIFT ALONG THE WAY</p>
                   <h2>남겨진 보물</h2>
-                  <div className="treasure-relic">◇</div>
+                  {state.node_reward && <div className="treasure-relic"><RelicIcon id={state.node_reward.id} name={state.node_reward.name} /></div>}
                   <h3>{state.node_reward?.name}</h3>
                   <p>{state.node_reward?.description}</p>
                   <button

@@ -88,6 +88,8 @@ fn fixture_game() -> Game {
 fn initial_position_moves_ai_and_seed_replay() {
     let mut a = started("vanguard", 2026);
     let mut b = a.clone();
+    assert!(a.deck.is_empty());
+    assert!(a.cards.hand.is_empty() && a.cards.draw.is_empty());
     assert_eq!(a.battle.outcome(), Battle::standard_roster());
     assert_eq!(a.snapshot().pieces.len(), 17);
     assert!(a
@@ -114,6 +116,8 @@ fn initial_position_moves_ai_and_seed_replay() {
         g.dispatch(Command::EnemyStep).unwrap();
         assert_eq!(g.battle.turn, PLAYER);
         assert_eq!(g.round, 2);
+        assert!(g.deck.is_empty() && g.cards.hand.is_empty());
+        assert_eq!(g.cards.mana, BASE_MANA);
     }
     assert_eq!(
         serde_json::to_string(&a.snapshot()).unwrap(),
@@ -183,56 +187,98 @@ fn card_cost_validation_ward_and_royal_protection() {
 }
 #[test]
 fn piles_reshuffle_keywords_and_hand_limit() {
+    fn ids(c: &CardCombat) -> Vec<u32> {
+        let mut ids: Vec<_> = c
+            .hand
+            .iter()
+            .chain(&c.draw)
+            .chain(&c.discard)
+            .chain(&c.exhausted)
+            .map(|c| c.id)
+            .collect();
+        ids.sort_unstable();
+        ids
+    }
     let mut rng = Rng::new(3);
-    let deck = starter_deck();
+    let deck: Vec<_> = (1..=12)
+        .map(|id| Card {
+            id,
+            kind: if id == 1 {
+                CardKind::Jeans
+            } else {
+                CardKind::Ward
+            },
+        })
+        .collect();
     let mut c = CardCombat::start(&deck, &mut rng);
-    assert_eq!(c.hand.len(), 5);
-    assert!(c.hand.iter().any(|c| c.kind == CardKind::Jeans));
-    let i = c
-        .hand
-        .iter()
-        .position(|c| c.kind == CardKind::Jeans)
-        .unwrap();
-    c.spend(i);
-    assert_eq!(c.exhausted.len(), 1);
-    c.hand = vec![
-        Card {
-            id: 20,
-            kind: CardKind::Gun,
-        },
-        Card {
-            id: 21,
-            kind: CardKind::FleetingWard,
-        },
-        Card {
-            id: 22,
-            kind: CardKind::Ward,
-        },
-    ];
-    c.draw.clear();
-    c.discard.clear();
+    assert_eq!(c.hand, vec![deck[0].clone()], "one card, innate first");
+    c.spend(0, &c.hand[0].kind.definition());
+    assert_eq!(c.exhausted, vec![deck[0].clone()]);
+    for _ in 0..4 {
+        let before = c.hand.len();
+        c.begin_turn(&mut rng, false);
+        assert_eq!(c.hand.len(), before + 1);
+        c.end_turn();
+        assert_eq!(c.hand.len(), before + 1, "0..4 ordinary cards persist");
+    }
+    c.begin_turn(&mut rng, false);
     c.end_turn();
-    assert_eq!(c.hand[0].kind, CardKind::Gun);
-    assert_eq!(c.discard.len(), 1);
-    assert_eq!(c.exhausted.len(), 2);
-    c.begin_turn(&mut rng);
-    assert_eq!(c.hand.len(), 2);
-    assert!(c.discard.is_empty());
-    assert_eq!(c.mana, 3);
-    c.hand = vec![
-        Card {
-            id: 30,
-            kind: CardKind::Gun
+    assert!(c.hand.is_empty());
+    assert_eq!(c.discard.len(), 5);
+    assert_eq!(ids(&c), (1..=12).collect::<Vec<_>>());
+    // At either side of the threshold, ethereal exhausts and retain stays.
+    for size in 0..=10 {
+        let mut c = CardCombat {
+            hand: (1..=size)
+                .map(|id| Card {
+                    id,
+                    kind: match id {
+                        1 => CardKind::FleetingWard,
+                        2 => CardKind::Gun,
+                        _ => CardKind::Ward,
+                    },
+                })
+                .collect(),
+            ..Default::default()
         };
-        9
-    ];
-    c.draw = deck.clone();
-    c.begin_turn(&mut rng);
-    assert_eq!(c.hand.len(), 10);
-    assert_eq!(c.draw.len(), 9);
+        c.end_turn();
+        assert_eq!(c.exhausted.len(), usize::from(size > 0));
+        assert_eq!(
+            c.hand.len(),
+            if size < 5 {
+                size.saturating_sub(1) as usize
+            } else {
+                1
+            }
+        );
+        assert_eq!(
+            c.discard.len(),
+            if size >= 5 { size as usize - 2 } else { 0 }
+        );
+        assert_eq!(ids(&c), (1..=size).collect::<Vec<_>>());
+        if size >= 5 {
+            c.begin_turn(&mut rng, false);
+            assert_eq!(c.hand.len(), 2, "reshuffle draws exactly one");
+            assert_eq!(c.discard.len(), 0);
+            assert_eq!(c.draw.len(), size as usize - 3);
+            assert_eq!(ids(&c), (1..=size).collect::<Vec<_>>());
+        }
+    }
+    let mut c = CardCombat::start(&deck, &mut rng);
+    for _ in 0..15 {
+        c.begin_turn(&mut rng, false);
+    }
+    assert_eq!(c.hand.len(), HAND_LIMIT);
+    assert_eq!(c.draw.len(), 2);
+    assert_eq!(ids(&c), (1..=12).collect::<Vec<_>>());
     let fresh = CardCombat::start(&deck, &mut rng);
     assert!(fresh.exhausted.is_empty());
-    assert_eq!(fresh.draw.len() + fresh.hand.len(), deck.len());
+    assert_eq!(ids(&fresh), (1..=12).collect::<Vec<_>>());
+    let mut empty = CardCombat::start(&[], &mut rng);
+    empty.end_turn();
+    empty.begin_turn(&mut rng, false);
+    assert!(ids(&empty).is_empty());
+    assert_eq!(empty.mana, BASE_MANA);
 }
 #[test]
 fn gun_formation_and_non_capture_removal_are_validated() {
@@ -313,15 +359,21 @@ fn reward_persistence_counterattack_and_relics() {
     assert_eq!(g.phase, RunPhase::Reward);
     assert_eq!(g.battle.outcome()[1].position, Some(p(0, 7)));
     assert!(g.cards.hand.is_empty());
-    g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    assert_eq!(g.deck.len(), 11);
+    let index = g
+        .snapshot()
+        .rewards
+        .iter()
+        .position(|r| matches!(r, RewardView::Card(_)))
+        .unwrap();
+    g.dispatch(Command::ChooseReward { index }).unwrap();
+    assert_eq!(g.deck.len(), 1);
     select_kind(&mut g, NodeKind::Combat);
     assert!(!g.log.iter().any(|s| s.starts_with("역습")));
     assert_eq!(g.battle.outcome()[1].position, Some(p(0, 7)));
     assert!(g.battle.board.piece_at(p(4, 0)).unwrap().is_some());
     assert_eq!(g.battle.outcome()[2].position, Some(p(0, 6)));
     assert!(!g.battle.has_ward(9));
-    assert_eq!(g.cards.hand.len() + g.cards.draw.len(), 11);
+    assert_eq!(g.cards.hand.len() + g.cards.draw.len(), 1);
     let b = Battle::with_options(
         BattleStart {
             players: roster(&[(5, KING, 4, 7), (1, ROOK, 0, 0)]),
@@ -333,6 +385,7 @@ fn reward_persistence_counterattack_and_relics() {
         BattleOptions {
             actions_per_turn: 1,
             self_defense: true,
+            ..BattleOptions::default()
         },
         &mut Rng::new(0),
     )
@@ -456,9 +509,16 @@ fn seeded_full_run_reaches_boss_victory() {
     let commands: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("fixtures/winning-run.json")).unwrap();
     let mut wins = 0;
-    for value in commands {
+    for (index, value) in commands.into_iter().enumerate() {
         let command: Command = serde_json::from_value(value).unwrap();
-        game.dispatch(command).unwrap();
+        game.dispatch(command).unwrap_or_else(|e| {
+            panic!(
+                "fixture command {index}: {e}, phase {:?}, turn {}, log {:?}",
+                game.phase,
+                game.battle.turn,
+                game.log.last()
+            )
+        });
         if game.phase == RunPhase::Reward {
             wins += 1;
         }
@@ -473,12 +533,14 @@ fn seeded_full_run_reaches_boss_victory() {
         NodeKind::Boss
     );
     assert_eq!(game.completed.len(), MAP_ROWS);
-    assert!(game.deck.len() >= 13);
-    assert!(game
-        .battle
-        .outcome()
-        .iter()
-        .all(|p| p.position.is_none_or(|pos| pos == p.origin)));
+    assert!(game.deck.len() >= 4);
+    if !game.relics.contains(&Relic::HardDisk) {
+        assert!(game
+            .battle
+            .outcome()
+            .iter()
+            .all(|p| p.position.is_none_or(|pos| pos == p.origin)));
+    }
     assert_eq!(game.battle.outcome()[8].kind, TEMPEST_PAWN);
 }
 

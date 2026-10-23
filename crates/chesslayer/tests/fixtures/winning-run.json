@@ -4,33 +4,23 @@
     "id": 2
   },
   {
-    "type": "play_card",
-    "id": 10,
-    "target": 5
-  },
-  {
-    "type": "play_card",
-    "id": 5,
-    "target": 4
+    "type": "move",
+    "from": 50,
+    "to": 42
   },
   {
     "type": "move",
-    "from": 51,
-    "to": 35
+    "from": 59,
+    "to": 32
   },
   {
     "type": "move",
-    "from": 58,
-    "to": 30
-  },
-  {
-    "type": "move",
-    "from": 30,
-    "to": 12
+    "from": 32,
+    "to": 4
   },
   {
     "type": "choose_reward",
-    "index": 0
+    "index": 1
   },
   {
     "type": "select_node",
@@ -45,18 +35,18 @@
   },
   {
     "type": "move",
-    "from": 52,
-    "to": 44
+    "from": 40,
+    "to": 32
   },
   {
     "type": "move",
-    "from": 61,
-    "to": 25
+    "from": 44,
+    "to": 36
   },
   {
     "type": "move",
-    "from": 58,
-    "to": 49
+    "from": 60,
+    "to": 52
   },
   {
     "type": "choose_reward",
@@ -77,47 +67,33 @@
   },
   {
     "type": "move",
-    "from": 51,
-    "to": 43
+    "from": 40,
+    "to": 24
   },
   {
     "type": "move",
-    "from": 43,
-    "to": 34
+    "from": 60,
+    "to": 28
   },
   {
     "type": "move",
-    "from": 59,
-    "to": 27
+    "from": 24,
+    "to": 8
   },
   {
     "type": "move",
-    "from": 27,
-    "to": 34
+    "from": 8,
+    "to": 1,
+    "promotion": 11
   },
   {
     "type": "move",
-    "from": 34,
-    "to": 26
-  },
-  {
-    "type": "move",
-    "from": 26,
-    "to": 33
-  },
-  {
-    "type": "move",
-    "from": 33,
-    "to": 12
-  },
-  {
-    "type": "move",
-    "from": 12,
+    "from": 1,
     "to": 4
   },
   {
     "type": "choose_reward",
-    "index": 0
+    "index": 2
   },
   {
     "type": "select_node",
@@ -131,13 +107,7 @@
     "id": 18
   },
   {
-    "type": "move",
-    "from": 48,
-    "to": 40
-  },
-  {
-    "type": "move",
-    "from": 57,
-    "to": 51
+    "type": "choose_reward",
+    "index": 2
   }
 ]
