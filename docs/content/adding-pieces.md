@@ -1,6 +1,6 @@
 # 기물 추가
 
-정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 기존 16종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시 이름·능력 설명, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
+정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 현재 17종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시 이름·능력 설명, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
 
 ## 1. 완전한 정의 파일 만들기
 
@@ -12,7 +12,7 @@
 use super::{movement, PieceDefinition};
 use crate::PieceType;
 
-pub const DANCER: PieceType = 17;
+pub const DANCER: PieceType = 18;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 30,
@@ -25,7 +25,7 @@ fn movement() -> String {
 }
 ```
 
-17은 현재 비어 있는 다음 ID다. 다른 기물을 먼저 추가했다면 사용하지 않는 ID를 선택한다. 종류 ID와 실제 보드 위 `Piece.id`는 다른 값이다.
+18은 현재 비어 있는 다음 ID다. 다른 기물을 먼저 추가했다면 사용하지 않는 ID를 선택한다. 종류 ID와 실제 보드 위 `Piece.id`는 다른 값이다.
 
 ### 기본 속성
 
@@ -33,7 +33,7 @@ fn movement() -> String {
 
 | 속성 | 설명 |
 | --- | --- |
-| `kind: PieceType` | `u16` 숫자 종류 ID. 0은 예약, 기존 1~16 재사용·변경 금지 |
+| `kind: PieceType` | `u16` 숫자 종류 ID. 0은 예약, 기존 1~17 재사용·변경 금지 |
 | `key: &'static str` | 보드 카탈로그/DSL의 고유 이름. `piece(dancer)`, `transition(dancer)` 등이 참조하므로 단순한 영문 식별자를 권장 |
 | `name: &'static str` | UI·기록의 한글 이름 |
 | `movement: fn() -> String` | Chesssembly 소스를 반환. 각 전투 시작 때 파싱 |
@@ -104,19 +104,19 @@ fn movement() -> String {
 
 ### 적 편성 — 선택한 전투에 출현시키려면
 
-`crates/chesslayer/src/content/mod.rs::encounter(index)`에서 최종 `Encounter { enemies, royal_id: 100 }`를 반환하기 전에 다음을 추가하면 첫 편성에 무희가 생긴다.
+`crates/chesslayer/src/content/encounters.rs::encounter(index)`에서 최종 `Encounter { enemies, royal_id: 100 }`를 반환하기 전에 다음을 추가하면 첫 편성에 무희가 생긴다.
 
 ```rust
 if index == 0 {
     enemies.push(EnemyPiece {
         id: 120,
-        kind: pieces::DANCER,
+        kind: crate::content::pieces::DANCER,
         position: Position::new(2, 1), // c7
     });
 }
 ```
 
-이 함수에는 이미 `EnemyPiece`와 `Position`이 임포트되어 있고 `pieces` 모듈도 선언되어 있다. 같은 전투의 다른 적/아군과 인스턴스 ID가 겹치면 안 된다. 적끼리 위치가 겹쳐도 안 된다. 적 로얄은 종류가 아니라 `royal_id`로 지정하며, 예시에서는 기존 100을 유지한다. 기존 편성 인덱스·맵 구조를 바꿀 필요는 없다.
+이 파일에는 이미 `EnemyPiece`와 `Position`이 임포트되어 있다. 새 종류는 `crate::content::pieces::DANCER`로 참조하거나 명시적으로 임포트한다. 같은 전투의 다른 적/아군과 인스턴스 ID가 겹치면 안 된다. 적끼리 위치가 겹쳐도 안 된다. 적 로얄은 종류가 아니라 `royal_id`로 지정하며, 예시에서는 기존 100을 유지한다. 기존 편성 인덱스·맵 구조를 바꿀 필요는 없다.
 
 ### 아군 시작 진형 — 필요할 때만
 

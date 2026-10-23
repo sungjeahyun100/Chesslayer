@@ -5,6 +5,7 @@ mod bouncing_bishop;
 mod bouncing_pawn;
 mod bouncing_queen;
 mod bouncing_rook;
+mod hook;
 mod king;
 mod knight;
 pub mod movement;
@@ -25,6 +26,7 @@ pub use bouncing_bishop::BOUNCING_BISHOP;
 pub use bouncing_pawn::BOUNCING_PAWN;
 pub use bouncing_queen::BOUNCING_QUEEN;
 pub use bouncing_rook::BOUNCING_ROOK;
+pub use hook::HOOK;
 pub use king::KING;
 pub use knight::KNIGHT;
 pub use pawn::PAWN;
@@ -92,6 +94,7 @@ pub const ALL: &[PieceDefinition] = &[
     bouncing_rook::DEFINITION,
     bouncing_bishop::DEFINITION,
     bouncing_queen::DEFINITION,
+    hook::DEFINITION,
 ];
 
 pub fn definition(kind: PieceType) -> Option<&'static PieceDefinition> {

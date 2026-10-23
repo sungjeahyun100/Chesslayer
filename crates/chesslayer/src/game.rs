@@ -122,7 +122,7 @@ impl Game {
             .and_then(|id| self.map.nodes[id].encounter)
             .ok_or("전투 노드가 아닙니다.")?;
         let mut encounter = encounter(index);
-        self.log(format!("{} · 전투 시작", ENCOUNTER_NAMES[index]));
+        self.log(format!("{} · 전투 시작", ENCOUNTERS[index].name));
         if self.relics.contains(&Relic::Whirlwind) {
             let mut positions: Vec<_> = encounter.enemies.iter().map(|e| e.position).collect();
             self.rng.shuffle(&mut positions);

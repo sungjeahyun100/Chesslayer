@@ -580,7 +580,7 @@ fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
                     target: TEMPEST_PAWN
                 })
                 .is_err());
-            g.dispatch(Command::SelectNode { id: 14 }).unwrap();
+            g.dispatch(Command::SelectNode { id: 13 }).unwrap();
             assert_eq!(
                 g.battle.outcome().into_iter().find(|p| p.id == id).unwrap(),
                 expected

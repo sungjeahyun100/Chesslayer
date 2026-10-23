@@ -4,6 +4,7 @@ use std::collections::HashSet;
 #[test]
 fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
     let mut distinct = HashSet::new();
+    let mut elites = HashSet::new();
     for seed in 0..128 {
         let map = ActMap::generate(seed);
         assert_eq!(map, ActMap::generate(seed));
@@ -27,6 +28,17 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
         let mut incoming = vec![0; map.nodes.len()];
         for n in &map.nodes {
             assert_eq!(n.id, map.nodes[n.id].id);
+            match n.kind {
+                NodeKind::Elite => {
+                    assert!(encounters::ELITES.contains(&n.encounter.unwrap()));
+                    elites.insert(n.encounter.unwrap());
+                    assert!(n.relic.is_some());
+                    assert!(n.description().contains("카드 1장"));
+                }
+                NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::HOOK_BOSS)),
+                NodeKind::Combat => assert!(n.encounter.unwrap() < 4),
+                _ => (),
+            }
             if n.kind != NodeKind::Boss {
                 assert!(!n.next.is_empty());
             }
@@ -61,6 +73,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
         assert!(map.nodes.iter().any(|n| n.kind == NodeKind::Elite));
     }
     assert!(distinct.len() > 120);
+    assert_eq!(elites, encounters::ELITES.into());
 }
 
 #[test]

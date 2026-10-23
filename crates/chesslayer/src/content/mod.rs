@@ -1,26 +1,18 @@
 //! Replaceable prototype content and provisional rules, not final game design.
 pub mod cards;
 pub mod characters;
+pub mod encounters;
 pub mod pieces;
 pub use cards::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
 pub use characters::{characters, Character};
+pub use encounters::{encounter, ENCOUNTERS};
 
-use crate::*;
 use serde::Serialize;
 
 pub const BASE_MANA: u8 = 3;
 pub const DRAW_PER_TURN: usize = 5;
 pub const HAND_LIMIT: usize = 10;
 pub const HASTE_ACTIONS: u8 = 2;
-pub const ENCOUNTER_NAMES: [&str; 6] = [
-    "홀로 선 왕",
-    "왕관을 쓴 기사",
-    "쌍둥이 주교",
-    "폰의 성벽",
-    "마하라자",
-    "왕관의 근위대",
-];
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Relic {
@@ -44,49 +36,6 @@ impl Relic {
                 "역습으로 아군이 죽으면 겹친 적도 제거합니다. 적 로얄은 제외됩니다."
             }
         }
-    }
-}
-pub fn encounter(index: usize) -> Encounter {
-    let royal_kind = match index {
-        1 | 5 => KNIGHT,
-        4 => AMAZON,
-        _ => KING,
-    };
-    let mut enemies = vec![EnemyPiece {
-        id: 100,
-        kind: royal_kind,
-        position: Position::new(4, 0),
-    }];
-    if matches!(index, 2 | 5) {
-        for (i, file) in [2, 5].into_iter().enumerate() {
-            enemies.push(EnemyPiece {
-                id: 101 + i as u32,
-                kind: BISHOP,
-                position: Position::new(file, 0),
-            });
-        }
-    }
-    if index == 5 {
-        for (id, file) in [(103, 3), (104, 5)] {
-            enemies.push(EnemyPiece {
-                id,
-                kind: PAWN,
-                position: Position::new(file, 1),
-            });
-        }
-    }
-    if index == 3 {
-        for file in 0..8 {
-            enemies.push(EnemyPiece {
-                id: 101 + file as u32,
-                kind: PAWN,
-                position: Position::new(file, 1),
-            });
-        }
-    }
-    Encounter {
-        enemies,
-        royal_id: 100,
     }
 }
 /// Small deterministic generator: the same seed and commands yield the same run, including WASM.

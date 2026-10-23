@@ -7,7 +7,7 @@ export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
   elite: { icon: <PieceImage pieceKey="rook" owner={1} />, label: "엘리트" },
   rest: { icon: "⌂", label: "휴식" },
   treasure: { icon: "◇", label: "보물" },
-  boss: { icon: <PieceImage pieceKey="amazon" owner={1} />, label: "보스" },
+  boss: { icon: <PieceImage pieceKey="hook" owner={1} />, label: "보스" },
 };
 const status = (node: MapNode) =>
   node.current

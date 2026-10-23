@@ -173,10 +173,16 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
           .getByRole("button", { name: "진행 중인 노드로 돌아가기" })
           .click();
       }
-      if (kind === "boss")
+      if (kind === "boss") {
         await expect(
-          page.getByRole("heading", { name: "마하라자", exact: true }),
+          page.getByRole("heading", { name: "구행", exact: true }),
         ).toBeVisible();
+        const hook = page.locator('[data-piece-id="100"] img');
+        await expect(hook).toHaveAttribute("data-piece-key", "hook");
+        await expect(hook).toBeVisible();
+        await expect.poll(() => hook.evaluate((img) => (img as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+        await page.screenshot({ path: "test-results/hook-boss.png", fullPage: true });
+      }
     } else if (cmd.type === "move") {
       const from = page.locator(`[data-square="${square(cmd.from)}"]`);
       await expect(from).toBeEnabled();
@@ -234,6 +240,7 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
   await expect(
     page.getByRole("heading", { name: "마지막 왕관까지." }),
   ).toBeVisible();
+  await expect(page.getByText("구행 보스를 직접 포획했습니다. 첫 번째 원정을 완수했습니다.")).toBeVisible();
   await expect(page.getByRole("log")).toContainText("역습");
   await page.screenshot({
     path: "test-results/map-run-victory.png",

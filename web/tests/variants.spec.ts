@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { Command, Snapshot } from "../src/types";
-const saveKey = "chesslayer.run.v1"; // Storage slot is retained; the payload carries version 2.
+const saveKey = "chesslayer.run.v1"; // Storage slot is retained; the payload carries version 3.
 const square = (cell: number) => `\"${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}\"`;
 const saved = (page: Page) => page.evaluate((key) => localStorage.getItem(key)!, saveKey);
 
@@ -72,7 +72,7 @@ for (const family of ["tempest", "bouncing"] as const) {
     await page.getByRole("button", { name: "강화 확정", exact: true }).click();
     expect(JSON.parse(await saved(page)).commands.at(-1)).toMatchObject(commands[restIndex]);
     await resume(page);
-    await page.locator('[data-node-id="14"]').click();
+    await page.locator('[data-node-id="13"]').click();
     await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", `${family}_pawn`);
     for (const c of commands.slice(restIndex + 2, promotionIndex)) {
       if (c.type === "move") await clickMove(page, c.from, c.to);
@@ -121,7 +121,7 @@ for (const family of ["tempest", "bouncing"] as const) {
     await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", `${family}_queen`);
     await resume(page);
     const final = await snapshot(page);
-    expect(final.map.current).toBe(18);
+    expect(final.map.current).toBe(15);
     expect(final.rest_options.find((p) => p.id === 9)).toMatchObject({ key: `${family}_queen`, upgrades: [family], dead: false });
     await imagesLoaded(page);
     expect(errors).toEqual([]);
@@ -130,9 +130,12 @@ for (const family of ["tempest", "bouncing"] as const) {
 
 test("이전 저장 버전은 설명을 표시하고 원본 기록을 보존한다", async ({ page }) => {
   await page.goto("/");
-  const legacy = JSON.stringify({ version: 1, character: "vanguard", seed: 2026, commands: [{ type: "rest_upgrade", id: 9 }] });
-  await page.evaluate(({ saveKey, legacy }) => localStorage.setItem(saveKey, legacy), { saveKey, legacy });
-  await resume(page);
-  await expect(page.getByRole("alert")).toContainText("이전 규칙으로 저장된 원정입니다");
-  expect(await saved(page)).toBe(legacy);
+  for (const version of [1, 2]) {
+    const legacy = JSON.stringify({ version, character: "vanguard", seed: 2026, commands: [{ type: "rest_upgrade", id: 9, ...(version === 2 ? { target: 8 } : {}) }] });
+    await page.evaluate(({ saveKey, legacy }) => localStorage.setItem(saveKey, legacy), { saveKey, legacy });
+    await resume(page);
+    await expect(page.getByRole("alert")).toContainText("이전 규칙으로 저장된 원정입니다");
+    await expect(page.getByRole("alert")).toContainText("1층 엘리트·보스 편성");
+    expect(await saved(page)).toBe(legacy);
+  }
 });

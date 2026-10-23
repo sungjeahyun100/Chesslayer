@@ -11,6 +11,8 @@ struct SavedRun {
     commands: Vec<Command>,
 }
 
+const SAVE_VERSION: u32 = 3;
+
 /// The only browser state owner. JavaScript sends intentions and renders snapshots.
 #[wasm_bindgen]
 pub struct WebGame {
@@ -24,7 +26,7 @@ impl WebGame {
         Ok(Self {
             game: Game::new(character, seed).map_err(|e| JsValue::from_str(&e))?,
             save: SavedRun {
-                version: 2,
+                version: SAVE_VERSION,
                 character: character.into(),
                 seed,
                 commands: vec![],
@@ -49,8 +51,8 @@ impl WebGame {
     pub fn restore(saved: &str) -> Result<WebGame, JsValue> {
         let header: serde_json::Value = serde_json::from_str(saved)
             .map_err(|_| JsValue::from_str("저장된 원정을 읽을 수 없습니다."))?;
-        if header.get("version").and_then(|v| v.as_u64()) != Some(2) {
-            return Err(JsValue::from_str("이전 규칙으로 저장된 원정입니다. 템페스트 행마·강화·승격 규칙이 변경되어 이어갈 수 없습니다. 새 원정을 시작하세요. 기존 기록은 새 원정을 시작하기 전까지 보존됩니다."));
+        if header.get("version").and_then(|v| v.as_u64()) != Some(u64::from(SAVE_VERSION)) {
+            return Err(JsValue::from_str("이전 규칙으로 저장된 원정입니다. 1층 엘리트·보스 편성과 행마 규칙이 변경되어 이어갈 수 없습니다. 새 원정을 시작하세요. 기존 기록은 새 원정을 시작하기 전까지 보존됩니다."));
         }
         let save: SavedRun = serde_json::from_str(saved)
             .map_err(|_| JsValue::from_str("저장된 원정을 읽을 수 없습니다."))?;

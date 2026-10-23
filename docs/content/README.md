@@ -1,11 +1,12 @@
 # 콘텐츠 정의와 확장 안내
 
-카드 4종, 기물 8종, 캐릭터 3종은 `crates/chesslayer/src/content/`에서 각각 한 파일로 관리한다. 정의 파일을 만들고 같은 디렉터리의 `mod.rs`에 등록하면 기존 조회·실행 경로에 연결된다. 카드와 기물은 **등록과 실제 획득·등장 경로 지정이 별도**다. 캐릭터는 등록하면 선택 화면에 바로 나온다.
+카드 4종, 기물 17종, 캐릭터 3종은 `crates/chesslayer/src/content/`에서 각각 한 파일로 관리한다. 정의 파일을 만들고 같은 디렉터리의 `mod.rs`에 등록하면 기존 조회·실행 경로에 연결된다. 카드와 기물은 **등록과 실제 획득·등장 경로 지정이 별도**다. 캐릭터는 등록하면 선택 화면에 바로 나온다.
 
 모든 경로는 저장소 루트 기준이다.
 
 - [카드 추가](adding-cards.md): 정의, 키워드, 대상 판정, 효과, 시작 덱·보상
 - [기물 추가](adding-pieces.md): ID, Chesssembly 행마, 표시, AI 가치, 전투 편성
+- [1층 몬스터 편성](encounters.md): 실제 ID·이름·좌표, 엘리트 선택, 구행과 저장 호환성
 - [캐릭터 추가](adding-characters.md): 기본 정보, 시작 유물, 지원 범위
 - [검증 기록과 최소 등록 테스트](validation.md)
 
@@ -30,7 +31,8 @@ web/src/main.tsx 기물 종류별 기호·배지
 ```text
 crates/chesslayer/src/
 ├── content/
-│   ├── mod.rs                 공통 상수, 유물 정보, 적 편성, RNG
+│   ├── mod.rs                 공통 상수, 유물 정보, RNG
+│   ├── encounters.rs          1층 몬스터 ID·명칭·고정 편성
 │   ├── cards/
 │   │   ├── mod.rs             CardKind, CardDefinition, 등록, 시작 덱·보상
 │   │   ├── jeans.rs           청바지
@@ -83,7 +85,7 @@ crates/chesslayer/src/
 | 작업 | 필수 | 게임에 등장시키려면 | 특수한 경우만 |
 | --- | --- | --- | --- |
 | 카드 | `content/cards/<이름>.rs`, `content/cards/mod.rs`의 모듈·enum·match | 같은 `mod.rs`의 시작 덱 또는 보상 목록 | 새 턴 이벤트/덱 조작 등 현재 효과 인자로 할 수 없는 기능은 코어 수정 |
-| 기물 | `content/pieces/<이름>.rs`, `content/pieces/mod.rs`의 모듈·ID 재노출·ALL | 적은 `content/mod.rs::encounter()`, 아군 초기 배치는 `battle.rs::standard_roster()` 등 실제 공급처 | SVG 두 진영 파일과 출처 등록. 새로운 지속 능력·분기 강화·로얄 규칙은 해당 코어 수정 |
+| 기물 | `content/pieces/<이름>.rs`, `content/pieces/mod.rs`의 모듈·ID 재노출·ALL | 적은 `content/encounters.rs::encounter()`, 아군 초기 배치는 `battle.rs::standard_roster()` 등 실제 공급처 | SVG 두 진영 파일과 출처 등록. 새로운 지속 능력·분기 강화·로얄 규칙은 해당 코어 수정 |
 | 캐릭터 | `content/characters/<이름>.rs`, `content/characters/mod.rs`의 모듈·ALL | 추가 작업 없이 선택 화면 노출 | 새 유물 또는 캐릭터별 덱·진형은 현재 정의 규격 밖 |
 
 등록 이후 기존 콘텐츠의 수치·행마·효과를 수정하는 일은 대부분 해당 정의 파일 하나에서 끝난다. 신규 콘텐츠는 Rust 모듈 등록 때문에 `mod.rs` 수정도 필요하다.
@@ -91,7 +93,7 @@ crates/chesslayer/src/
 ## 유지한 ID와 의존 관계
 
 - 카드 직렬화 키: `jeans`, `ward`, `gun`, `fleeting_ward`. 인스턴스 `Card.id`와 카드 종류는 별개다. 시작 덱의 기존 순서와 ID 1~10을 유지했다. 이후 획득 ID는 시작 덱의 최댓값 다음부터 할당한다.
-- 기물 종류: 폰 1, 나이트 2, 비숍 3, 룩 4, 퀸 5, 킹 6, 아마존 7, 템페스트 폰 8, 템페스트 룩/비숍/나이트/퀸 9~12, 바운싱 폰/룩/비숍/퀸 13~16. 기존 DSL 이름은 유지한다. 0은 예약되어 있다.
+- 기물 종류: 폰 1, 나이트 2, 비숍 3, 룩 4, 퀸 5, 킹 6, 아마존 7, 템페스트 폰 8, 템페스트 룩/비숍/나이트/퀸 9~12, 바운싱 폰/룩/비숍/퀸 13~16, 구행 17. 기존 DSL 이름은 유지한다. 0은 예약되어 있다.
 - 캐릭터 ID와 순서: `vanguard`, `wanderer`, `guardian`. 시작 유물: `Haste`, `Whirlwind`, `SelfDefense`.
 - 보상 인덱스: 가호 0, 청바지 1, 총 2. 기존 명령 기보가 이 순서를 참조한다. 새 보상은 보통 뒤에 추가한다.
 - 청바지는 정확히 `ROOK | QUEEN`, 총 진형은 정확히 `ROOK, ROOK, QUEEN`을 검사한다. 퀸 행마를 가진 아마존이 자동으로 퀸 취급을 받지 않는다.

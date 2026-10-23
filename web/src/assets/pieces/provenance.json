@@ -670,5 +670,71 @@
     "sha256": "555361f9e98d146fa0dac684afb98dbdb485caf47050cc65d1f85593846755c7",
     "changes": "Existing framed base silhouette with hand-authored paired wall-and-rebound arrows",
     "license": "unverified-extracted-source"
+  },
+  {
+    "key": "hook",
+    "side": "white",
+    "file": "hook-white.svg",
+    "source": "chess_play/decoded-svg/149__kind_of_chess_piece_white4__DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR__8f2859e7dfdefd3d0331bb133a86e038.svg",
+    "sha256": "a9afe8547c752010b2801e3599afbac0f77eb77872110dd34156fa11486c22b5",
+    "changes": "User-identified shogi hook source; centered in a 45×45 frame at 36.5 height; colors and embedded artwork unchanged; 0° rotation (points up for player).",
+    "license": "unverified-extracted-source",
+    "original": {
+      "sourceFile": "8f2859e7dfdefd3d0331bb133a86e038.svg",
+      "assetId": "8f2859e7dfdefd3d0331bb133a86e038",
+      "dataFormat": "svg",
+      "chosenName": "DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR9iQbZg2",
+      "chosenSprite": "kind of chess piece white4",
+      "outputFile": "149__kind_of_chess_piece_white4__DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR__8f2859e7dfdefd3d0331bb133a86e038.svg",
+      "references": [
+        {
+          "sprite": "kind of chess piece white4",
+          "costumeIndex": 90,
+          "costumeName": "DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR9iQbZg2",
+          "rotationCenterX": 19.17494776843182,
+          "rotationCenterY": 22.18184808193189
+        },
+        {
+          "sprite": "스프라이트 2",
+          "costumeIndex": 34,
+          "costumeName": "DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR9iQbZg2",
+          "rotationCenterX": 19.17494776843182,
+          "rotationCenterY": 22.18184808193189
+        }
+      ]
+    }
+  },
+  {
+    "key": "hook",
+    "side": "black",
+    "file": "hook-black.svg",
+    "source": "chess_play/decoded-svg/149__kind_of_chess_piece_white4__DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR__8f2859e7dfdefd3d0331bb133a86e038.svg",
+    "sha256": "a9afe8547c752010b2801e3599afbac0f77eb77872110dd34156fa11486c22b5",
+    "changes": "User-identified shogi hook source; centered in a 45×45 frame at 36.5 height; colors and embedded artwork unchanged; 180° rotation (points down for enemy).",
+    "license": "unverified-extracted-source",
+    "original": {
+      "sourceFile": "8f2859e7dfdefd3d0331bb133a86e038.svg",
+      "assetId": "8f2859e7dfdefd3d0331bb133a86e038",
+      "dataFormat": "svg",
+      "chosenName": "DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR9iQbZg2",
+      "chosenSprite": "kind of chess piece white4",
+      "outputFile": "149__kind_of_chess_piece_white4__DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR__8f2859e7dfdefd3d0331bb133a86e038.svg",
+      "references": [
+        {
+          "sprite": "kind of chess piece white4",
+          "costumeIndex": 90,
+          "costumeName": "DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR9iQbZg2",
+          "rotationCenterX": 19.17494776843182,
+          "rotationCenterY": 22.18184808193189
+        },
+        {
+          "sprite": "스프라이트 2",
+          "costumeIndex": 34,
+          "costumeName": "DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR9iQbZg2",
+          "rotationCenterX": 19.17494776843182,
+          "rotationCenterY": 22.18184808193189
+        }
+      ]
+    }
   }
 ]

@@ -25,18 +25,12 @@ async function loadRest(page: Page, casualties = false) {
           casualties &&
           command.type === "move" &&
           command.from === 12 &&
-          command.to === 5
+          command.to === 19
         ) {
           const jeans = s.hand.find((c: any) => c.definition.kind === "jeans");
           game.dispatch(JSON.stringify({ type: "play_card", id: jeans.id }));
         }
-        game.dispatch(
-          JSON.stringify(
-            casualties && command.type === "move" && command.from === 59
-              ? { type: "move", from: 55, to: 47 }
-              : command,
-          ),
-        );
+        game.dispatch(JSON.stringify(command));
       }
       localStorage.setItem(saveKey, game.save());
       game.free();
@@ -87,7 +81,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   await expect(page.locator(".rest-detail")).toHaveCount(0);
   await page.locator('[data-square="a3"]').click();
   await expect(page.locator(".rest-detail")).toHaveCount(0);
-  await page.locator('[data-square="e1"]').click();
+  await page.locator('[data-square="f1"]').click();
   await expect(
     page.getByText("이 기물에 정의된 강화 경로가 없습니다."),
   ).toBeVisible();
@@ -153,7 +147,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   ]);
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
-  await page.locator('[data-node-id="14"]').click();
+  await page.locator('[data-node-id="13"]').click();
   await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute(
     "data-piece-key",
     "tempest_pawn",
@@ -207,7 +201,7 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   });
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
-  await page.locator('[data-node-id="14"]').click();
+  await page.locator('[data-node-id="13"]').click();
   await expect(page.locator('[data-square="a1"]')).toHaveAccessibleName(
     "a1 백 룩",
   );
@@ -224,9 +218,9 @@ test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진�
   page.on("pageerror", (e) => errors.push(e.message));
   const pieces = [
     { id: 1, square: "a1", name: "룩", key: "rook", families: ["tempest", "bouncing"] },
-    { id: 3, square: "g7", name: "비숍", key: "bishop", families: ["tempest", "bouncing"] },
+    { id: 3, square: "c5", name: "비숍", key: "bishop", families: ["tempest", "bouncing"] },
     { id: 2, square: "b1", name: "나이트", key: "knight", families: ["tempest"] },
-    { id: 4, square: "d3", name: "퀸", key: "queen", families: ["tempest", "bouncing"] },
+    { id: 4, square: "d1", name: "퀸", key: "queen", families: ["tempest", "bouncing"] },
   ];
   for (const piece of pieces) {
     for (const family of piece.families) {
@@ -263,7 +257,7 @@ test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진�
       expect(after.log.at(-1)).toContain(`${piece.name} → ${name}`);
       await page.reload();
       await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
-      await page.locator('[data-node-id="14"]').click();
+      await page.locator('[data-node-id="13"]').click();
       await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
       const next = await restoreSnapshot(page);
       expect(next.rest_options.find((p: any) => p.id === piece.id)).toMatchObject({

@@ -63,3 +63,11 @@ Vite의 명시된 리소스 폴더 import glob만 번들에 포함한다. 상태
 확장 파일은 모두 `web/src/assets/pieces/<key>-white.svg`, `<key>-black.svg`로 매핑한다. 모든 화면에서 기존 `PieceImage`를 사용하며 승격 선택에도 같은 컴포넌트를 쓴다. 원본 `chess_play/`는 수정하지 않았다. 유니코드 대체나 외부 이미지 요청은 없다.
 
 `provenance.json`에 추가 파일 각각의 정확한 원본 경로·원본 SHA-256·변형 내용을 추가했다. 추출 SVG와 파생 이미지의 원본 저작권·재배포 라이선스는 기존과 같이 **미확인**이며 새로 그린 장식이 그 상태를 변경하지 않는다. 앞 절의 16개는 1차 폴리싱 당시 수량이고 현재는 32개다.
+
+## 구행 방향 이미지 (현재 총 34개)
+
+구행의 기물 ID는 17, key는 `hook`이다. 사용자가 지정한 원본 `chess_play/decoded-svg/149__kind_of_chess_piece_white4__DCx_U2xhaGga2BHX6T4I8st1a1XszSVJv8X829uwDynl4cANjovliBTCGfaGA1z0NEWKz-bZokKbr4AR__8f2859e7dfdefd3d0331bb133a86e038.svg`를 사용한다. 원본은 쇼기 구행의 글자와 위를 향하는 오각형을 담고 있으며, SVG 내부에 PNG가 포함되어 있다. 처음 적용했던 임시 룩 이미지는 이 원본으로 교체했다.
+
+`hook-white.svg`는 아군용으로 위를 향하고, `hook-black.svg`는 같은 그림 전체를 중심 기준으로 **180도 회전**하여 적군용으로 아래를 향한다. 글자를 거울처럼 반사하지 않으며 색은 바꾸지 않는다. 파일명의 white/black은 기존 진영 조회 키이고, 실제 구분은 쇼기처럼 방향으로 한다. 두 파일 모두 45×45 프레임 안에 같은 크기(높이 36.5)로 중앙 정렬했다. 내부 그림과 원본 파일은 수정하지 않았다. 전투와 지도 보스 아이콘 모두 공통 key 조회를 사용한다.
+
+`provenance.json`에 원본 경로·SHA-256·manifest 항목과 회전·크기 조정을 기록했다. 원본 라이선스의 확인 상태는 기존과 같다.

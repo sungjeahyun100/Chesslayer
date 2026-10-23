@@ -1,5 +1,8 @@
 //! One immutable, seeded Act graph. Run traversal is kept separately by Game.
-use crate::content::{Relic, Rng, ENCOUNTER_NAMES};
+use crate::content::{
+    encounters::{ELITES, HOOK_BOSS},
+    Relic, Rng, ENCOUNTERS,
+};
 use serde::Serialize;
 
 pub const MAP_ROWS: usize = 7;
@@ -28,7 +31,7 @@ impl MapNode {
         match self.kind {
             NodeKind::Rest => "작은 쉼터",
             NodeKind::Treasure => "남겨진 보물",
-            _ => ENCOUNTER_NAMES[self.encounter.expect("combat node has encounter")],
+            _ => ENCOUNTERS[self.encounter.expect("combat node has encounter")].name,
         }
     }
     pub fn description(&self) -> String {
@@ -37,7 +40,8 @@ impl MapNode {
                 "적 로얄을 포획하고 카드 1장을 선택합니다. 아군의 위치와 손실이 이어집니다.".into()
             }
             NodeKind::Elite => format!(
-                "비숍과 폰이 호위하는 로얄 나이트. 승리하면 카드 1장과 {}을 얻습니다.",
+                "{} 승리하면 카드 1장과 {}을 얻습니다.",
+                ENCOUNTERS[self.encounter.unwrap()].description,
                 self.relic.unwrap().name()
             ),
             NodeKind::Rest => {
@@ -49,7 +53,10 @@ impl MapNode {
                 self.relic.unwrap().name()
             ),
             NodeKind::Boss => {
-                "퀸과 나이트의 행마를 가진 마하라자. 직접 포획하면 원정을 완수합니다.".into()
+                format!(
+                    "{} 직접 포획하면 원정을 완수합니다.",
+                    ENCOUNTERS[HOOK_BOSS].description
+                )
             }
         }
     }
@@ -63,6 +70,8 @@ impl ActMap {
     pub fn generate(seed: u32) -> Self {
         // Map creation never consumes the combat/deck RNG stream.
         let mut rng = Rng::new(seed ^ 0x41c7_9e35);
+        // Keep the graph, normal encounters and relic stream stable when elite selection changes.
+        let mut elite_rng = Rng::new(seed ^ 0xe11e_0001);
         let widths = [3, 4, 2, 3 + rng.index(2), 2, 3 + rng.index(2), 1];
         let mut nodes = vec![];
         let mut layers = vec![];
@@ -98,8 +107,8 @@ impl ActMap {
             let mut layer = vec![];
             for (i, (lane, kind)) in lanes.into_iter().zip(kinds).enumerate() {
                 let encounter = match kind {
-                    NodeKind::Boss => Some(4),
-                    NodeKind::Elite => Some(5),
+                    NodeKind::Boss => Some(HOOK_BOSS),
+                    NodeKind::Elite => Some(ELITES[elite_rng.index(ELITES.len())]),
                     NodeKind::Combat if row == 0 => Some(starting_encounters[i]),
                     NodeKind::Combat => Some(1 + rng.index(3)),
                     _ => None,

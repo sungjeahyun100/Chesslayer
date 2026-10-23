@@ -343,7 +343,7 @@ fn reward_persistence_counterattack_and_relics() {
         .map
         .nodes
         .iter()
-        .find(|n| n.kind == NodeKind::Elite)
+        .find(|n| n.kind == NodeKind::Elite && encounter(n.encounter.unwrap()).enemies.len() > 1)
         .unwrap()
         .id;
     let parent = a
@@ -357,12 +357,15 @@ fn reward_persistence_counterattack_and_relics() {
     a.completed.push(parent);
     a.dispatch(Command::SelectNode { id: target }).unwrap();
     assert!(a.log.iter().any(|s| s.starts_with("소용돌이")));
-    assert!(encounter(5).enemies.iter().any(|e| a
-        .battle
-        .board
-        .piece_at(e.position)
-        .unwrap()
-        .is_none_or(|p| p.id != e.id)));
+    assert!(encounter(a.map.nodes[target].encounter.unwrap())
+        .enemies
+        .iter()
+        .any(|e| a
+            .battle
+            .board
+            .piece_at(e.position)
+            .unwrap()
+            .is_none_or(|p| p.id != e.id)));
 }
 #[test]
 fn rest_upgrade_revive_and_occupied_origin_rejection() {
