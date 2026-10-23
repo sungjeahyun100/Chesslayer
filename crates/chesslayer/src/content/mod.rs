@@ -1,4 +1,10 @@
 //! Replaceable prototype content and provisional rules, not final game design.
+pub mod cards;
+pub mod characters;
+pub mod pieces;
+pub use cards::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
+pub use characters::{characters, Character};
+
 use crate::*;
 use serde::Serialize;
 
@@ -6,9 +12,6 @@ pub const BASE_MANA: u8 = 3;
 pub const DRAW_PER_TURN: usize = 5;
 pub const HAND_LIMIT: usize = 10;
 pub const HASTE_ACTIONS: u8 = 2;
-pub const GUN_ADJACENT_FORMATION: bool = true;
-pub const GUN_HALF_WIDTH: i32 = 1;
-pub const GUN_HITS_ALLIES: bool = true;
 pub const ENCOUNTER_NAMES: [&str; 6] = [
     "홀로 선 왕",
     "왕관을 쓴 기사",
@@ -42,39 +45,6 @@ impl Relic {
             }
         }
     }
-}
-#[derive(Serialize)]
-pub struct Character {
-    pub id: &'static str,
-    pub name: &'static str,
-    pub title: &'static str,
-    pub description: &'static str,
-    pub relic: Relic,
-}
-pub fn characters() -> Vec<Character> {
-    vec![
-        Character {
-            id: "vanguard",
-            name: "선봉대",
-            title: "한 수 더, 한 발 먼저",
-            description: "가속으로 연속 두 수를 둡니다. 적도 두 번 움직이므로 킹을 지키세요.",
-            relic: Relic::Haste,
-        },
-        Character {
-            id: "wanderer",
-            name: "방랑자",
-            title: "흐트러진 진형 속으로",
-            description: "소용돌이로 적의 배치를 뒤섞습니다. 다음 전투의 시작 위치를 읽어 보세요.",
-            relic: Relic::Whirlwind,
-        },
-        Character {
-            id: "guardian",
-            name: "수호자",
-            title: "희생에도 대가를",
-            description: "호신용품으로 역습에 반격합니다. 로얄은 반드시 직접 포획해야 합니다.",
-            relic: Relic::SelfDefense,
-        },
-    ]
 }
 pub fn encounter(index: usize) -> Encounter {
     let royal_kind = match index {

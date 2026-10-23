@@ -12,8 +12,6 @@ import type {
 import "./style.css";
 import { ActMap, nodeTypes } from "./ActMap";
 
-const icons = ["", "♙", "♘", "♗", "♖", "♕", "♔", "♕", "♙"];
-const blackIcons = ["", "♟", "♞", "♝", "♜", "♛", "♚", "♛", "♟"];
 const relicIcons = { haste: "»", whirlwind: "◎", self_defense: "◇" };
 function Tags({ card }: { card: CardDefinition }) {
   return (
@@ -53,12 +51,9 @@ function PieceGlyph({ piece }: { piece: Piece }) {
       data-cell={piece.cell}
       aria-hidden="true"
     >
-      <span className="glyph">
-        {(piece.owner === 0 ? icons : blackIcons)[piece.kind]}
-      </span>
+      <span className="glyph">{piece.glyph}</span>
       {piece.royal && <span className="royal-mark">★</span>}
-      {piece.kind === 7 && <span className="piece-mod">♞</span>}
-      {piece.kind === 8 && <span className="piece-mod">ϟ</span>}
+      {piece.badge && <span className="piece-mod">{piece.badge}</span>}
       {piece.ward && <span className="ward-mark">◇</span>}
     </span>
   );

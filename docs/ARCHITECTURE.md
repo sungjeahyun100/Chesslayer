@@ -13,13 +13,16 @@ chesslayer-web (WebGame: WASM 객체 하나가 Game 하나를 소유)
   ↓
 chesslayer
   battle.rs   기존 Battle 기반 이동·턴·가호·로얄 보호·역습·outcome
-  cards.rs    카드 정의, 영구 덱과 별개인 전투 더미
-  content.rs  몬스터, 캐릭터, 임시 규칙 상수, 결정적 RNG
+  cards.rs    영구 덱과 별개인 전투 더미, 마나·키워드 처리
+  content/    카드·기물·캐릭터별 정의, 명시적 등록 목록
+    mod.rs    몬스터 편성, 유물 정보, 임시 규칙 상수, 결정적 RNG
   map.rs      한 번 생성하는 제1막 그래프, 노드 콘텐츠와 표시 자료형
   game.rs     명령 검증, AI, 보상, 휴식, 원정 상태와 UI 스냅샷
   ↓
 chessembly (보드, 액션, 파서와 이동 후보 계산)
 ```
+
+카드별 효과·대상 검증은 `content/cards/`, 기물의 ID·이름·행마·AI 가치·표시는 `content/pieces/`, 캐릭터 기본 정보·시작 유물은 `content/characters/`에 있다. 각 디렉터리의 `mod.rs`에서 명시적으로 등록한다. 카드 효과는 공통 `Battle` 메서드를 호출하고, 기물 행마는 기존 Chesssembly 계산기를 사용한다. [콘텐츠 추가 가이드](content/README.md)에 전체 파일 구조와 복사 가능한 예제가 있다.
 
 ## 한 번의 명령
 

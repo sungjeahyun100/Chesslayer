@@ -11,6 +11,8 @@ export interface Piece {
   id: number;
   kind: number;
   name: string;
+  glyph: string;
+  badge: string | null;
   owner: number;
   cell: number;
   square: string;

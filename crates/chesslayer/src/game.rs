@@ -44,7 +44,7 @@ pub struct Game {
     rng: Rng,
     next_card_id: u32,
 }
-fn engine_error(e: Error) -> String {
+pub(crate) fn engine_error(e: Error) -> String {
     format!("요청한 행동을 수행할 수 없습니다: {e:?}")
 }
 fn pos(index: usize) -> Result<Position, String> {
@@ -63,6 +63,7 @@ impl Game {
             .find(|c| c.id == character)
             .ok_or("캐릭터를 선택하세요.")?;
         let deck = starter_deck();
+        let next_card_id = deck.iter().map(|card| card.id).max().unwrap_or(0) + 1;
         let battle = Battle::new(BattleStart {
             players: Battle::standard_roster(),
             encounter: encounter(0),
@@ -83,7 +84,7 @@ impl Game {
             log: vec![],
             round: 1,
             rng: Rng::new(seed),
-            next_card_id: 11,
+            next_card_id,
         };
         Ok(game)
     }
@@ -239,7 +240,7 @@ impl Game {
                 if self.phase != RunPhase::Reward {
                     return Err("지금은 보상을 선택할 수 없습니다.".into());
                 }
-                let kind = *[CardKind::Ward, CardKind::Jeans, CardKind::Gun]
+                let kind = *content::cards::REWARD_POOL
                     .get(index)
                     .ok_or("보상 선택이 잘못되었습니다.")?;
                 self.deck.push(Card {
@@ -426,51 +427,7 @@ impl Game {
         if self.cards.mana < d.cost {
             return Err("마나가 부족합니다.".into());
         }
-        let mut removed = None;
-        match d.kind {
-            CardKind::Ward | CardKind::FleetingWard => {
-                self.battle
-                    .grant_ward(target.ok_or("가호를 받을 기물을 선택하세요.")?)
-                    .map_err(engine_error)?;
-            }
-            CardKind::Jeans => {
-                if target.is_some() {
-                    return Err("청바지는 대상을 선택하지 않습니다.".into());
-                }
-                let ids: Vec<_> = self
-                    .battle
-                    .board
-                    .cells()
-                    .iter()
-                    .flatten()
-                    .filter(|p| matches!(p.kind, ROOK | QUEEN))
-                    .map(|p| p.id)
-                    .collect();
-                removed = Some(self.battle.remove_nonroyals(&ids).map_err(engine_error)?);
-            }
-            CardKind::Gun => {
-                let target = target.ok_or("진형 맨 앞의 아군 룩을 선택하세요.")?;
-                let front = self
-                    .gun_front(target)
-                    .ok_or("전방부터 룩·룩·퀸을 같은 파일의 연속 세 칸에 배치하세요.")?;
-                let ids: Vec<_> = self
-                    .battle
-                    .board
-                    .cells()
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(i, p)| {
-                        p.filter(|p| {
-                            (GUN_HITS_ALLIES || p.owner == ENEMY)
-                                && (i as i32 % 8 - front.file).abs() <= GUN_HALF_WIDTH
-                                && (i as i32 / 8) < front.rank
-                        })
-                        .map(|p| p.id)
-                    })
-                    .collect();
-                removed = Some(self.battle.remove_nonroyals(&ids).map_err(engine_error)?);
-            }
-        }
+        let removed = (d.effect)(&mut self.battle, target)?;
         self.cards.spend(index);
         self.log(format!(
             "{} 사용 · 마나 −{}{}",
@@ -481,42 +438,6 @@ impl Game {
                 .unwrap_or_default()
         ));
         Ok(())
-    }
-    fn gun_front(&self, id: u32) -> Option<Position> {
-        let (i, _) = self
-            .battle
-            .board
-            .cells()
-            .iter()
-            .enumerate()
-            .find(|(_, p)| p.is_some_and(|p| p.id == id && p.owner == PLAYER && p.kind == ROOK))?;
-        let front = pos(i).ok()?;
-        let behind: Vec<_> = ((front.rank + 1)..8)
-            .filter_map(|rank| {
-                self.battle
-                    .board
-                    .piece_at(Position::new(front.file, rank))
-                    .ok()
-                    .flatten()
-                    .map(|p| (rank, p))
-            })
-            .collect();
-        if behind.len() < 2 {
-            return None;
-        }
-        if behind[0].1.owner != PLAYER
-            || behind[0].1.kind != ROOK
-            || behind[1].1.owner != PLAYER
-            || behind[1].1.kind != QUEEN
-        {
-            return None;
-        }
-        if GUN_ADJACENT_FORMATION
-            && (behind[0].0 != front.rank + 1 || behind[1].0 != front.rank + 2)
-        {
-            return None;
-        }
-        Some(front)
     }
     fn enemy_step(&mut self) -> Result<(), String> {
         if self.phase != RunPhase::Combat || self.battle.turn != ENEMY {
@@ -545,12 +466,7 @@ impl Game {
                         } else if p.id == self.battle.king_id {
                             100_000
                         } else {
-                            match p.kind {
-                                QUEEN | AMAZON => 90,
-                                ROOK => 50,
-                                BISHOP | KNIGHT => 30,
-                                _ => 10,
-                            }
+                            content::pieces::definition(p.kind).map_or(10, |d| d.value)
                         }
                     })
                     .sum();
@@ -591,6 +507,9 @@ impl Game {
                         id: p.id,
                         kind: p.kind,
                         name: piece_name(p.kind),
+                        glyph: content::pieces::definition(p.kind)
+                            .map_or("", |d| d.glyphs[usize::from(p.owner)]),
+                        badge: content::pieces::definition(p.kind).and_then(|d| d.badge),
                         owner: p.owner,
                         cell: i,
                         square: square(pos(i).unwrap()),
@@ -624,10 +543,9 @@ impl Game {
             .map(|c| {
                 let d = c.kind.definition();
                 let targets = if d.targeted {
-                    pieces
-                        .iter()
-                        .filter(|p| d.kind != CardKind::Gun || self.gun_front(p.id).is_some())
-                        .map(|p| p.id)
+                    (d.target_candidates)(&self.battle)
+                        .into_iter()
+                        .filter(|id| pieces.iter().any(|p| p.id == *id))
                         .collect::<Vec<_>>()
                 } else {
                     vec![]
@@ -713,8 +631,8 @@ impl Game {
                 })
                 .collect(),
             log: self.log.clone(),
-            rewards: [CardKind::Ward, CardKind::Jeans, CardKind::Gun]
-                .into_iter()
+            rewards: content::cards::REWARD_POOL
+                .iter()
                 .map(|k| k.definition())
                 .collect(),
             rest_options,
@@ -762,6 +680,8 @@ pub struct PieceView {
     pub id: u32,
     pub kind: u16,
     pub name: &'static str,
+    pub glyph: &'static str,
+    pub badge: Option<&'static str>,
     pub owner: u16,
     pub cell: usize,
     pub square: String,

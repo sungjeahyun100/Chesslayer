@@ -72,6 +72,7 @@ npm run preview --prefix web
 - [프로토타입 임시 규칙·미구현 항목·알려진 한계](docs/PROTOTYPE.md)
 - [테스트 설명·실행 순서·결과](docs/TESTING.md)
 - [통합 구조와 상태 흐름](docs/ARCHITECTURE.md)
+- [콘텐츠 구조와 카드·기물·캐릭터 추가 가이드](docs/content/README.md)
 - [기존 Chesssembly 문법](docs/CHESSEMBLY.md)
 
 핵심 검증 명령은 다음과 같습니다. 자세한 준비와 통과 조건은 테스트 문서에 있습니다.

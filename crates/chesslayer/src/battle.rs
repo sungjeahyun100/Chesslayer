@@ -7,25 +7,11 @@ use chessembly::{Error as DslError, Program};
 use std::collections::{BTreeMap, HashSet};
 pub const PLAYER: PlayerId = 0;
 pub const ENEMY: PlayerId = 1;
-pub const PAWN: PieceType = 1;
-pub const KNIGHT: PieceType = 2;
-pub const BISHOP: PieceType = 3;
-pub const ROOK: PieceType = 4;
-pub const QUEEN: PieceType = 5;
-pub const KING: PieceType = 6;
-pub const AMAZON: PieceType = 7;
-pub const TEMPEST_PAWN: PieceType = 8;
-const NAMES: [&str; 9] = [
-    "",
-    "pawn",
-    "knight",
-    "bishop",
-    "rook",
-    "queen",
-    "king",
-    "amazon",
-    "tempest_pawn",
-];
+// Keep the existing crate-root API through battle's re-exports.
+use crate::content::pieces;
+pub use crate::content::pieces::{
+    piece_name, AMAZON, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK, TEMPEST_PAWN,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BattleOptions {
@@ -114,7 +100,8 @@ pub struct Battle {
     actions_per_turn: u8,
     wards: HashSet<PieceId>,
     players: Vec<PlayerPiece>,
-    programs: Vec<Program>,
+    programs: BTreeMap<PieceType, Program>,
+    initial_double_step: Program,
     moved_ids: HashSet<PieceId>,
 }
 impl Battle {
@@ -141,7 +128,7 @@ impl Battle {
         let mut events = vec![];
         let mut board = Board::new(8, 8)?;
         board.set_catalog(
-            NAMES.iter().map(|s| s.to_string()).collect(),
+            pieces::catalog(),
             vec!["player".into(), "enemy".into()],
             vec![1, -1],
         )?;
@@ -223,7 +210,11 @@ impl Battle {
         if !found_royal {
             return Err(Error::InvalidSetup);
         }
-        let programs = movement_programs()?;
+        let programs = pieces::ALL
+            .iter()
+            .map(|d| Program::parse(&(d.movement)()).map(|program| (d.kind, program)))
+            .collect::<Result<_, _>>()?;
+        let initial_double_step = Program::parse(pieces::movement::INITIAL_DOUBLE_STEP)?;
         let moved_ids = players.iter().filter(|p| p.moved).map(|p| p.id).collect();
         let wards = players
             .iter()
@@ -243,6 +234,7 @@ impl Battle {
             king_id,
             players,
             programs,
+            initial_double_step,
             moved_ids,
         };
         battle.update_result(ResultReason::Counterattack);
@@ -291,12 +283,16 @@ impl Battle {
         if piece.owner != self.turn {
             return Err(Error::WrongTurn);
         }
-        let mut actions = self.programs[usize::from(piece.kind)].execute(&self.board, from)?;
-        if matches!(piece.kind, PAWN | TEMPEST_PAWN)
+        let mut actions = self
+            .programs
+            .get(&piece.kind)
+            .ok_or(Error::InvalidSetup)?
+            .execute(&self.board, from)?;
+        if pieces::definition(piece.kind).is_some_and(|d| d.initial_double_step)
             && !self.moved_ids.contains(&piece.id)
             && from.rank == if piece.owner == PLAYER { 6 } else { 1 }
         {
-            let double = self.programs[0].execute(&self.board, from)?;
+            let double = self.initial_double_step.execute(&self.board, from)?;
             if let Some(second) = double.get(1) {
                 actions.push(second.clone())
             }
@@ -478,71 +474,8 @@ impl Battle {
     }
 }
 fn valid_kind(k: PieceType) -> bool {
-    (PAWN..=TEMPEST_PAWN).contains(&k)
-}
-fn movement_programs() -> Result<Vec<Program>, Error> {
-    let mut programs = vec![Program::parse("move(0,1) move(0,1)")?];
-    programs.push(Program::parse(
-        "move(0,1); enemy(-1,1) take(-1,1); enemy(1,1) take(1,1)",
-    )?);
-    let knight = [
-        (-1, 2),
-        (1, 2),
-        (-2, 1),
-        (2, 1),
-        (-2, -1),
-        (2, -1),
-        (-1, -2),
-        (1, -2),
-    ];
-    programs.push(Program::parse(
-        &knight
-            .iter()
-            .map(|(x, y)| format!("take-move({x},{y})"))
-            .collect::<Vec<_>>()
-            .join(";"),
-    )?);
-    let bishop = [(-1, -1), (-1, 1), (1, -1), (1, 1)];
-    let rook = [(-1, 0), (1, 0), (0, -1), (0, 1)];
-    let all = [bishop.as_slice(), rook.as_slice()].concat();
-    for dirs in [bishop.as_slice(), rook.as_slice(), all.as_slice()] {
-        programs.push(Program::parse(
-            &dirs
-                .iter()
-                .map(|(x, y)| format!("take-move({x},{y}) repeat(1)"))
-                .collect::<Vec<_>>()
-                .join(";"),
-        )?)
-    }
-    programs.push(Program::parse(
-        &all.iter()
-            .map(|(x, y)| format!("take-move({x},{y})"))
-            .collect::<Vec<_>>()
-            .join(";"),
-    )?);
-    let amazon = all
-        .iter()
-        .map(|(x, y)| format!("take-move({x},{y}) repeat(1)"))
-        .chain(knight.iter().map(|(x, y)| format!("take-move({x},{y})")))
-        .collect::<Vec<_>>()
-        .join(";");
-    programs.push(Program::parse(&amazon)?);
-    programs.push(Program::parse("move(0,1); enemy(-1,1) take(-1,1); enemy(1,1) take(1,1); take-move(-1,0); take-move(1,0); move(0,-1)")?);
-    Ok(programs)
+    pieces::definition(k).is_some()
 }
 pub fn square(p: Position) -> String {
     format!("{}{}", (b'a' + p.file as u8) as char, 8 - p.rank)
-}
-pub fn piece_name(kind: PieceType) -> &'static str {
-    match kind {
-        PAWN => "폰",
-        KNIGHT => "나이트",
-        BISHOP => "비숍",
-        ROOK => "룩",
-        QUEEN => "퀸",
-        KING => "킹",
-        AMAZON => "아마존",
-        TEMPEST_PAWN => "템페스트 폰",
-        _ => "기물",
-    }
 }
