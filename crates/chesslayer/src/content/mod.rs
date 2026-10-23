@@ -33,7 +33,7 @@ impl Relic {
             Self::Haste => "양 진영이 턴마다 최대 2회 이동합니다.",
             Self::Whirlwind => "전투 시작 시 적들끼리 시작 위치를 무작위로 교환합니다.",
             Self::SelfDefense => {
-                "역습으로 아군이 죽으면 겹친 적도 제거합니다. 적 로얄은 제외됩니다."
+                "전투 시작 시 무작위 아군 하나를 보호합니다. 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다."
             }
         }
     }
@@ -46,10 +46,17 @@ impl Rng {
         Self(u64::from(seed) + 0x9e3779b97f4a7c15)
     }
     pub fn index(&mut self, len: usize) -> usize {
-        self.0 ^= self.0 << 13;
-        self.0 ^= self.0 >> 7;
-        self.0 ^= self.0 << 17;
-        (self.0 % len.max(1) as u64) as usize
+        let len = len.max(1) as u64;
+        // Xorshift visits 1..=u64::MAX. Reject the tail for equally sized buckets.
+        let limit = u64::MAX - u64::MAX % len;
+        loop {
+            self.0 ^= self.0 << 13;
+            self.0 ^= self.0 >> 7;
+            self.0 ^= self.0 << 17;
+            if self.0 <= limit {
+                return (self.0 % len) as usize;
+            }
+        }
     }
     pub fn shuffle<T>(&mut self, items: &mut [T]) {
         for i in (1..items.len()).rev() {

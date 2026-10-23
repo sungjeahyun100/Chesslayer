@@ -1,0 +1,74 @@
+[
+  {
+    "type": "select_node",
+    "id": 2
+  },
+  {
+    "type": "play_card",
+    "id": 10,
+    "target": 5
+  },
+  {
+    "type": "play_card",
+    "id": 5,
+    "target": 4
+  },
+  {
+    "type": "move",
+    "from": 51,
+    "to": 35
+  },
+  {
+    "type": "move",
+    "from": 58,
+    "to": 30
+  },
+  {
+    "type": "move",
+    "from": 30,
+    "to": 12
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 6
+  },
+  {
+    "type": "claim_treasure"
+  },
+  {
+    "type": "select_node",
+    "id": 8
+  },
+  {
+    "type": "play_card",
+    "id": 1,
+    "target": null
+  },
+  {
+    "type": "move",
+    "from": 52,
+    "to": 44
+  },
+  {
+    "type": "move",
+    "from": 61,
+    "to": 52
+  },
+  {
+    "type": "move",
+    "from": 60,
+    "to": 52
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 10
+  }
+]

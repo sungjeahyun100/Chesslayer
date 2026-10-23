@@ -23,7 +23,7 @@ pub fn targets(battle: &Battle) -> Vec<PieceId> {
         .collect()
 }
 
-/// Shared by Ward and FleetingWard; persistence and capture rules stay in Battle.
+/// Shared by Ward and FleetingWard; combat lifetime and capture rules stay in Battle.
 pub fn effect(battle: &mut Battle, target: Option<PieceId>) -> Result<Option<usize>, String> {
     battle
         .grant_ward(target.ok_or("가호를 받을 기물을 선택하세요.")?)

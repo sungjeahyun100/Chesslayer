@@ -14,6 +14,7 @@ pub use chessembly::{
 pub enum ResultReason {
     RoyalCaptured,
     Counterattack,
+    SelfDefense,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameResult {

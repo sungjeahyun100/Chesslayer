@@ -45,18 +45,18 @@
   },
   {
     "type": "move",
-    "from": 12,
-    "to": 19
+    "from": 52,
+    "to": 44
   },
   {
     "type": "move",
-    "from": 19,
-    "to": 26
+    "from": 61,
+    "to": 25
   },
   {
     "type": "move",
-    "from": 60,
-    "to": 61
+    "from": 58,
+    "to": 49
   },
   {
     "type": "choose_reward",
@@ -82,18 +82,8 @@
   },
   {
     "type": "move",
-    "from": 26,
-    "to": 17
-  },
-  {
-    "type": "move",
     "from": 32,
     "to": 24
-  },
-  {
-    "type": "move",
-    "from": 35,
-    "to": 27
   },
   {
     "type": "move",
@@ -114,12 +104,12 @@
   {
     "type": "move",
     "from": 0,
-    "to": 8
+    "to": 16
   },
   {
     "type": "move",
-    "from": 8,
-    "to": 19
+    "from": 16,
+    "to": 5
   },
   {
     "type": "choose_reward",

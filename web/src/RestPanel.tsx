@@ -84,7 +84,7 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
           {!!piece.upgrades.length && <p className="rest-note">강화 이력 유지 · {piece.upgrades.length}회</p>}
           {candidates.length > 1 && <div className="revive-candidates" role="group" aria-label="부활 후보">{candidates.map((p) => <button key={p.id} aria-pressed={p.id === piece.id} onClick={() => onChoose({ cell: choice!.cell, id: p.id, target: undefined })}><PieceImage pieceKey={p.key} /><span>{p.name}</span></button>)}</div>}
           <p className="rest-question">이 기물을 되살리시겠습니까?</p>
-          <p className="rest-note">초기 위치 {piece.square} · 쉼터 행동 1회<br />종류·강화·이동 이력·지속 효과를 유지합니다.</p>
+          <p className="rest-note">초기 위치 {piece.square} · 쉼터 행동 1회<br />영구 진화·강화·성장 정보를 유지합니다.</p>
           <div className="rest-confirm"><button className="primary" onClick={() => send({ type: "rest_revive", id: piece.id })}>부활 확정</button><button onClick={onCancel}>취소</button></div>
         </div>
       )}

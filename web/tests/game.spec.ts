@@ -240,8 +240,8 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
   await expect(
     page.getByRole("heading", { name: "마지막 왕관까지." }),
   ).toBeVisible();
-  await expect(page.getByText("구행 보스를 직접 포획했습니다. 첫 번째 원정을 완수했습니다.")).toBeVisible();
-  await expect(page.getByRole("log")).toContainText("역습");
+  await expect(page.getByText("구행 보스를 쓰러뜨렸습니다. 첫 번째 원정을 완수했습니다.")).toBeVisible();
+  await expect(page.getByRole("log")).toContainText("시작 칸으로 복귀");
   await page.screenshot({
     path: "test-results/map-run-victory.png",
     fullPage: true,
@@ -292,4 +292,31 @@ test("킹 포획 시 패배하고 새 원정을 시작할 수 있다", async ({ 
   await expect(
     page.getByRole("heading", { name: "어떤 수를 두시겠어요?" }),
   ).toBeVisible();
+});
+
+test("호신용품: 보호 대상 표시·설명과 저장 복원", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
+  const target = await page.evaluate(async () => {
+    const url = "/src/wasm/chesslayer_web.js";
+    const { default: init, WebGame } = await import(url);
+    await init();
+    const game = new WebGame("guardian", 2026);
+    const s = JSON.parse(game.dispatch(JSON.stringify({ type: "select_node", id: 2 })));
+    const targets = s.pieces.filter((p: any) => p.self_defense);
+    if (targets.length !== 1 || targets[0].owner !== 0) throw new Error("expected one living ally");
+    localStorage.setItem("chesslayer.run.v1", game.save());
+    game.free();
+    return targets[0];
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  await expect(page.locator(".self-defense-mark")).toHaveCount(1);
+  await expect(page.locator(`[data-piece-id="${target.id}"] .self-defense-mark`)).toBeVisible();
+  const cell = page.locator(`[data-square="${target.square}"]`);
+  await expect(cell).toHaveAccessibleName(/호신용품 보호 대상/);
+  await expect(cell).toHaveAttribute("title", /포획한 적도 사망/);
+  await cell.click();
+  await expect(page.locator(".self-defense-info")).toContainText("포획한 적도 사망");
+  await page.screenshot({ path: "test-results/self-defense.png", fullPage: true });
 });

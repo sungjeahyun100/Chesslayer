@@ -8,12 +8,12 @@ use std::collections::{BTreeMap, HashSet};
 pub const PLAYER: PlayerId = 0;
 pub const ENEMY: PlayerId = 1;
 // Keep the existing crate-root API through battle's re-exports.
-use crate::content::pieces;
 pub use crate::content::pieces::{
     piece_name, AMAZON, BISHOP, BOUNCING_BISHOP, BOUNCING_PAWN, BOUNCING_QUEEN, BOUNCING_ROOK,
     KING, KNIGHT, PAWN, QUEEN, ROOK, TEMPEST_BISHOP, TEMPEST_KNIGHT, TEMPEST_PAWN, TEMPEST_QUEEN,
     TEMPEST_ROOK,
 };
+use crate::content::{pieces, Rng};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BattleOptions {
@@ -31,7 +31,10 @@ impl Default for BattleOptions {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PlayerPiece {
     pub id: PieceId,
+    /// Permanent kind. Combat promotions exist only on the battle board.
     pub kind: PieceType,
+    /// Permanent home, independent of the current kind, position or survival.
+    pub origin: Position,
     pub position: Option<Position>,
     pub moved: bool,
     pub upgrades: Vec<String>,
@@ -101,6 +104,7 @@ pub struct Battle {
     pub events: Vec<String>,
     actions_per_turn: u8,
     wards: HashSet<PieceId>,
+    self_defense_target: Option<PieceId>,
     players: Vec<PlayerPiece>,
     programs: BTreeMap<PieceType, Program>,
     initial_double_step: Program,
@@ -113,6 +117,7 @@ impl Battle {
             .map(|i| PlayerPiece {
                 id: i + 1,
                 kind: if i < 8 { back[i as usize] } else { PAWN },
+                origin: Position::new((i % 8) as i32, if i < 8 { 7 } else { 6 }),
                 position: Some(Position::new((i % 8) as i32, if i < 8 { 7 } else { 6 })),
                 moved: false,
                 upgrades: vec![],
@@ -121,9 +126,13 @@ impl Battle {
             .collect()
     }
     pub fn new(start: BattleStart) -> Result<Self, Error> {
-        Self::with_options(start, BattleOptions::default())
+        Self::with_options(start, BattleOptions::default(), &mut Rng::new(0))
     }
-    pub fn with_options(start: BattleStart, options: BattleOptions) -> Result<Self, Error> {
+    pub fn with_options(
+        start: BattleStart,
+        options: BattleOptions,
+        rng: &mut Rng,
+    ) -> Result<Self, Error> {
         if options.actions_per_turn == 0 {
             return Err(Error::InvalidSetup);
         }
@@ -135,9 +144,14 @@ impl Battle {
             vec![1, -1],
         )?;
         let mut ids = HashSet::new();
+        let mut origins = HashSet::new();
         let mut king_id = None;
         for p in &start.players {
-            if !ids.insert(p.id) || !valid_kind(p.kind) {
+            if !ids.insert(p.id)
+                || !valid_kind(p.kind)
+                || board.index(p.origin).is_none()
+                || !origins.insert(p.origin)
+            {
                 return Err(Error::InvalidSetup);
             }
             if p.kind == KING && king_id.replace(p.id).is_some() {
@@ -158,11 +172,6 @@ impl Battle {
             }
         }
         let king_id = king_id.ok_or(Error::InvalidSetup)?;
-        let start_positions: BTreeMap<_, _> = start
-            .players
-            .iter()
-            .filter_map(|p| p.position.map(|pos| (p.id, pos)))
-            .collect();
         let mut players = start.players;
         let mut found_royal = false;
         let mut enemy_positions = HashSet::new();
@@ -186,20 +195,6 @@ impl Battle {
                     ));
                 }
             }
-            let collision = players
-                .iter()
-                .any(|p| start_positions.get(&p.id) == Some(&e.position));
-            if collision && options.self_defense && e.id != start.encounter.royal_id {
-                board.set_piece(e.position, None)?;
-                events.push(format!(
-                    "호신용품: {}의 적도 제거했습니다.",
-                    square(e.position)
-                ));
-                continue;
-            }
-            if collision && options.self_defense && e.id == start.encounter.royal_id {
-                events.push("호신용품: 적 로얄은 직접 포획으로만 제거할 수 있습니다.".into());
-            }
             board.set_piece(
                 e.position,
                 Some(Piece {
@@ -218,14 +213,10 @@ impl Battle {
             .collect::<Result<_, _>>()?;
         let initial_double_step = Program::parse(pieces::movement::INITIAL_DOUBLE_STEP)?;
         let moved_ids = players.iter().filter(|p| p.moved).map(|p| p.id).collect();
-        let wards = players
-            .iter()
-            .filter(|p| p.position.is_some() && p.persistent.get("ward").copied().unwrap_or(0) > 0)
-            .map(|p| p.id)
-            .collect();
         let mut battle = Self {
             events,
-            wards,
+            wards: HashSet::new(),
+            self_defense_target: None,
             actions_left: options.actions_per_turn,
             actions_per_turn: options.actions_per_turn,
             board,
@@ -240,7 +231,31 @@ impl Battle {
             moved_ids,
         };
         battle.update_result(ResultReason::Counterattack);
+        if options.self_defense && battle.phase == Phase::Active {
+            let living: Vec<_> = battle
+                .board
+                .cells()
+                .iter()
+                .flatten()
+                .filter(|p| p.owner == PLAYER)
+                .collect();
+            let target = living[rng.index(living.len())];
+            battle.self_defense_target = Some(target.id);
+            battle.events.push(format!(
+                "호신용품: 아군 {}이 보호 대상으로 선택되었습니다. 적에게 포획되면 포획자도 사망합니다.",
+                piece_name(target.kind)
+            ));
+        }
         Ok(battle)
+    }
+    /// Run boundary: keep identities, deaths and permanent growth; discard combat state.
+    pub(crate) fn reset_after_battle(&mut self) -> Result<(), Error> {
+        let mut roster = self.outcome();
+        for p in &mut roster {
+            p.position = p.position.map(|_| p.origin);
+            p.moved = false;
+        }
+        self.replace_roster_at_rest(roster)
     }
     pub(crate) fn replace_roster_at_rest(&mut self, roster: Vec<PlayerPiece>) -> Result<(), Error> {
         if self.phase != Phase::Finished {
@@ -267,11 +282,8 @@ impl Battle {
                 )?;
             }
         }
-        self.wards = roster
-            .iter()
-            .filter(|p| p.position.is_some() && p.persistent.get("ward").copied().unwrap_or(0) > 0)
-            .map(|p| p.id)
-            .collect();
+        self.wards.clear();
+        self.self_defense_target = None;
         self.moved_ids = roster.iter().filter(|p| p.moved).map(|p| p.id).collect();
         self.board = next;
         self.players = roster;
@@ -357,9 +369,6 @@ impl Battle {
         });
         if let Some(victim) = victim {
             self.wards.remove(&victim.id);
-            if let Some(p) = self.players.iter_mut().find(|p| p.id == victim.id) {
-                p.persistent.remove("ward");
-            }
             self.events.push(format!(
                 "가호: {}의 포획을 한 번 막았습니다.",
                 piece_name(victim.kind)
@@ -395,6 +404,9 @@ impl Battle {
     pub fn has_ward(&self, id: PieceId) -> bool {
         self.wards.contains(&id)
     }
+    pub fn has_self_defense(&self, id: PieceId) -> bool {
+        self.self_defense_target == Some(id)
+    }
     pub fn grant_ward(&mut self, id: PieceId) -> Result<(), Error> {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
@@ -403,9 +415,6 @@ impl Battle {
             return Err(Error::IllegalAction);
         }
         self.wards.insert(id);
-        if let Some(p) = self.players.iter_mut().find(|p| p.id == id) {
-            p.persistent.insert("ward".into(), 1);
-        }
         Ok(())
     }
     /// Non-capture removal always protects both royals. Counterattacks only occur in setup.
@@ -433,21 +442,55 @@ impl Battle {
         Ok(removed)
     }
     fn apply_effect(&mut self, action: &DefaultAction, source: ActionSource) -> Result<(), Error> {
+        let mut next = self.board.clone();
+        let mut retaliation = None;
         if source == ActionSource::ResolvedCardEffect {
-            let mut next = self.board.clone();
             apply_default_action(&mut next, action)?;
             for id in [self.king_id, self.royal_id] {
                 if !next.cells().iter().flatten().any(|p| p.id == id) {
                     return Err(Error::ProtectedRoyal);
                 }
             }
-            self.board = next;
         } else {
-            apply_default_action(&mut self.board, action)?;
+            for step in action.steps() {
+                // Resolve the actual captor and victim at this step, including multi-step moves.
+                let captor = next.piece_at(step.from)?;
+                let victim = next.piece_at(step.take)?;
+                let retaliates = !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                    && captor.is_some_and(|p| p.owner == ENEMY)
+                    && victim.is_some_and(|p| p.owner == PLAYER && self.has_self_defense(p.id));
+                apply_default_action(&mut next, &DefaultAction::one(step.clone()))?;
+                if retaliates {
+                    let captor = captor.unwrap();
+                    if let Some(index) = next
+                        .cells()
+                        .iter()
+                        .position(|p| p.is_some_and(|p| p.id == captor.id))
+                    {
+                        next.set_piece(Position::new(index as i32 % 8, index as i32 / 8), None)?;
+                    }
+                    retaliation = Some(captor);
+                    // A dead captor cannot perform any remaining steps of its move.
+                    break;
+                }
+            }
         }
+        self.board = next;
+        self.wards
+            .retain(|id| self.board.cells().iter().flatten().any(|p| p.id == *id));
         self.sync_players();
+        if let Some(captor) = retaliation {
+            self.events.push(format!(
+                "호신용품: 보호 대상을 포획한 적 {}도 사망했습니다.",
+                piece_name(captor.kind)
+            ));
+        }
         if source == ActionSource::PieceMove {
-            self.update_result(ResultReason::RoyalCaptured);
+            self.update_result(if retaliation.is_some() {
+                ResultReason::SelfDefense
+            } else {
+                ResultReason::RoyalCaptured
+            });
         }
         Ok(())
     }
@@ -461,7 +504,6 @@ impl Battle {
                 if piece.owner == PLAYER {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
                         p.position = Some(Position::new(index as i32 % 8, index as i32 / 8));
-                        p.kind = piece.kind;
                     }
                 }
             }
@@ -501,6 +543,9 @@ impl Battle {
             Phase::Active
         } else {
             Phase::Finished
+        };
+        if self.phase == Phase::Finished {
+            self.self_defense_target = None;
         }
     }
 }

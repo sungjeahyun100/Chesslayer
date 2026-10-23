@@ -81,6 +81,7 @@ function BoardPiece({
       <PieceImage pieceKey={previewKey || piece.key} owner={piece.owner} />
       {piece.royal && <span className="royal-mark">★</span>}
       {piece.ward && <span className="ward-mark">◇</span>}
+      {piece.self_defense && <span className="self-defense-mark">◆</span>}
     </span>
   );
 }
@@ -529,12 +530,13 @@ function App() {
                           data-square={square}
                           data-legal={legal || undefined}
                           className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(state.phase === "rest" ? restChoice?.cell : selected) === i ? "selected" : ""} ${state.phase === "rest" && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""}`}
+                          title={piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined}
                           onClick={() => clickSquare(i)}
                           disabled={
                             state.phase !== "rest" &&
                             (state.phase !== "combat" || !turn || !!promotion)
                           }
-                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}`}
+                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}`}
                           aria-pressed={
                             (state.phase === "rest"
                               ? restChoice?.cell
@@ -624,7 +626,7 @@ function App() {
                         </button>
                       </>
                     ) : selected !== null ? (
-                      "표시된 칸을 클릭해 이동하세요."
+                      <span>표시된 칸을 클릭해 이동하세요.{state.pieces.find((p) => p.cell === selected)?.self_defense && <strong className="self-defense-info"> ◆ 호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다.</strong>}</span>
                     ) : turn ? (
                       "카드를 사용하거나, 백 기물을 선택하세요."
                     ) : (
@@ -774,10 +776,10 @@ function App() {
             <section className="outcome" ref={outcomeRef} aria-live="polite">
               {state.phase === "reward" && (
                 <>
-                  <p className="eyebrow">ROYAL CAPTURED</p>
+                  <p className="eyebrow">ROYAL DEFEATED</p>
                   <h2>전투 승리</h2>
                   <p>
-                    남은 기물의 위치와 강화는 이어집니다. 덱에 추가할 카드 한
+                    생존 기물은 시작 칸으로 돌아가며 영구 강화는 유지됩니다. 덱에 추가할 카드 한
                     장을 선택하세요.
                   </p>
                   {state.node_kind === "elite" && state.node_reward && (
@@ -837,7 +839,7 @@ function App() {
                   </h2>
                   <p>
                     {state.phase === "victory"
-                      ? `${state.encounter} 보스를 직접 포획했습니다. 첫 번째 원정을 완수했습니다.`
+                      ? `${state.encounter} 보스를 쓰러뜨렸습니다. 첫 번째 원정을 완수했습니다.`
                       : "진형은 여기에서 멈추지만, 다음 원정의 한 수는 달라질 수 있습니다."}
                   </p>
                   <button

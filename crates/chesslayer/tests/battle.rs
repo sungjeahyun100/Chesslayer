@@ -6,6 +6,7 @@ fn player(id: u32, kind: u16, pos: Position) -> PlayerPiece {
     PlayerPiece {
         id,
         kind,
+        origin: pos,
         position: Some(pos),
         moved: false,
         upgrades: vec!["veteran".into()],

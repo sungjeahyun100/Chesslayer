@@ -142,6 +142,7 @@ impl Game {
                 encounter,
             },
             options,
+            &mut self.rng,
         )
         .map_err(engine_error)?;
         if haste {
@@ -153,7 +154,7 @@ impl Game {
         self.round = 1;
         self.cards = CardCombat::start(&self.deck, &mut self.rng);
         self.events();
-        self.check_finish();
+        self.check_finish()?;
         Ok(())
     }
     pub fn available_nodes(&self) -> Vec<usize> {
@@ -346,12 +347,12 @@ impl Game {
                 if self.phase != RunPhase::Rest {
                     return Err("쉼터에서만 부활할 수 있습니다.".into());
                 }
-                let origin = Battle::standard_roster()
-                    .into_iter()
-                    .find(|p| p.id == id)
-                    .and_then(|p| p.position)
-                    .ok_or("잘못된 기물입니다.")?;
                 let mut roster = self.battle.outcome();
+                let origin = roster
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map(|p| p.origin)
+                    .ok_or("잘못된 기물입니다.")?;
                 if roster.iter().any(|p| p.position == Some(origin)) {
                     return Err("원래 초기 위치가 점유되어 부활할 수 없습니다.".into());
                 }
@@ -359,7 +360,8 @@ impl Game {
                     .iter_mut()
                     .find(|p| p.id == id && p.position.is_none() && p.kind != KING)
                     .ok_or("사망한 아군 기물을 선택하세요.")?;
-                p.position = Some(origin); // Identity, upgrades and prior movement history persist.
+                p.position = Some(origin);
+                p.moved = false;
                 self.battle
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
@@ -425,7 +427,7 @@ impl Game {
             }
         }
         self.events();
-        self.check_finish();
+        self.check_finish()?;
         if self.phase == RunPhase::Combat && self.battle.turn != side {
             if side == PLAYER {
                 self.cards.end_turn();
@@ -436,8 +438,9 @@ impl Game {
         }
         Ok(())
     }
-    fn check_finish(&mut self) {
+    fn check_finish(&mut self) -> Result<(), String> {
         if let GameResult::Win { winner, reason } = self.battle.result {
+            self.battle.reset_after_battle().map_err(engine_error)?;
             self.cards = CardCombat::default();
             if winner == PLAYER {
                 self.phase = if self
@@ -451,7 +454,11 @@ impl Game {
                 if self.phase == RunPhase::Victory {
                     self.completed.push(self.current_node.unwrap());
                 }
-                self.log("승리! 적 로얄을 직접 포획했습니다. 생존 진형을 계승합니다.");
+                self.log(if reason == ResultReason::SelfDefense {
+                    "승리! 호신용품으로 적 로얄이 사망했습니다. 생존 기물이 시작 칸으로 복귀합니다."
+                } else {
+                    "승리! 적 로얄을 직접 포획했습니다. 생존 기물이 시작 칸으로 복귀합니다."
+                });
             } else {
                 self.phase = RunPhase::Defeat;
                 self.log(if reason == ResultReason::Counterattack {
@@ -461,6 +468,7 @@ impl Game {
                 });
             }
         }
+        Ok(())
     }
     fn play_card(&mut self, id: u32, target: Option<u32>) -> Result<(), String> {
         self.require_player()?;
@@ -561,6 +569,7 @@ impl Game {
                         square: square(pos(i).unwrap()),
                         royal: p.id == self.battle.royal_id || p.id == self.battle.king_id,
                         ward: self.battle.has_ward(p.id),
+                        self_defense: self.battle.has_self_defense(p.id),
                     })
             })
             .collect();
@@ -627,14 +636,10 @@ impl Game {
             })
             .collect();
         let roster = self.battle.outcome();
-        let standard = Battle::standard_roster();
         let rest_options = roster
             .iter()
             .map(|p| {
-                let origin = standard
-                    .iter()
-                    .find(|s| s.id == p.id)
-                    .and_then(|s| s.position);
+                let origin = Some(p.origin);
                 RestOption {
                     id: p.id,
                     kind: p.kind,
@@ -644,7 +649,7 @@ impl Game {
                     cell: p.position.map(cell),
                     origin: origin.map(cell),
                     upgrades: p.upgrades.clone(),
-                    ward: p.persistent.get("ward").copied().unwrap_or(0) > 0,
+                    ward: self.battle.has_ward(p.id),
                     square: p.position.or(origin).map(square).unwrap_or_default(),
                     can_upgrade: self.phase == RunPhase::Rest
                         && p.position.is_some()
@@ -775,6 +780,7 @@ pub struct PieceView {
     pub square: String,
     pub royal: bool,
     pub ward: bool,
+    pub self_defense: bool,
 }
 #[derive(Serialize)]
 pub struct MoveView {

@@ -121,7 +121,7 @@ fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
     assert_eq!(game.phase, RunPhase::Map);
     assert_eq!(game.map, original);
     assert_eq!(game.available_nodes().len(), 2);
-    assert_eq!(game.battle.outcome()[3].position, Some(Position::new(4, 0)));
+    assert_eq!(game.battle.outcome()[3].position, Some(Position::new(3, 7)));
     assert_eq!(game.deck.len(), 11);
     let snapshot = serde_json::to_string(&game.snapshot()).unwrap();
     for id in [start, invalid, usize::MAX] {

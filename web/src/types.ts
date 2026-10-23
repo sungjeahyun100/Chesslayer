@@ -18,6 +18,7 @@ export interface Piece {
   square: string;
   royal: boolean;
   ward: boolean;
+  self_defense: boolean;
 }
 export interface CardDefinition {
   kind: string;

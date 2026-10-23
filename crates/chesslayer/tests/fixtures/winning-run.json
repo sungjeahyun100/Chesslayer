@@ -45,18 +45,18 @@
   },
   {
     "type": "move",
-    "from": 12,
-    "to": 19
+    "from": 52,
+    "to": 44
   },
   {
     "type": "move",
-    "from": 19,
-    "to": 26
+    "from": 61,
+    "to": 25
   },
   {
     "type": "move",
-    "from": 60,
-    "to": 61
+    "from": 58,
+    "to": 49
   },
   {
     "type": "choose_reward",
@@ -77,8 +77,13 @@
   },
   {
     "type": "move",
-    "from": 35,
-    "to": 28
+    "from": 51,
+    "to": 43
+  },
+  {
+    "type": "move",
+    "from": 43,
+    "to": 34
   },
   {
     "type": "move",
@@ -88,11 +93,26 @@
   {
     "type": "move",
     "from": 27,
-    "to": 11
+    "to": 34
   },
   {
     "type": "move",
-    "from": 11,
+    "from": 34,
+    "to": 26
+  },
+  {
+    "type": "move",
+    "from": 26,
+    "to": 33
+  },
+  {
+    "type": "move",
+    "from": 33,
+    "to": 12
+  },
+  {
+    "type": "move",
+    "from": 12,
     "to": 4
   },
   {
@@ -112,17 +132,12 @@
   },
   {
     "type": "move",
-    "from": 55,
-    "to": 39
+    "from": 48,
+    "to": 40
   },
   {
     "type": "move",
-    "from": 63,
-    "to": 47
-  },
-  {
-    "type": "move",
-    "from": 61,
-    "to": 62
+    "from": 57,
+    "to": 51
   }
 ]

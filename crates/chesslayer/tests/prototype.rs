@@ -8,6 +8,7 @@ fn roster(items: &[(u32, u16, i32, i32)]) -> Vec<PlayerPiece> {
         .map(|&(id, kind, x, y)| PlayerPiece {
             id,
             kind,
+            origin: p(x, y),
             position: Some(p(x, y)),
             moved: false,
             upgrades: vec![],
@@ -298,11 +299,10 @@ fn gun_formation_and_non_capture_removal_are_validated() {
 #[test]
 fn reward_persistence_counterattack_and_relics() {
     let mut g = start_before("guardian", NodeKind::Combat);
-    g.battle = battle(
-        roster(&[(5, KING, 4, 7), (1, ROOK, 4, 1), (9, PAWN, 0, 4)]),
-        vec![e(100, KNIGHT, 4, 0)],
-        100,
-    );
+    let mut players = roster(&[(5, KING, 4, 7), (1, ROOK, 4, 1), (9, PAWN, 0, 4)]);
+    players[1].origin = p(0, 7);
+    players[2].origin = p(0, 6);
+    g.battle = battle(players, vec![e(100, KNIGHT, 4, 0)], 100);
     g.battle.grant_ward(9).unwrap();
     g.dispatch(Command::Move {
         from: 12,
@@ -311,16 +311,16 @@ fn reward_persistence_counterattack_and_relics() {
     })
     .unwrap();
     assert_eq!(g.phase, RunPhase::Reward);
-    assert_eq!(g.battle.outcome()[1].position, Some(p(4, 0)));
+    assert_eq!(g.battle.outcome()[1].position, Some(p(0, 7)));
     assert!(g.cards.hand.is_empty());
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     assert_eq!(g.deck.len(), 11);
     select_kind(&mut g, NodeKind::Combat);
-    assert!(g.log.iter().any(|s| s.starts_with("역습")));
-    assert_eq!(g.battle.outcome()[1].position, None);
+    assert!(!g.log.iter().any(|s| s.starts_with("역습")));
+    assert_eq!(g.battle.outcome()[1].position, Some(p(0, 7)));
     assert!(g.battle.board.piece_at(p(4, 0)).unwrap().is_some());
-    assert_eq!(g.battle.outcome()[2].position, Some(p(0, 4)));
-    assert!(g.battle.has_ward(9));
+    assert_eq!(g.battle.outcome()[2].position, Some(p(0, 6)));
+    assert!(!g.battle.has_ward(9));
     assert_eq!(g.cards.hand.len() + g.cards.draw.len(), 11);
     let b = Battle::with_options(
         BattleStart {
@@ -334,9 +334,10 @@ fn reward_persistence_counterattack_and_relics() {
             actions_per_turn: 1,
             self_defense: true,
         },
+        &mut Rng::new(0),
     )
     .unwrap();
-    assert!(b.board.piece_at(p(0, 0)).unwrap().is_none());
+    assert_eq!(b.board.piece_at(p(0, 0)).unwrap().unwrap().id, 101);
     assert!(b.events.iter().any(|s| s.starts_with("호신용품")));
     let mut a = Game::new("wanderer", 42).unwrap();
     let target = a
@@ -368,7 +369,7 @@ fn reward_persistence_counterattack_and_relics() {
             .is_none_or(|p| p.id != e.id)));
 }
 #[test]
-fn rest_upgrade_revive_and_occupied_origin_rejection() {
+fn rest_upgrade_revive_and_reset_origin() {
     let mut g = start_before("vanguard", NodeKind::Rest);
     let mut players = Battle::standard_roster();
     players[0].position = None;
@@ -385,10 +386,16 @@ fn rest_upgrade_revive_and_occupied_origin_rejection() {
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     select_kind(&mut g, NodeKind::Rest);
     assert_eq!(g.phase, RunPhase::Rest);
-    assert!(g
-        .dispatch(Command::RestRevive { id: 1 })
-        .unwrap_err()
-        .contains("점유"));
+    assert_eq!(g.battle.outcome()[1].position, Some(p(1, 7)));
+    assert!(
+        g.snapshot()
+            .rest_options
+            .iter()
+            .find(|p| p.id == 1)
+            .unwrap()
+            .can_revive
+    );
+    assert!(g.dispatch(Command::RestRevive { id: 2 }).is_err());
     assert_eq!(g.phase, RunPhase::Rest);
     let mut upgrade = g.clone();
     upgrade
@@ -467,7 +474,11 @@ fn seeded_full_run_reaches_boss_victory() {
     );
     assert_eq!(game.completed.len(), MAP_ROWS);
     assert!(game.deck.len() >= 13);
-    assert!(game.log.iter().any(|s| s.starts_with("역습")));
+    assert!(game
+        .battle
+        .outcome()
+        .iter()
+        .all(|p| p.position.is_none_or(|pos| pos == p.origin)));
     assert_eq!(game.battle.outcome()[8].kind, TEMPEST_PAWN);
 }
 
@@ -522,7 +533,7 @@ fn amazon_movement_and_capture_work_for_both_sides() {
 }
 
 #[test]
-fn revived_upgrade_keeps_identity_history_and_ward_immediately() {
+fn revived_upgrade_keeps_identity_and_growth_without_combat_state() {
     for (kind, family) in [
         (TEMPEST_PAWN, "tempest"),
         (TEMPEST_QUEEN, "tempest"),
@@ -533,7 +544,7 @@ fn revived_upgrade_keeps_identity_history_and_ward_immediately() {
         players[8].kind = kind;
         players[8].upgrades.push(family.into());
         players[8].moved = true;
-        players[8].persistent.insert("ward".into(), 1);
+        players[8].persistent.insert("growth".into(), 3);
         players[8].position = None;
         players[3].position = Some(p(4, 1));
         g.battle = battle(players, vec![e(100, KNIGHT, 4, 0)], 100);
@@ -549,7 +560,7 @@ fn revived_upgrade_keeps_identity_history_and_ward_immediately() {
         let preview = g.snapshot();
         let candidate = preview.rest_options.iter().find(|p| p.id == 9).unwrap();
         assert_eq!(candidate.origin, Some(48));
-        assert!(candidate.can_revive && candidate.ward);
+        assert!(candidate.can_revive && !candidate.ward);
         assert_eq!(g.battle.outcome(), before, "snapshot cannot mutate roster");
         g.dispatch(Command::RestRevive { id: 9 }).unwrap();
         let revived = &g.battle.outcome()[8];
@@ -557,8 +568,8 @@ fn revived_upgrade_keeps_identity_history_and_ward_immediately() {
         assert_eq!(revived.kind, kind);
         assert_eq!(revived.upgrades, before[8].upgrades);
         assert_eq!(revived.persistent, before[8].persistent);
-        assert!(revived.moved && g.battle.has_ward(9));
-        assert!(g.snapshot().pieces.iter().find(|p| p.id == 9).unwrap().ward);
+        assert!(!revived.moved && !g.battle.has_ward(9));
+        assert!(!g.snapshot().pieces.iter().find(|p| p.id == 9).unwrap().ward);
         assert!(
             g.dispatch(Command::RestRevive { id: 9 }).is_err(),
             "one action per node"

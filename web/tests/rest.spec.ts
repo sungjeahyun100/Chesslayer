@@ -11,7 +11,7 @@ async function loadRest(page: Page, casualties = false) {
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
   await page.evaluate(
-    async ({ commands, casualties, saveKey }) => {
+    async ({ commands, saveKey }) => {
       const url = "/src/wasm/chesslayer_web.js";
       const { default: init, WebGame } = await import(url);
       await init();
@@ -21,21 +21,12 @@ async function loadRest(page: Page, casualties = false) {
         while (s.phase === "combat" && s.turn === 1)
           s = JSON.parse(game.dispatch(JSON.stringify({ type: "enemy_step" })));
         if (s.phase === "rest") break;
-        if (
-          casualties &&
-          command.type === "move" &&
-          command.from === 12 &&
-          command.to === 19
-        ) {
-          const jeans = s.hand.find((c: any) => c.definition.kind === "jeans");
-          game.dispatch(JSON.stringify({ type: "play_card", id: jeans.id }));
-        }
         game.dispatch(JSON.stringify(command));
       }
       localStorage.setItem(saveKey, game.save());
       game.free();
     },
-    { commands, casualties, saveKey },
+    { commands: casualties ? JSON.parse(readFileSync("../crates/chesslayer/tests/fixtures/rest-revive.json", "utf8")) : commands, saveKey },
   );
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
@@ -74,6 +65,9 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
 }) => {
   await loadRest(page);
   const before = await saved(page);
+  const formation = await restoreSnapshot(page);
+  expect(formation.rest_options.every((p: any) => p.dead ? p.cell === null : p.cell === p.origin)).toBe(true);
+  expect(formation.pieces.every((p: any) => !p.ward && !p.self_defense)).toBe(true);
   await expect(page.locator(".rest-grid, .outcome, .turn-panel")).toHaveCount(
     0,
   );
@@ -81,7 +75,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   await expect(page.locator(".rest-detail")).toHaveCount(0);
   await page.locator('[data-square="a3"]').click();
   await expect(page.locator(".rest-detail")).toHaveCount(0);
-  await page.locator('[data-square="f1"]').click();
+  await page.locator('[data-square="e1"]').click();
   await expect(
     page.getByText("이 기물에 정의된 강화 경로가 없습니다."),
   ).toBeVisible();
@@ -218,7 +212,7 @@ test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진�
   page.on("pageerror", (e) => errors.push(e.message));
   const pieces = [
     { id: 1, square: "a1", name: "룩", key: "rook", families: ["tempest", "bouncing"] },
-    { id: 3, square: "c5", name: "비숍", key: "bishop", families: ["tempest", "bouncing"] },
+    { id: 3, square: "c1", name: "비숍", key: "bishop", families: ["tempest", "bouncing"] },
     { id: 2, square: "b1", name: "나이트", key: "knight", families: ["tempest"] },
     { id: 4, square: "d1", name: "퀸", key: "queen", families: ["tempest", "bouncing"] },
   ];

@@ -308,7 +308,7 @@ fn pawn_start_rules_and_all_promotions_preserve_instances() {
                 players[8].position = if side == PLAYER { Some(from) } else { None };
                 players[8].moved = true;
                 players[8].upgrades = vec!["veteran".into(), "family".into()];
-                players[8].persistent.insert("ward".into(), 1);
+                players[8].persistent.insert("growth".into(), 3);
                 let before = players[8].clone();
                 let mut enemies = vec![EnemyPiece {
                     id: 100,
@@ -363,7 +363,11 @@ fn pawn_start_rules_and_all_promotions_preserve_instances() {
                     })
                     .unwrap();
                     assert_eq!(&next.outcome()[8], p);
-                    assert!(next.has_ward(p.id));
+                    assert!(!next.has_ward(p.id));
+                    assert_eq!(
+                        p.kind, kind,
+                        "promotion changes the board, not permanent kind"
+                    );
                 }
             }
         }
@@ -432,14 +436,7 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
                 g.dispatch(Command::EnemyStep).unwrap();
             }
         }
-        assert_eq!(
-            g.battle.outcome()[8].kind,
-            if family == TEMPEST_PAWN {
-                TEMPEST_QUEEN
-            } else {
-                BOUNCING_QUEEN
-            }
-        );
+        assert_eq!(g.battle.outcome()[8].kind, family);
         assert!(g
             .dispatch(Command::RestUpgrade {
                 id: 9,
@@ -490,17 +487,16 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
         assert!(!guarded.battle.has_ward(guarded.battle.king_id));
         assert_eq!(guarded.battle.result, GameResult::Ongoing);
         ai.dispatch(Command::EnemyStep).unwrap();
-        let promoted = ai
-            .battle
-            .board
-            .piece_at(Position::new(7, 7))
-            .unwrap()
-            .unwrap();
         assert!(pieces::definition(family)
             .unwrap()
             .promotions
-            .contains(&promoted.kind));
-        assert_eq!((promoted.id, promoted.owner), (101, ENEMY));
+            .iter()
+            .any(|&kind| ai
+                .log
+                .iter()
+                .any(|entry| entry
+                    == &format!("승격: {} → {}", piece_name(family), piece_name(kind)))));
+        assert!(ai.snapshot().pieces.iter().all(|p| p.owner == PLAYER));
         assert_eq!(ai.phase, RunPhase::Defeat);
     }
 }
