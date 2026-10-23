@@ -1350,7 +1350,7 @@ footer span {
 }
 .map-chart {
   position: relative;
-  height: 620px;
+  height: 720px;
   margin: 10px 0;
   background: radial-gradient(ellipse at 50% 50%, #e8eddf66, transparent 75%);
 }
@@ -1371,23 +1371,24 @@ footer span {
 }
 .map-connections path {
   fill: none;
-  stroke: #c2ccba;
-  stroke-width: 1.7;
-  stroke-dasharray: 4 5;
+  stroke: #789073;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
   vector-effect: non-scaling-stroke;
 }
 .map-connections path.taken {
-  stroke: #2e624b;
-  stroke-width: 3;
-  stroke-dasharray: none;
+  stroke: #285e43;
+  stroke-width: 4.5;
 }
 .map-connections path.next {
-  stroke: #7c9b59;
-  stroke-width: 2.5;
-  stroke-dasharray: 5 4;
+  stroke: #5d873e;
+  stroke-width: 4;
+  stroke-dasharray: 9 5;
 }
 .map-connections path.skipped {
-  stroke: #e1e3d9;
+  stroke: #c7cfc1;
+  stroke-width: 2;
 }
 .map-node-slot {
   position: absolute;
@@ -1400,9 +1401,9 @@ footer span {
   width: 46px;
   height: 46px;
   border-radius: 50%;
-  border: 1px solid #c4ccbb;
+  border: 1px solid #9daf96;
   background: #f3f3e9;
-  color: #839378;
+  color: #567451;
   display: grid;
   place-items: center;
   margin: auto;
@@ -1421,8 +1422,8 @@ footer span {
   left: 50%;
   transform: translateX(-50%);
   width: 100px;
-  color: #7c8b70;
-  font-size: 9px;
+  color: #587251;
+  font-size: 10px;
   white-space: nowrap;
   pointer-events: none;
   background: #f5f3eccc;
@@ -1688,7 +1689,7 @@ footer span {
     gap: 0;
   }
   .map-chart {
-    height: 620px;
+    height: 720px;
     margin: 0 0 10px;
   }
   .map-node {
@@ -1705,6 +1706,10 @@ footer span {
     font-size: 8px;
     top: 47px;
     width: 70px;
+  }
+  .map-node-slot:not(.is-available):not(.is-current):not(.kind-boss)
+    .node-caption {
+    display: none;
   }
   .map-aside {
     border-top: 1px solid var(--line);

@@ -39,8 +39,15 @@ export function ActMap({
   const available = map.nodes.filter((n) => n.available);
   const detail =
     map.nodes.find((n) => n.id === inspected) ?? available[0] ?? current;
-  const x = (node: MapNode) => 50 + node.lane * 100;
-  const y = (node: MapNode) => 60 + (map.rows - 1 - node.row) * 76;
+  const rows = Array.from({ length: map.rows }, (_, row) =>
+    map.nodes.filter((node) => node.row === row),
+  );
+  const column = (node: MapNode) =>
+    rows[node.row].findIndex((peer) => peer.id === node.id);
+  // Center each layer in reading order; irregular random lane gaps obscure the edges.
+  const x = (node: MapNode) =>
+    250 + (column(node) - (rows[node.row].length - 1) / 2) * 135;
+  const y = (node: MapNode) => 58 + (map.rows - 1 - node.row) * 95;
   const choose = (id: number) => send({ type: "select_node", id });
   return (
     <main className="act-map-screen" data-phase={state.phase} ref={top}>
@@ -73,7 +80,7 @@ export function ActMap({
           <div className="map-direction">보스를 향해 ↑</div>
           <svg
             className="map-connections"
-            viewBox="0 0 500 620"
+            viewBox="0 0 500 720"
             preserveAspectRatio="none"
             aria-hidden="true"
           >
@@ -99,7 +106,7 @@ export function ActMap({
                             ? "skipped"
                             : ""
                     }
-                    d={`M ${x(from)} ${y(from)} C ${x(from)} ${y(from) - 38}, ${x(to)} ${y(to) + 38}, ${x(to)} ${y(to)}`}
+                    d={`M ${x(from)} ${y(from) - 22} L ${x(to)} ${y(to) + 22}`}
                   />
                 );
               }),
@@ -116,7 +123,7 @@ export function ActMap({
                         ? "next"
                         : "skipped"
                   }
-                  d={`M 250 590 Q ${x(n)} 570 ${x(n)} ${y(n)}`}
+                  d={`M 250 687 L ${x(n)} ${y(n) + 22}`}
                 />
               ))}
           </svg>
@@ -124,7 +131,7 @@ export function ActMap({
             <div
               key={node.id}
               className={`map-node-slot kind-${node.kind} ${node.current ? "is-current" : ""} ${node.visited ? "is-visited" : ""} ${node.available ? "is-available" : ""} ${node.skipped ? "is-skipped" : ""}`}
-              style={{ left: `${x(node) / 5}%`, top: `${y(node) / 6.2}%` }}
+              style={{ left: `${x(node) / 5}%`, top: `${y(node) / 7.2}%` }}
               onMouseEnter={() => inspect(node.id)}
             >
               {node.current && <span className="current-marker">현재</span>}
@@ -139,7 +146,7 @@ export function ActMap({
                 onFocus={() => inspect(node.id)}
                 onClick={() => choose(node.id)}
                 title={`${node.name} · ${node.description}`}
-                aria-label={`${node.row + 1}단계 경로 ${node.lane + 1} · ${nodeTypes[node.kind].label} · ${node.name} · ${status(node)}`}
+                aria-label={`${node.row + 1}단계 경로 ${column(node) + 1} · ${nodeTypes[node.kind].label} · ${node.name} · ${status(node)}`}
                 aria-current={node.current ? "location" : undefined}
               >
                 <span aria-hidden="true">
@@ -199,7 +206,7 @@ export function ActMap({
                 </span>
                 <span>
                   <small>
-                    경로 {node.lane + 1} · {nodeTypes[node.kind].label}
+                    경로 {column(node) + 1} · {nodeTypes[node.kind].label}
                   </small>
                   <strong>{node.name}</strong>
                 </span>
