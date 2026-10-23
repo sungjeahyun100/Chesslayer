@@ -96,9 +96,17 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
     "aria-pressed",
     "true",
   );
-  await expect(page.locator(".tree-status")).toHaveText(["선택 가능", "선택 가능"]);
+  await expect(page.locator(".skill-node.available small")).toHaveText(["선택 가능", "선택 가능"]);
+  await expect(page.locator(".skill-node")).toHaveCount(3);
+  await expect(page.locator(".skill-connection.available")).toHaveCount(2);
+  // Each real branch is a separate connected node, not a row of upgrade cards.
+  const positions = await page.locator(".skill-node").evaluateAll((nodes) => nodes.map((n) => ({
+    x: (n as HTMLElement).style.left, y: (n as HTMLElement).style.top,
+  })));
+  expect(new Set(positions.map((p) => p.y)).size).toBe(3);
+  expect(new Set(positions.map((p) => p.x)).size).toBe(2);
   await page
-    .getByRole("button", { name: "폰 → 템페스트 폰 강화 미리보기" })
+    .getByRole("button", { name: "템페스트 폰 · 선택 가능 · 상세 보기" })
     .click();
   await expect(page.locator(".rest-portrait img")).toHaveAttribute(
     "data-piece-key",
@@ -116,7 +124,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   expect(await saved(page)).toBe(before);
   await page.locator('[data-square="a2"]').click();
   await page
-    .getByRole("button", { name: "폰 → 템페스트 폰 강화 미리보기" })
+    .getByRole("button", { name: "템페스트 폰 · 선택 가능 · 상세 보기" })
     .click();
   await allImagesLoaded(page);
   await page.screenshot({
@@ -126,6 +134,18 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   });
   await page.getByRole("button", { name: "강화 확정", exact: true }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
+  await expect(page.getByRole("status").filter({ hasText: "강화 완료" })).toBeVisible();
+  await expect(page.locator(".skill-connection.acquired")).toHaveCount(1);
+  await expect(page.locator(".skill-connection.locked")).toHaveCount(1);
+  await page.getByRole("button", { name: "바운싱 폰 · 잠김 · 상세 보기" }).click();
+  await expect(page.locator(".skill-lock-reason")).toContainText("이 가지로 변경하는 강화 경로는 없습니다");
+  await expect(page.locator(".skill-requirements")).toContainText("살아 있는 일반 폰");
+  await expect(page.getByRole("button", { name: "강화 확정", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "템페스트 폰 · 현재 기물 · 상세 보기" }).click();
+  await expect(page.locator(".skill-inspector")).toContainText("현재 기물에 적용된 능력");
+  await page.screenshot({ path: "test-results/rest-tree-acquired.png", fullPage: true, animations: "disabled" });
+  await page.getByRole("button", { name: "맵으로 돌아가기 →", exact: true }).click();
+  await expect(page.locator(".act-map-screen")).toBeVisible();
   const snapshot = await restoreSnapshot(page);
   expect(snapshot.pieces.find((p: any) => p.id === 9).key).toBe("tempest_pawn");
   expect(snapshot.rest_options.find((p: any) => p.id === 9).upgrades).toEqual([
@@ -217,10 +237,10 @@ test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진�
       await page.reload();
       await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
       await page.locator(`[data-square="${piece.square}"]`).click();
-      await expect(page.locator(".upgrade-path")).toHaveCount(piece.families.length);
+      await expect(page.locator(".skill-node.available")).toHaveCount(piece.families.length);
       const name = `${family === "tempest" ? "템페스트" : "바운싱"} ${piece.name}`;
       const key = `${family}_${piece.key}`;
-      await page.getByRole("button", { name: `${piece.name} → ${name} 강화 미리보기` }).click();
+      await page.getByRole("button", { name: `${name} · 선택 가능 · 상세 보기` }).click();
       await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", key);
       await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
       expect(await saved(page)).toBe(original);

@@ -93,6 +93,8 @@ function App() {
   const [state, setState] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
+  const [restCompleted, setRestCompleted] = useState(false);
+  const [upgradeHistory, setUpgradeHistory] = useState<Extract<Command, { type: "rest_upgrade" }>[]>([]);
   const [promotion, setPromotion] = useState<{
     from: number;
     to: number;
@@ -132,7 +134,7 @@ function App() {
   // A new run frees the previous engine in start(); avoid freeing live state during Vite hot reload.
   // The browser releases the WASM instance when this document closes.
   useEffect(() => {
-    if (state?.phase && state.phase !== previousPhase.current) {
+    if (state?.phase && state.phase !== previousPhase.current && !restCompleted) {
       if (state.phase !== "combat" && state.phase !== "rest")
         outcomeRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -145,7 +147,7 @@ function App() {
         });
     }
     previousPhase.current = state?.phase;
-  }, [state?.phase]);
+  }, [state?.phase, restCompleted]);
   useEffect(() => {
     if (targetCard)
       boardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -155,7 +157,13 @@ function App() {
     try {
       setState(JSON.parse(engine.current.dispatch(JSON.stringify(command))));
       persist(engine.current);
-      setRestChoice(null);
+      if (command.type === "rest_upgrade") {
+        setRestCompleted(true);
+        setRestChoice((choice) => choice && { ...choice, target: command.target });
+      } else {
+        setRestChoice(null);
+        setRestCompleted(false);
+      }
       setPromotion(null);
       setSelected(null);
       setTargetCard(null);
@@ -182,6 +190,7 @@ function App() {
       if (e.key === "Escape") {
         setSelected(null);
         setRestChoice(null);
+        setRestCompleted(false);
         setPromotion(null);
         setTargetCard(null);
         setError("");
@@ -191,8 +200,13 @@ function App() {
     return () => window.removeEventListener("keydown", cancel);
   }, []);
   function persist(game: WebGame) {
+    const saved = game.save();
+    // Read the existing command history for presentation only. Promotions are
+    // not rest upgrades and must not illuminate an unrelated upgrade edge.
+    const commands: Command[] = JSON.parse(saved).commands;
+    setUpgradeHistory(commands.filter((c): c is Extract<Command, { type: "rest_upgrade" }> => c.type === "rest_upgrade"));
     try {
-      localStorage.setItem(SAVE_KEY, game.save());
+      localStorage.setItem(SAVE_KEY, saved);
       setHasSave(true);
       setSaveNotice("");
     } catch {
@@ -211,6 +225,7 @@ function App() {
       setState(JSON.parse(next.snapshot()));
       persist(next);
       setRestChoice(null);
+      setRestCompleted(false);
       setPromotion(null);
       setSelected(null);
       setTargetCard(null);
@@ -231,6 +246,7 @@ function App() {
       setState(JSON.parse(next.snapshot()));
       persist(next);
       setRestChoice(null);
+      setRestCompleted(false);
       setPromotion(null);
       setSelected(null);
       setTargetCard(null);
@@ -285,8 +301,14 @@ function App() {
     setSelected(piece?.owner === 0 && selected !== cell ? cell : null);
   }
   const turn = state?.turn === 0;
-  const showMap = state?.phase === "map" || mapOpen;
+  const showMap = (state?.phase === "map" || mapOpen) && !restCompleted;
   const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
+  const restView = state?.phase === "rest" || restCompleted;
+  const upgradeOpen = restView && !!restPiece && !restPiece.dead;
+  function closeRest() {
+    setRestChoice(null);
+    setRestCompleted(false);
+  }
   const restPath = state?.upgrade_paths.find(
     (p) => p.from === restPiece?.kind && p.to === restChoice?.target,
   );
@@ -447,13 +469,13 @@ function App() {
         <ActMap state={state} send={send} onClose={() => setMapOpen(false)} />
       )}
       {screen === "game" && state && !showMap && (
-        <main className="game-layout" data-phase={state.phase}>
+        <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined}>
           <nav className="node-navigation" aria-label="원정 위치">
             <span>
               ACT I / {state.map.nodes.find((n) => n.current)!.row + 1}번째 지점
               · {state.node_kind && nodeTypes[state.node_kind].label}
             </span>
-            <button className="text-button" onClick={() => setMapOpen(true)}>
+            <button className="text-button" onClick={() => { setRestCompleted(false); setMapOpen(true); }}>
               전체 지도 보기 ↗
             </button>
           </nav>
@@ -477,8 +499,8 @@ function App() {
                         {turn ? "나의 턴" : "적의 턴"}
                         <small>{state.actions_left}회 행동</small>
                       </>
-                    ) : state.phase === "rest" ? (
-                      "쉼터 · 행동 1회"
+                    ) : restView ? (
+                      restCompleted ? "쉼터 · 강화 완료" : "쉼터 · 행동 1회"
                     ) : (
                       "진형 계승"
                     )}
@@ -533,7 +555,7 @@ function App() {
                           key={p.id}
                           piece={p}
                           focused={
-                            state.phase === "rest" && restChoice?.id === p.id
+                            restView && restChoice?.id === p.id
                           }
                           previewKey={
                             restChoice?.id === p.id ? previewKey : undefined
@@ -580,7 +602,7 @@ function App() {
                 <div className="board-caption">
                   <span>백 · 나의 진형</span>
                   <span>
-                    {state.phase === "rest"
+                    {restView
                       ? "강화 · 부활은 확정 후 적용"
                       : `★ 적 로얄: ${state.royal_name}`}
                   </span>
@@ -612,13 +634,16 @@ function App() {
                 )}
               </section>
               <aside className="sidebar">
-                {state.phase === "rest" ? (
+                {restView ? (
                   <RestPanel
                     state={state}
                     choice={restChoice}
                     onChoose={setRestChoice}
-                    onCancel={() => setRestChoice(null)}
+                    onCancel={closeRest}
                     send={send}
+                    history={upgradeHistory}
+                    completed={restCompleted}
+                    onContinue={closeRest}
                   />
                 ) : (
                   <>
@@ -745,7 +770,7 @@ function App() {
               </div>
             </section>
           )}
-          {state.phase !== "combat" && state.phase !== "rest" && (
+          {state.phase !== "combat" && state.phase !== "rest" && !restCompleted && (
             <section className="outcome" ref={outcomeRef} aria-live="polite">
               {state.phase === "reward" && (
                 <>

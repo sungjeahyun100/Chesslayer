@@ -53,11 +53,20 @@ for (const family of ["tempest", "bouncing"] as const) {
     }, { commands: commands.slice(0, restIndex), saveKey });
     await resume(page);
     await page.locator('[data-square="a2"]').click();
-    await expect(page.locator(".upgrade-path")).toHaveCount(2);
-    await page.getByRole("button", { name: "폰 → 템페스트 폰 강화 미리보기" }).click();
-    await page.getByRole("button", { name: "폰 → 바운싱 폰 강화 미리보기" }).click();
-    await expect(page.locator('.upgrade-path[aria-pressed="true"]')).toHaveCount(1);
-    await page.getByRole("button", { name: `폰 → ${family === "tempest" ? "템페스트" : "바운싱"} 폰 강화 미리보기` }).click();
+    await expect(page.locator(".skill-node.available")).toHaveCount(2);
+    await page.getByRole("button", { name: "템페스트 폰 · 선택 가능 · 상세 보기" }).click();
+    await page.getByRole("button", { name: "바운싱 폰 · 선택 가능 · 상세 보기" }).click();
+    await expect(page.locator('.skill-node[aria-pressed="true"]')).toHaveCount(1);
+    await page.getByRole("button", { name: `${family === "tempest" ? "템페스트" : "바운싱"} 폰 · 선택 가능 · 상세 보기` }).click();
+    if (family === "bouncing") {
+      const zoom = page.locator(".skill-map-toolbar output");
+      const beforeZoom = await zoom.textContent();
+      await page.getByRole("button", { name: "트리 확대", exact: true }).click();
+      await expect(zoom).not.toHaveText(beforeZoom!);
+      await page.getByRole("button", { name: "전체 보기", exact: true }).click();
+      await expect(zoom).toHaveText(beforeZoom!);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
     await imagesLoaded(page);
     await page.screenshot({ path: `test-results/${family}-tree.png`, fullPage: true, animations: "disabled" });
     await page.getByRole("button", { name: "강화 확정", exact: true }).click();

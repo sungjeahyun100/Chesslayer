@@ -205,12 +205,13 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
     } else if (cmd.type === "rest_upgrade") {
       await page.locator('[data-square="a2"]').click();
       await page
-        .getByRole("button", { name: "폰 → 템페스트 폰 강화 미리보기" })
+        .getByRole("button", { name: "템페스트 폰 · 선택 가능 · 상세 보기" })
         .click();
       await page
         .getByRole("button", { name: "강화 확정", exact: true })
         .click();
       await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
+      await page.getByRole("button", { name: "맵으로 돌아가기 →", exact: true }).click();
     } else if (cmd.type === "claim_treasure") {
       await expect(
         page.getByRole("heading", { name: "남겨진 보물", exact: true }),
