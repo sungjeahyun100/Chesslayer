@@ -38,6 +38,8 @@ npm run dev --prefix web
 
 Rust 코드를 바꾼 뒤에는 `npm run wasm --prefix web`을 다시 실행하고 브라우저를 새로고침하세요. React/CSS는 Vite가 즉시 반영합니다. WASM 생성물은 Git에 포함하지 않습니다.
 
+웹 화면의 버전은 `web/package.json`에서 읽습니다. 이후 작은 변경사항을 반영할 때는 `cd web && npm version patch --no-git-tag-version`으로 패치 버전을 올리면 잠금 파일과 화면 표시가 함께 갱신됩니다. 게임 저장 데이터 버전은 별도로 관리합니다.
+
 프로덕션 빌드도 같은 WASM 엔진을 사용합니다.
 
 ```sh

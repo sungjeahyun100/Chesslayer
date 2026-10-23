@@ -93,7 +93,7 @@ fn formations_use_original_ids_keep_all_relics_and_apply_only_at_start() {
     for (relic, squares) in [
         (
             Relic::KingsIndian,
-            "a1 d2 c1 e2 g1 g2 f3 f1 a2 b2 c2 d3 e4 f2 g3 h2",
+            "a1 d2 c1 d1 g1 g2 f3 f1 a2 b2 c2 d3 e2 f2 g3 h2",
         ),
         (
             Relic::QueensIndian,

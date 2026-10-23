@@ -170,12 +170,15 @@ button.primary {
   font-size: clamp(32px, 3.4vw, 52px);
   font-weight: 600;
   line-height: 1.5;
-  margin: 22px 0;
+  margin: 22px 0 0;
   white-space: nowrap;
 }
-.home h1 em {
-  font-style: normal;
-  color: #53705a;
+.home-version {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: #7a8276;
+  margin: 0 0 22px;
 }
 .intro {
   font-size: 15px;

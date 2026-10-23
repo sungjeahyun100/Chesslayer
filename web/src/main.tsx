@@ -17,6 +17,7 @@ import { RestPanel, type RestChoice } from "./RestPanel";
 import { PromotionPicker } from "./PromotionPicker";
 import { UpgradeTree } from "./UpgradeTree";
 import { CardArt, RelicIcon } from "./ContentArt";
+import { version } from "../package.json";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
 const SAVE_KEY = "chesslayer.run.v1";
@@ -425,11 +426,8 @@ function App() {
         <main className="home">
           <section className="home-copy">
             <p className="eyebrow">A CHESS ROGUELIKE</p>
-            <h1>
-              한 수의 끝이,
-              <br />
-              <em>다음 전투의 시작.</em>
-            </h1>
+            <h1>Chesslayer</h1>
+            <p className="home-version">v{version}</p>
             <p className="intro">
               길을 선택하고, 카드로 판을 바꾸세요.
               <br />

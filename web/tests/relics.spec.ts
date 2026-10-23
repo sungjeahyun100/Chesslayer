@@ -43,7 +43,7 @@ test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·�
         return { start, saved, next: JSON.parse(game.snapshot()) as Snapshot, nextSave: game.save() };
       } finally { game.free(); }
     }, run);
-    expect(JSON.parse(result.saved).version).toBe(7);
+    expect(JSON.parse(result.saved).version).toBe(8);
     expect(result.start.relics.some((r) => r.id === run.relic)).toBe(true);
     if (run.relic === "initiative") {
       expect(result.start.initiative_turns_left).toBe(10);
@@ -82,6 +82,8 @@ test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·�
       await expect(page.locator(".mana small")).toContainText("남은 코스트에 3");
     }
     if (run.relic === "kings_indian") {
+      expect(result.start.pieces.find((p) => p.id === 4)?.square).toBe("d1");
+      expect(result.start.pieces.find((p) => p.id === 13)?.square).toBe("e2");
       await page.screenshot({ path: "test-results/relic-kia-desktop.png", fullPage: true });
     }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
