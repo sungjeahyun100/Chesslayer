@@ -11,6 +11,10 @@ import type {
 } from "./types";
 import "./style.css";
 import { ActMap, nodeTypes } from "./ActMap";
+import { PieceImage } from "./PieceImage";
+import { RestPanel, type RestChoice } from "./RestPanel";
+
+const SAVE_KEY = "chesslayer.run.v1";
 
 const relicIcons = { haste: "»", whirlwind: "◎", self_defense: "◇" };
 function Tags({ card }: { card: CardDefinition }) {
@@ -31,7 +35,19 @@ function CardFace({ card }: { card: CardDefinition }) {
         <span>전술 카드</span>
       </div>
       <div className="card-symbol" aria-hidden="true">
-        {card.kind === "jeans" ? "♖ × ♕" : card.kind === "gun" ? "♖ ♖ ♕" : "◇"}
+        {card.kind === "jeans" || card.kind === "gun" ? (
+          <>
+            <PieceImage pieceKey="rook" />
+            {card.kind === "gun" ? (
+              <PieceImage pieceKey="rook" />
+            ) : (
+              <span>×</span>
+            )}
+            <PieceImage pieceKey="queen" />
+          </>
+        ) : (
+          <span>◇</span>
+        )}
       </div>
       <h3>{card.name}</h3>
       <p>{card.description}</p>
@@ -39,10 +55,18 @@ function CardFace({ card }: { card: CardDefinition }) {
     </>
   );
 }
-function PieceGlyph({ piece }: { piece: Piece }) {
+function BoardPiece({
+  piece,
+  focused = false,
+  previewKey,
+}: {
+  piece: Piece;
+  focused?: boolean;
+  previewKey?: string;
+}) {
   return (
     <span
-      className={`piece owner-${piece.owner} ${piece.ward ? "warded" : ""}`}
+      className={`piece owner-${piece.owner} ${piece.ward ? "warded" : ""} ${focused ? "rest-focused" : ""}`}
       style={{
         left: `${(piece.cell % 8) * 12.5}%`,
         top: `${Math.floor(piece.cell / 8) * 12.5}%`,
@@ -51,9 +75,8 @@ function PieceGlyph({ piece }: { piece: Piece }) {
       data-cell={piece.cell}
       aria-hidden="true"
     >
-      <span className="glyph">{piece.glyph}</span>
+      <PieceImage pieceKey={previewKey || piece.key} owner={piece.owner} />
       {piece.royal && <span className="royal-mark">★</span>}
-      {piece.badge && <span className="piece-mod">{piece.badge}</span>}
       {piece.ward && <span className="ward-mark">◇</span>}
     </span>
   );
@@ -66,6 +89,9 @@ function App() {
   const [character, setCharacter] = useState("vanguard");
   const [state, setState] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
+  const [hasSave, setHasSave] = useState(false);
+  const [saveNotice, setSaveNotice] = useState("");
   const [targetCard, setTargetCard] = useState<Card | null>(null);
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
@@ -81,6 +107,13 @@ function App() {
         if (active) {
           setChoices(JSON.parse(catalog()));
           setReady(true);
+          try {
+            setHasSave(!!localStorage.getItem(SAVE_KEY));
+          } catch {
+            setSaveNotice(
+              "브라우저 저장소를 사용할 수 없어 이번 원정은 저장되지 않습니다.",
+            );
+          }
         }
       })
       .catch((e) => setError(`게임 엔진을 불러오지 못했습니다. ${String(e)}`));
@@ -92,7 +125,7 @@ function App() {
   // The browser releases the WASM instance when this document closes.
   useEffect(() => {
     if (state?.phase && state.phase !== previousPhase.current) {
-      if (state.phase !== "combat")
+      if (state.phase !== "combat" && state.phase !== "rest")
         outcomeRef.current?.scrollIntoView({
           behavior: "smooth",
           block: "start",
@@ -113,6 +146,8 @@ function App() {
     if (!engine.current) return;
     try {
       setState(JSON.parse(engine.current.dispatch(JSON.stringify(command))));
+      persist(engine.current);
+      setRestChoice(null);
       setSelected(null);
       setTargetCard(null);
       setMapOpen(false);
@@ -137,6 +172,7 @@ function App() {
     const cancel = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSelected(null);
+        setRestChoice(null);
         setTargetCard(null);
         setError("");
       }
@@ -144,6 +180,36 @@ function App() {
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
   }, []);
+  function persist(game: WebGame) {
+    try {
+      localStorage.setItem(SAVE_KEY, game.save());
+      setHasSave(true);
+      setSaveNotice("");
+    } catch {
+      setSaveNotice(
+        "진행 상태를 저장하지 못했습니다. 이 탭을 닫으면 최근 진행을 잃을 수 있습니다.",
+      );
+    }
+  }
+  function resume() {
+    try {
+      const saved = localStorage.getItem(SAVE_KEY);
+      if (!saved) return;
+      const next = WebGame.restore(saved);
+      engine.current?.free();
+      engine.current = next;
+      setState(JSON.parse(next.snapshot()));
+      persist(next);
+      setRestChoice(null);
+      setSelected(null);
+      setTargetCard(null);
+      setMapOpen(false);
+      setError("");
+      setScreen("game");
+    } catch (e) {
+      setError(String(e));
+    }
+  }
   function start() {
     try {
       // Entropy only comes from the browser; the seeded Rust engine generates the entire Act.
@@ -152,6 +218,8 @@ function App() {
       engine.current?.free();
       engine.current = next;
       setState(JSON.parse(next.snapshot()));
+      persist(next);
+      setRestChoice(null);
       setSelected(null);
       setTargetCard(null);
       setMapOpen(false);
@@ -172,7 +240,18 @@ function App() {
     else send({ type: "play_card", id: card.id });
   }
   function clickSquare(cell: number) {
-    if (!state || state.phase !== "combat" || state.turn !== 0) return;
+    if (!state) return;
+    if (state.phase === "rest") {
+      const ally = state.rest_options.find((p) => !p.dead && p.cell === cell);
+      const occupant = state.pieces.find((p) => p.cell === cell);
+      const candidate =
+        !occupant &&
+        state.rest_options.find((p) => p.can_revive && p.origin === cell);
+      const option = ally || candidate;
+      if (option) setRestChoice({ cell, id: option.id, upgrade: false });
+      return;
+    }
+    if (state.phase !== "combat" || state.turn !== 0) return;
     const piece = state.pieces.find((p) => p.cell === cell);
     if (targetCard) {
       if (piece && targetCard.targets.includes(piece.id))
@@ -190,6 +269,10 @@ function App() {
   }
   const turn = state?.turn === 0;
   const showMap = state?.phase === "map" || mapOpen;
+  const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
+  const restPath = state?.upgrade_paths.find((p) => p.from === restPiece?.kind);
+  const previewKey = restChoice?.upgrade ? restPath?.to_key : undefined;
+  const selectedPiece = state?.pieces.find((p) => p.cell === selected);
   return (
     <>
       <header className="topbar">
@@ -201,10 +284,10 @@ function App() {
             if (screen !== "game") setScreen("home");
           }}
         >
-          <span>♞</span> CHESSLAYER
+          <PieceImage pieceKey="knight" owner={1} /> CHESSLAYER
         </a>
         <div className="top-right">
-          <span className="edition">PLAYABLE PROTOTYPE / 01</span>
+          <span className="edition">FIRST EXPEDITION / 01</span>
           <button
             className="text-button"
             onClick={() => setHelp(!help)}
@@ -225,7 +308,7 @@ function App() {
           <p>
             맵에서 이어진 다음 노드를 선택하세요. 승리한 진형은 다음 전투로
             이어집니다. 적의 시작 칸과 겹친 아군은 역습으로 사라집니다. 킹을
-            잃으면 원정이 끝납니다. 새로고침하면 진행은 초기화됩니다.
+            잃으면 원정이 끝납니다. 진행은 이 브라우저에 자동 저장됩니다.
           </p>
           <p>
             소멸: 사용 후 이번 전투에서 제외 · 보존: 턴 종료에도 손패 유지 ·
@@ -241,6 +324,11 @@ function App() {
             닫기
           </button>
         </div>
+      )}
+      {saveNotice && (
+        <p className="save-notice" role="status">
+          {saveNotice}
+        </p>
       )}
       {screen === "home" && (
         <main className="home">
@@ -263,6 +351,11 @@ function App() {
             >
               {ready ? "새 게임 시작" : "엔진 불러오는 중…"} <span>↗</span>
             </button>
+            {ready && hasSave && (
+              <button className="resume-button" onClick={resume}>
+                저장된 원정 이어하기 →
+              </button>
+            )}
             <div className="home-facts">
               <span>갈라지는 경로</span>
               <span>선택하는 보상</span>
@@ -278,8 +371,12 @@ function App() {
                 />
               ))}
             </div>
-            <span className="hero-king">♔</span>
-            <span className="hero-knight">♞</span>
+            <span className="hero-king">
+              <PieceImage pieceKey="king" />
+            </span>
+            <span className="hero-knight">
+              <PieceImage pieceKey="knight" owner={1} />
+            </span>
             <span className="hero-caption">EVERY POSITION TELLS A STORY.</span>
           </div>
           <div className="home-foot">
@@ -360,6 +457,8 @@ function App() {
                         {turn ? "나의 턴" : "적의 턴"}
                         <small>{state.actions_left}회 행동</small>
                       </>
+                    ) : state.phase === "rest" ? (
+                      "쉼터 · 행동 1회"
                     ) : (
                       "진형 계승"
                     )}
@@ -387,11 +486,18 @@ function App() {
                           key={i}
                           data-square={square}
                           data-legal={legal || undefined}
-                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${selected === i ? "selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""}`}
+                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(state.phase === "rest" ? restChoice?.cell : selected) === i ? "selected" : ""} ${state.phase === "rest" && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""}`}
                           onClick={() => clickSquare(i)}
-                          disabled={state.phase !== "combat" || !turn}
+                          disabled={
+                            state.phase !== "rest" &&
+                            (state.phase !== "combat" || !turn)
+                          }
                           aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}`}
-                          aria-pressed={selected === i}
+                          aria-pressed={
+                            (state.phase === "rest"
+                              ? restChoice?.cell
+                              : selected) === i
+                          }
                         >
                           {legal && (
                             <span
@@ -403,8 +509,31 @@ function App() {
                     })}
                     <div className="piece-layer">
                       {state.pieces.map((p) => (
-                        <PieceGlyph key={p.id} piece={p} />
+                        <BoardPiece
+                          key={p.id}
+                          piece={p}
+                          focused={
+                            state.phase === "rest" && restChoice?.id === p.id
+                          }
+                          previewKey={
+                            restChoice?.id === p.id ? previewKey : undefined
+                          }
+                        />
                       ))}
+                      {state.phase === "rest" &&
+                        restPiece?.dead &&
+                        restChoice && (
+                          <span
+                            className="piece rest-ghost rest-focused"
+                            style={{
+                              left: `${(restChoice.cell % 8) * 12.5}%`,
+                              top: `${Math.floor(restChoice.cell / 8) * 12.5}%`,
+                            }}
+                          >
+                            <PieceImage pieceKey={restPiece.key} />
+                            <small>미리보기</small>
+                          </span>
+                        )}
                     </div>
                   </div>
                   <div className="file-labels">
@@ -415,7 +544,11 @@ function App() {
                 </div>
                 <div className="board-caption">
                   <span>백 · 나의 진형</span>
-                  <span>★ 적 로얄: {state.royal_name}</span>
+                  <span>
+                    {state.phase === "rest"
+                      ? "강화 · 부활은 확정 후 적용"
+                      : `★ 적 로얄: ${state.royal_name}`}
+                  </span>
                 </div>
                 {state.phase === "combat" && (
                   <div
@@ -444,65 +577,91 @@ function App() {
                 )}
               </section>
               <aside className="sidebar">
-                <section className="turn-panel">
-                  <div className="section-label">
-                    TURN {state.round.toString().padStart(2, "0")}
-                    <span>기본 마나 3</span>
-                  </div>
-                  <div className="mana">
-                    <span className="mana-orb">{state.mana}</span>
-                    <div>
-                      <strong>사용 가능한 마나</strong>
-                      <small>내 턴 시작 시 회복됩니다.</small>
-                    </div>
-                  </div>
-                  <button
-                    className="primary end-turn"
-                    onClick={() => send({ type: "end_turn" })}
-                    disabled={!turn || state.phase !== "combat"}
-                  >
-                    턴 종료 <span>→</span>
-                  </button>
-                </section>
-                <section className="relic-panel">
-                  <div className="section-label">
-                    보유 유물 <span>{state.relics.length}</span>
-                  </div>
-                  {state.relics.map((r) => (
-                    <div className="relic" key={r.name}>
-                      <span>◇</span>
-                      <div>
-                        <strong>{r.name}</strong>
-                        <p>{r.description}</p>
+                {state.phase === "rest" ? (
+                  <RestPanel
+                    state={state}
+                    choice={restChoice}
+                    onChoose={setRestChoice}
+                    onCancel={() => setRestChoice(null)}
+                    send={send}
+                  />
+                ) : (
+                  <>
+                    {selectedPiece && (
+                      <section className="selected-piece-info">
+                        <PieceImage
+                          pieceKey={selectedPiece.key}
+                          owner={selectedPiece.owner}
+                        />
+                        <div>
+                          <strong>
+                            {selectedPiece.name} · {selectedPiece.square}
+                          </strong>
+                          <p>{selectedPiece.description}</p>
+                        </div>
+                      </section>
+                    )}
+                    <section className="turn-panel">
+                      <div className="section-label">
+                        TURN {state.round.toString().padStart(2, "0")}
+                        <span>기본 마나 3</span>
                       </div>
-                    </div>
-                  ))}
-                </section>
-                <section className="log-panel">
-                  <div className="section-label">
-                    전투 기록<span>최근 기록</span>
-                  </div>
-                  <div
-                    className="battle-log"
-                    ref={logRef}
-                    role="log"
-                    aria-label="전투 기록"
-                  >
-                    {state.log.map((line, i) => (
-                      <p
-                        key={`${i}-${line}`}
-                        className={
-                          line.includes("역습") || line.includes("승리")
-                            ? "important"
-                            : ""
-                        }
+                      <div className="mana">
+                        <span className="mana-orb">{state.mana}</span>
+                        <div>
+                          <strong>사용 가능한 마나</strong>
+                          <small>내 턴 시작 시 회복됩니다.</small>
+                        </div>
+                      </div>
+                      <button
+                        className="primary end-turn"
+                        onClick={() => send({ type: "end_turn" })}
+                        disabled={!turn || state.phase !== "combat"}
                       >
-                        <span>·</span>
-                        {line}
-                      </p>
-                    ))}
-                  </div>
-                </section>
+                        턴 종료 <span>→</span>
+                      </button>
+                    </section>
+                    <section className="relic-panel">
+                      <div className="section-label">
+                        보유 유물 <span>{state.relics.length}</span>
+                      </div>
+                      {state.relics.map((r) => (
+                        <div className="relic" key={r.name}>
+                          <span>◇</span>
+                          <div>
+                            <strong>{r.name}</strong>
+                            <p>{r.description}</p>
+                          </div>
+                        </div>
+                      ))}
+                    </section>
+                    <section className="log-panel">
+                      <div className="section-label">
+                        전투 기록<span>최근 기록</span>
+                      </div>
+                      <div
+                        className="battle-log"
+                        ref={logRef}
+                        role="log"
+                        aria-label="전투 기록"
+                      >
+                        {state.log.map((line, i) => (
+                          <p
+                            key={`${i}-${line}`}
+                            className={
+                              line.includes("역습") || line.includes("승리")
+                                ? "important"
+                                : ""
+                            }
+                          >
+                            <span>·</span>
+                            {line}
+                          </p>
+                        ))}
+                      </div>
+                    </section>
+                  </>
+                )}
               </aside>
             </>
           )}
@@ -551,7 +710,7 @@ function App() {
               </div>
             </section>
           )}
-          {state.phase !== "combat" && (
+          {state.phase !== "combat" && state.phase !== "rest" && (
             <section className="outcome" ref={outcomeRef} aria-live="polite">
               {state.phase === "reward" && (
                 <>
@@ -599,68 +758,13 @@ function App() {
                   </button>
                 </>
               )}
-              {state.phase === "rest" && (
-                <>
-                  <p className="eyebrow">A MOMENT OF REST</p>
-                  <h2>작은 쉼터</h2>
-                  <p>
-                    기물을 한 번 강화하거나 부활시킬 수 있습니다. 템페스트 폰은
-                    옆으로 이동·포획하고 뒤로 한 칸 이동할 수 있습니다.
-                  </p>
-                  <div className="rest-grid">
-                    <div>
-                      <h3>폰 강화</h3>
-                      {state.rest_options
-                        .filter((p) => p.can_upgrade)
-                        .map((p) => (
-                          <button
-                            key={p.id}
-                            onClick={() =>
-                              send({ type: "rest_upgrade", id: p.id })
-                            }
-                          >
-                            ♙ {p.square}의 폰 <span>→ 템페스트</span>
-                          </button>
-                        ))}
-                      {!state.rest_options.some((p) => p.can_upgrade) && (
-                        <p>강화할 일반 폰이 없습니다.</p>
-                      )}
-                    </div>
-                    <div>
-                      <h3>기물 부활</h3>
-                      {state.rest_options
-                        .filter((p) => p.dead)
-                        .map((p) => (
-                          <button
-                            key={p.id}
-                            disabled={!p.can_revive}
-                            onClick={() =>
-                              send({ type: "rest_revive", id: p.id })
-                            }
-                          >
-                            {p.name} · {p.square}
-                            <span>
-                              {p.can_revive ? "부활" : "초기 칸 점유"}
-                            </span>
-                          </button>
-                        ))}
-                      {!state.rest_options.some((p) => p.dead) && (
-                        <p>모든 아군이 생존했습니다.</p>
-                      )}
-                    </div>
-                  </div>
-                  <button
-                    className="text-button"
-                    onClick={() => send({ type: "rest_skip" })}
-                  >
-                    휴식을 마치고 맵으로 →
-                  </button>
-                </>
-              )}
               {(state.phase === "victory" || state.phase === "defeat") && (
                 <>
                   <span className="end-symbol">
-                    {state.phase === "victory" ? "♔" : "♚"}
+                    <PieceImage
+                      pieceKey="king"
+                      owner={state.phase === "victory" ? 0 : 1}
+                    />
                   </span>
                   <p className="eyebrow">
                     EXPEDITION{" "}
@@ -692,8 +796,7 @@ function App() {
         </main>
       )}
       <footer>
-        CHESSLAYER{" "}
-        <span>첫 번째 플레이테스트 · 임시 규칙이 적용되어 있습니다.</span>
+        CHESSLAYER <span>첫 번째 원정 · 진행은 이 브라우저에 저장됩니다.</span>
       </footer>
     </>
   );

@@ -265,6 +265,12 @@ impl Battle {
                 )?;
             }
         }
+        self.wards = roster
+            .iter()
+            .filter(|p| p.position.is_some() && p.persistent.get("ward").copied().unwrap_or(0) > 0)
+            .map(|p| p.id)
+            .collect();
+        self.moved_ids = roster.iter().filter(|p| p.moved).map(|p| p.id).collect();
         self.board = next;
         self.players = roster;
         Ok(())

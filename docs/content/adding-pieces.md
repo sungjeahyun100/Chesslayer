@@ -1,6 +1,6 @@
 # 기물 추가
 
-정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 기존 8종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
+정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 기존 8종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시 이름·능력 설명, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
 
 ## 1. 완전한 정의 파일 만들기
 
@@ -16,8 +16,7 @@ pub const DANCER: PieceType = 9;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 30,
-    glyphs: ["♗", "♝"],
-    badge: Some("◇"),
+    description: "대각선 두 칸을 뛰어 이동·포획합니다. 중간 기물은 뛰어넘습니다.",
     ..PieceDefinition::new(DANCER, "dancer", "무희", movement)
 };
 
@@ -44,11 +43,11 @@ fn movement() -> String {
 | 선택 속성 | 기본값 | 설명 |
 | --- | --- | --- |
 | `value: i32` | `10` | 적 AI의 포획 점수. 기존 킹 ID 포획 최우선과 가호 점수 처리는 코어에 남음 |
-| `glyphs: [&'static str; 2]` | `["♙", "♟"]` | 플레이어 0 / 적 1 순서의 화면 기호 |
-| `badge: Option<&'static str>` | `None` | 아마존의 `♞`, 템페스트의 `ϟ` 같은 작은 표시 |
+| `description: &'static str` | `""` | 실제 능력 설명. 등록 시 반드시 작성하며 UI가 그대로 표시 |
+| `upgrade: Option<UpgradeDefinition>` | `None` | 강화 대상 ID·이력 key·능력 변화·선행 조건. 현재는 종류당 단일 경로 |
 | `initial_double_step: bool` | `false` | 기존 폰 첫 두 칸 규칙 재사용. 일반 행마는 별도로 정의 |
 
-새 기호·배지는 Rust 스냅샷으로 전달된다. `web/src/main.tsx`나 TypeScript 기물 목록을 수정할 필요가 없다.
+이미지는 `web/src/assets/pieces/<key>-white.svg`, `<key>-black.svg` 두 파일로 등록한다. `PieceImage.tsx`가 Rust의 key·진영으로 조회하므로 화면마다 매핑하지 않는다. 누락 파일은 오류 표식으로 표시하고 콘텐츠 등록 테스트도 실패한다. `provenance.json`에 원본 경로·변경 내용·라이선스 확인 상태를 기록한다. [에셋 안내](../ASSETS.md)를 참고한다.
 
 ## 2. 등록하기 — 필수
 
@@ -124,7 +123,7 @@ if index == 0 {
 
 ### 휴식 강화·다른 콘텐츠의 참조 — 필요할 때만
 
-현재 휴식은 `game.rs`의 `RestUpgrade`에서 일반 폰만 템페스트 폰으로 바꾸고, `rest_options`도 그 조건을 표시한다. 새로운 강화 경로는 등록만으로 생기지 않는다. 새 강화가 필요하면 이 두 지점을 함께 수정한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
+현재 휴식의 폰 → 템페스트 폰 경로는 `pawn.rs`의 `upgrade`에 정의한다. `RestUpgrade`, `rest_options`, `upgrade_paths`는 같은 정의를 읽는다. 새 단일 경로는 해당 기물 정의의 `upgrade`에 추가하며 대상 ID도 등록해야 한다. 여러 분기나 자원 비용을 도입하려면 명령의 대상 선택과 실제 비용 검증도 함께 구현해야 한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
 
 ## 5. 특수 능력의 경계
 
@@ -150,4 +149,4 @@ npm run dev --prefix web
 
 등록 테스트는 모든 기물의 ID/key 중복, 보드 카탈로그 연결, DSL 파싱·후보 실행을 확인한다. 정의에 문법 오류가 있으면 그 종류가 아직 보드에 없어도 전투 초기화가 실패한다.
 
-예시 무희를 실제 편성/초기 진형에 놓고 표시 기호·이름과 대각선 두 칸 후보를 확인한다. 양측 방향, 보드 경계, 도착 칸의 아군 차단/적 포획, 중간 기물 점프를 확인한다. 첫 두 칸을 켰다면 시작 랭크·이동 이력·중간 점유도 확인한다. 이동/포획은 `Battle::legal_actions()`에서 받은 후보로 수행하고 다음 전투의 위치·종류 계승도 확인한다. 기존 회귀 검증 전체 명령은 [TESTING.md](../TESTING.md)에 있다.
+예시 무희를 실제 편성/초기 진형에 놓고 이미지·이름과 대각선 두 칸 후보를 확인한다. 양측 방향, 보드 경계, 도착 칸의 아군 차단/적 포획, 중간 기물 점프를 확인한다. 첫 두 칸을 켰다면 시작 랭크·이동 이력·중간 점유도 확인한다. 이동/포획은 `Battle::legal_actions()`에서 받은 후보로 수행하고 다음 전투의 위치·종류 계승도 확인한다. 기존 회귀 검증 전체 명령은 [TESTING.md](../TESTING.md)에 있다.

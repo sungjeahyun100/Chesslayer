@@ -65,7 +65,7 @@ crates/chesslayer/src/
 | 종류 | 정의 파일이 소유하는 것 | 공통 실행부가 소유하는 것 |
 | --- | --- | --- |
 | 카드 | 이름·설명·비용·키워드, 대상 후보, 대상 유효성 검사, 효과 함수 | 플레이어 턴·손패·비용 검사, 성공 후 마나/더미 처리, 사용 기록 |
-| 기물 | 숫자 ID·DSL 이름·표시 이름, 행마 DSL 생성, AI 가치, 양측 기호·배지, 첫 두 칸 사용 여부 | Chesssembly 후보 계산·적용, 이동 이력, 턴 소비, 가호, 로얄 판정, 계승 |
+| 기물 | 숫자 ID·DSL 이름·표시 이름, 행마 DSL 생성, AI 가치, 능력 설명·단일 강화 경로, 첫 두 칸 사용 여부 | Chesssembly 후보 계산·적용, 이동 이력, 턴 소비, 가호, 로얄 판정, 계승 |
 | 캐릭터 | 문자열 ID·이름·제목·설명, 시작 유물 한 개 | 공통 덱·16기 진형 초기화, 유물 획득·발동, 원정 진행 |
 
 각 종류는 같은 자료형과 등록 경로를 사용한다. 카드와 기물의 선택 속성은 생성자 기본값을 덮어쓰므로 특수 속성을 매번 나열할 필요가 없다. 캐릭터는 현재 데이터만으로 정의되며 별도 실행 콜백이 없다.
@@ -75,7 +75,7 @@ crates/chesslayer/src/
 ## 등록·초기화·조회·실행
 
 1. **카드**: `CardKind::definition()`의 명시적 `match`가 각 파일의 `definition()`을 호출한다. `starter_deck()`와 `REWARD_POOL`은 획득 경로다. `Game::play_card()`는 공통 검증 뒤 `definition.effect`를 호출하고 성공한 경우에만 비용과 더미를 처리한다. 스냅샷은 `target_candidates`를 호출한다. 함수 포인터는 직렬화하지 않으므로 브라우저는 데이터만 받는다.
-2. **기물**: `pieces::ALL` → 숫자 ID로 인덱싱한 보드 이름 카탈로그 → 전투 시작 시 모든 행마를 `Program::parse()` → ID별 프로그램 보관 → `Battle::legal_actions()` → 공통 규칙 적용 순서다. `pieces::definition(kind)`는 이름·AI·표시에도 사용한다. React는 Rust가 제공하는 `glyph`와 `badge`를 그린다.
+2. **기물**: `pieces::ALL` → 숫자 ID로 인덱싱한 보드 이름 카탈로그 → 전투 시작 시 모든 행마를 `Program::parse()` → ID별 프로그램 보관 → `Battle::legal_actions()` → 공통 규칙 적용 순서다. `pieces::definition(kind)`는 이름·AI·표시에도 사용한다. React는 Rust가 제공하는 `key`와 진영으로 공통 `PieceImage`를 통해 SVG를 그린다. 강화 UI와 실행은 같은 `upgrade` 정의를 사용한다.
 3. **캐릭터**: `characters::ALL` → `characters()` → WASM `catalog()` → 선택 화면이다. `Game::new(id, seed)`도 같은 목록에서 ID를 찾고 `relic`을 런에 넣는다. 기존 유물 발동은 `Game::start_battle()`와 `BattleOptions`를 통해 유지한다.
 
 ## 추가할 때 수정하는 파일
@@ -83,7 +83,7 @@ crates/chesslayer/src/
 | 작업 | 필수 | 게임에 등장시키려면 | 특수한 경우만 |
 | --- | --- | --- | --- |
 | 카드 | `content/cards/<이름>.rs`, `content/cards/mod.rs`의 모듈·enum·match | 같은 `mod.rs`의 시작 덱 또는 보상 목록 | 새 턴 이벤트/덱 조작 등 현재 효과 인자로 할 수 없는 기능은 코어 수정 |
-| 기물 | `content/pieces/<이름>.rs`, `content/pieces/mod.rs`의 모듈·ID 재노출·ALL | 적은 `content/mod.rs::encounter()`, 아군 초기 배치는 `battle.rs::standard_roster()` 등 실제 공급처 | 새로운 지속 능력·휴식 강화 종류·로얄 규칙은 해당 코어 수정 |
+| 기물 | `content/pieces/<이름>.rs`, `content/pieces/mod.rs`의 모듈·ID 재노출·ALL | 적은 `content/mod.rs::encounter()`, 아군 초기 배치는 `battle.rs::standard_roster()` 등 실제 공급처 | SVG 두 진영 파일과 출처 등록. 새로운 지속 능력·분기 강화·로얄 규칙은 해당 코어 수정 |
 | 캐릭터 | `content/characters/<이름>.rs`, `content/characters/mod.rs`의 모듈·ALL | 추가 작업 없이 선택 화면 노출 | 새 유물 또는 캐릭터별 덱·진형은 현재 정의 규격 밖 |
 
 등록 이후 기존 콘텐츠의 수치·행마·효과를 수정하는 일은 대부분 해당 정의 파일 하나에서 끝난다. 신규 콘텐츠는 Rust 모듈 등록 때문에 `mod.rs` 수정도 필요하다.
@@ -103,4 +103,4 @@ crates/chesslayer/src/
 
 모든 캐릭터는 같은 시작 덱과 표준 16기 진형을 사용하고 유물 한 개만 다르다. 유물 자체는 캐릭터 정의로 옮기지 않았다. 새로운 능력의 이벤트 구독 시스템은 없다. 카드 효과에는 `Battle`과 선택 기물 ID만 전달하며 덱·마나·원정 RNG를 직접 조작하는 인터페이스는 없다.
 
-저장/불러오기 기능은 여전히 없다. 기존 JSON 명령·스냅샷 필드, ID 및 기보 참조는 유지했고 기물 스냅샷에 표시용 `glyph`, `badge`만 추가했다. 시작 덱 장수를 바꾸면 UI의 고정 문구와 장수에 의존하는 기존 테스트도 검토해야 한다. 기물 등록 누락이나 중복 ID는 [등록 테스트](validation.md)로 확인한다.
+1차 폴리싱에서 로컬 저장/이어하기를 추가했다. 기존 JSON 명령·ID·기보 참조는 유지했으며 스냅샷의 `glyph`, `badge`는 이미지 조회용 `key`와 능력 `description`으로 교체했다. 새로 추가한 콘텐츠가 결정적 재생 결과를 바꾸면 저장 버전 호환성도 검토한다. 시작 덱 장수를 바꾸면 UI의 고정 문구와 장수에 의존하는 기존 테스트도 검토해야 한다. 기물 등록 누락이나 중복 ID는 [등록 테스트](validation.md)로 확인한다.

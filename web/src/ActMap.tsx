@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { PieceImage } from "./PieceImage";
 import type { Command, MapNode, NodeKind, Snapshot } from "./types";
 
-export const nodeTypes: Record<NodeKind, { icon: string; label: string }> = {
+export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
   combat: { icon: "⚔", label: "일반 전투" },
-  elite: { icon: "♜", label: "엘리트" },
+  elite: { icon: <PieceImage pieceKey="rook" owner={1} />, label: "엘리트" },
   rest: { icon: "⌂", label: "휴식" },
   treasure: { icon: "◇", label: "보물" },
-  boss: { icon: "♛", label: "보스" },
+  boss: { icon: <PieceImage pieceKey="amazon" owner={1} />, label: "보스" },
 };
 const status = (node: MapNode) =>
   node.current

@@ -11,8 +11,8 @@ export interface Piece {
   id: number;
   kind: number;
   name: string;
-  glyph: string;
-  badge: string | null;
+  key: string;
+  description: string;
   owner: number;
   cell: number;
   square: string;
@@ -63,14 +63,8 @@ export interface Snapshot {
   relics: { name: string; description: string }[];
   log: string[];
   rewards: CardDefinition[];
-  rest_options: {
-    id: number;
-    name: string;
-    square: string;
-    can_upgrade: boolean;
-    can_revive: boolean;
-    dead: boolean;
-  }[];
+  rest_options: RestOption[];
+  upgrade_paths: UpgradePath[];
   royal_name: string;
   seed: number;
 }
@@ -95,4 +89,30 @@ export interface MapNode {
   visited: boolean;
   current: boolean;
   skipped: boolean;
+}
+
+export interface RestOption {
+  id: number;
+  kind: number;
+  key: string;
+  name: string;
+  description: string;
+  cell: number | null;
+  origin: number | null;
+  square: string;
+  upgrades: string[];
+  ward: boolean;
+  can_upgrade: boolean;
+  can_revive: boolean;
+  dead: boolean;
+}
+export interface UpgradePath {
+  from: number;
+  from_key: string;
+  from_name: string;
+  to: number;
+  to_key: string;
+  to_name: string;
+  effect: string;
+  requirement: string;
 }

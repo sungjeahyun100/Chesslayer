@@ -442,3 +442,145 @@ fn seeded_full_run_reaches_boss_victory() {
     assert!(game.log.iter().any(|s| s.starts_with("역습")));
     assert_eq!(game.battle.outcome()[8].kind, TEMPEST_PAWN);
 }
+
+#[test]
+fn variant_movement_and_capture_work_for_both_sides() {
+    for side in [PLAYER, ENEMY] {
+        for kind in [AMAZON, TEMPEST_PAWN] {
+            let origin = p(3, 3);
+            let forward = if side == PLAYER { 2 } else { 4 };
+            let back = if side == PLAYER { 4 } else { 2 };
+            let mut players = roster(&[(5, KING, 7, 7)]);
+            let mut enemies = vec![e(101, KING, 7, 0)];
+            if side == PLAYER {
+                players.extend(roster(&[(9, kind, 3, 3), (10, PAWN, 2, 3)]));
+                enemies.extend([
+                    e(100, ROOK, 4, 3),
+                    e(102, PAWN, 3, back),
+                    e(103, PAWN, 2, forward),
+                ]);
+            } else {
+                enemies.extend([e(100, kind, 3, 3), e(102, PAWN, 2, 3)]);
+                players.extend(roster(&[
+                    (9, ROOK, 4, 3),
+                    (10, PAWN, 3, back),
+                    (11, PAWN, 2, forward),
+                ]));
+            }
+            let mut b = battle(players, enemies, 101);
+            b.turn = side;
+            let destinations: Vec<_> = b
+                .legal_actions(origin)
+                .unwrap()
+                .iter()
+                .map(|a| a.steps().last().unwrap().move_to)
+                .collect();
+            assert!(destinations.contains(&p(4, 3)), "lateral capture");
+            assert!(!destinations.contains(&p(2, 3)), "friendly blocker");
+            assert!(destinations.contains(&p(2, forward)), "diagonal capture");
+            if kind == TEMPEST_PAWN {
+                assert!(destinations.contains(&p(3, forward)), "forward move");
+                assert!(!destinations.contains(&p(3, back)), "no backward capture");
+                assert!(!destinations.contains(&p(5, 2)), "no knight leap");
+                let mut empty_back = b.clone();
+                empty_back.board.set_piece(p(3, back), None).unwrap();
+                assert!(empty_back.legal_actions(origin).unwrap().iter().any(|a| a
+                    .steps()
+                    .last()
+                    .unwrap()
+                    .move_to
+                    == p(3, back)));
+            } else {
+                assert!(destinations.contains(&p(5, 2)), "knight leap over blockers");
+                assert!(!destinations.contains(&p(1, 3)), "slider blocked by ally");
+                assert!(
+                    !destinations.contains(&p(5, 3)),
+                    "slider stops at first enemy"
+                );
+                assert!(destinations.contains(&p(6, 6)), "diagonal slide");
+            }
+            let capture = action(&b, origin, p(4, 3));
+            b.apply_piece_action(&capture).unwrap();
+            assert!(b.board.piece_at(origin).unwrap().is_none());
+            let moved = b.board.piece_at(p(4, 3)).unwrap().unwrap();
+            assert_eq!((moved.kind, moved.owner), (kind, side));
+        }
+        let rank = if side == PLAYER { 6 } else { 1 };
+        let target = if side == PLAYER { 4 } else { 3 };
+        let mut b = if side == PLAYER {
+            battle(
+                roster(&[(5, KING, 7, 7), (9, TEMPEST_PAWN, 3, rank)]),
+                vec![e(100, KING, 7, 0)],
+                100,
+            )
+        } else {
+            battle(
+                roster(&[(5, KING, 7, 7)]),
+                vec![e(100, KING, 7, 0), e(101, TEMPEST_PAWN, 3, rank)],
+                100,
+            )
+        };
+        b.turn = side;
+        b.apply_piece_action(&action(&b, p(3, rank), p(3, target)))
+            .unwrap();
+        // Returning to the starting rank never restores a spent first move.
+        for to in [if side == PLAYER { 5 } else { 2 }, rank] {
+            b.turn = side;
+            let from = if to == rank {
+                if side == PLAYER {
+                    5
+                } else {
+                    2
+                }
+            } else {
+                target
+            };
+            b.apply_piece_action(&action(&b, p(3, from), p(3, to)))
+                .unwrap();
+        }
+        b.turn = side;
+        assert!(!b.legal_actions(p(3, rank)).unwrap().iter().any(|a| a
+            .steps()
+            .last()
+            .unwrap()
+            .move_to
+            == p(3, target)));
+    }
+}
+
+#[test]
+fn revived_upgrade_keeps_identity_history_and_ward_immediately() {
+    let mut g = start_before("vanguard", NodeKind::Rest);
+    let mut players = Battle::standard_roster();
+    players[8].kind = TEMPEST_PAWN;
+    players[8].upgrades.push("tempest".into());
+    players[8].moved = true;
+    players[8].persistent.insert("ward".into(), 1);
+    players[8].position = None;
+    players[3].position = Some(p(4, 1));
+    g.battle = battle(players, vec![e(100, KNIGHT, 4, 0)], 100);
+    g.dispatch(Command::Move { from: 12, to: 4 }).unwrap();
+    g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    select_kind(&mut g, NodeKind::Rest);
+    let before = g.battle.outcome();
+    let preview = g.snapshot();
+    let candidate = preview.rest_options.iter().find(|p| p.id == 9).unwrap();
+    assert_eq!(candidate.origin, Some(48));
+    assert!(candidate.can_revive && candidate.ward);
+    assert_eq!(g.battle.outcome(), before, "snapshot cannot mutate roster");
+    g.dispatch(Command::RestRevive { id: 9 }).unwrap();
+    let revived = &g.battle.outcome()[8];
+    assert_eq!(revived.id, before[8].id);
+    assert_eq!(revived.kind, TEMPEST_PAWN);
+    assert_eq!(revived.upgrades, before[8].upgrades);
+    assert_eq!(revived.persistent, before[8].persistent);
+    assert!(revived.moved && g.battle.has_ward(9));
+    assert!(g.snapshot().pieces.iter().find(|p| p.id == 9).unwrap().ward);
+    assert!(
+        g.dispatch(Command::RestRevive { id: 9 }).is_err(),
+        "one action per node"
+    );
+    let next = g.available_nodes()[0];
+    g.dispatch(Command::SelectNode { id: next }).unwrap();
+    assert_eq!(g.battle.outcome()[8], *revived);
+}

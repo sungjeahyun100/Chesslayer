@@ -12,7 +12,7 @@ pub enum RunPhase {
     Victory,
     Defeat,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
     Move { from: usize, to: usize },
@@ -292,10 +292,13 @@ impl Game {
                 let mut roster = self.battle.outcome();
                 let p = roster
                     .iter_mut()
-                    .find(|p| p.id == id && p.kind == PAWN && p.position.is_some())
+                    .find(|p| p.id == id && p.position.is_some())
                     .ok_or("살아 있는 일반 폰을 선택하세요.")?;
-                p.kind = TEMPEST_PAWN;
-                p.upgrades.push("tempest".into());
+                let upgrade = content::pieces::definition(p.kind)
+                    .and_then(|d| d.upgrade.as_ref())
+                    .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
+                p.kind = upgrade.target;
+                p.upgrades.push(upgrade.key.into());
                 self.battle
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
@@ -507,9 +510,8 @@ impl Game {
                         id: p.id,
                         kind: p.kind,
                         name: piece_name(p.kind),
-                        glyph: content::pieces::definition(p.kind)
-                            .map_or("", |d| d.glyphs[usize::from(p.owner)]),
-                        badge: content::pieces::definition(p.kind).and_then(|d| d.badge),
+                        key: content::pieces::definition(p.kind).unwrap().key,
+                        description: content::pieces::definition(p.kind).unwrap().description,
                         owner: p.owner,
                         cell: i,
                         square: square(pos(i).unwrap()),
@@ -579,10 +581,24 @@ impl Game {
                     .and_then(|s| s.position);
                 RestOption {
                     id: p.id,
+                    kind: p.kind,
+                    key: content::pieces::definition(p.kind).unwrap().key,
                     name: piece_name(p.kind),
+                    description: content::pieces::definition(p.kind).unwrap().description,
+                    cell: p.position.map(cell),
+                    origin: origin.map(cell),
+                    upgrades: p.upgrades.clone(),
+                    ward: p.persistent.get("ward").copied().unwrap_or(0) > 0,
                     square: p.position.or(origin).map(square).unwrap_or_default(),
-                    can_upgrade: p.position.is_some() && p.kind == PAWN,
-                    can_revive: p.position.is_none()
+                    can_upgrade: self.phase == RunPhase::Rest
+                        && p.position.is_some()
+                        && content::pieces::definition(p.kind)
+                            .unwrap()
+                            .upgrade
+                            .is_some(),
+                    can_revive: self.phase == RunPhase::Rest
+                        && origin.is_some()
+                        && p.position.is_none()
                         && p.kind != KING
                         && !roster
                             .iter()
@@ -636,6 +652,21 @@ impl Game {
                 .map(|k| k.definition())
                 .collect(),
             rest_options,
+            upgrade_paths: content::pieces::ALL
+                .iter()
+                .filter_map(|d| {
+                    d.upgrade.as_ref().map(|u| UpgradeView {
+                        from: d.kind,
+                        from_key: d.key,
+                        from_name: d.name,
+                        to: u.target,
+                        to_key: content::pieces::definition(u.target).unwrap().key,
+                        to_name: piece_name(u.target),
+                        effect: u.effect,
+                        requirement: u.requirement,
+                    })
+                })
+                .collect(),
             royal_name: self
                 .battle
                 .board
@@ -672,6 +703,7 @@ pub struct Snapshot {
     pub log: Vec<String>,
     pub rewards: Vec<CardDefinition>,
     pub rest_options: Vec<RestOption>,
+    pub upgrade_paths: Vec<UpgradeView>,
     pub royal_name: &'static str,
     pub seed: u32,
 }
@@ -680,8 +712,8 @@ pub struct PieceView {
     pub id: u32,
     pub kind: u16,
     pub name: &'static str,
-    pub glyph: &'static str,
-    pub badge: Option<&'static str>,
+    pub key: &'static str,
+    pub description: &'static str,
     pub owner: u16,
     pub cell: usize,
     pub square: String,
@@ -708,9 +740,28 @@ pub struct RelicView {
 #[derive(Serialize)]
 pub struct RestOption {
     pub id: u32,
+    pub kind: PieceType,
+    pub key: &'static str,
+    pub description: &'static str,
+    pub cell: Option<usize>,
+    pub origin: Option<usize>,
+    pub upgrades: Vec<String>,
+    pub ward: bool,
     pub name: &'static str,
     pub square: String,
     pub can_upgrade: bool,
     pub can_revive: bool,
     pub dead: bool,
+}
+
+#[derive(Serialize)]
+pub struct UpgradeView {
+    pub from: PieceType,
+    pub from_key: &'static str,
+    pub from_name: &'static str,
+    pub to: PieceType,
+    pub to_key: &'static str,
+    pub to_name: &'static str,
+    pub effect: &'static str,
+    pub requirement: &'static str,
 }

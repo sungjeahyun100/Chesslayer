@@ -20,14 +20,21 @@ pub use queen::QUEEN;
 pub use rook::ROOK;
 pub use tempest_pawn::TEMPEST_PAWN;
 
+pub struct UpgradeDefinition {
+    pub target: PieceType,
+    pub key: &'static str,
+    pub effect: &'static str,
+    pub requirement: &'static str,
+}
+
 pub struct PieceDefinition {
     pub kind: PieceType,
     pub key: &'static str,
     pub name: &'static str,
     pub movement: fn() -> String,
     pub value: i32,
-    pub glyphs: [&'static str; 2],
-    pub badge: Option<&'static str>,
+    pub description: &'static str,
+    pub upgrade: Option<UpgradeDefinition>,
     pub initial_double_step: bool,
 }
 impl PieceDefinition {
@@ -43,8 +50,8 @@ impl PieceDefinition {
             name,
             movement,
             value: 10,
-            glyphs: ["♙", "♟"],
-            badge: None,
+            description: "",
+            upgrade: None,
             initial_double_step: false,
         }
     }

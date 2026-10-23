@@ -10,6 +10,18 @@ fn catalog_entries_are_unique_and_connected() {
         assert_ne!(definition.kind, 0, "zero is reserved for the board catalog");
         assert!(kinds.insert(definition.kind), "duplicate piece ID");
         assert!(!definition.key.is_empty());
+        assert!(!definition.description.is_empty());
+        for side in ["white", "black"] {
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+                "../../web/src/assets/pieces/{}-{side}.svg",
+                definition.key
+            ));
+            assert!(path.is_file(), "missing image: {}", path.display());
+        }
+        if let Some(upgrade) = &definition.upgrade {
+            assert!(content::pieces::definition(upgrade.target).is_some());
+            assert_ne!(upgrade.target, definition.kind);
+        }
         assert!(keys.insert(definition.key), "duplicate Chesssembly name");
         let mut battle = Battle::new(BattleStart {
             players: Battle::standard_roster(),

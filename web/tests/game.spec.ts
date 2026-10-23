@@ -203,7 +203,13 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
       await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
       await expect(page.locator(".map-supplies")).toContainText("덱");
     } else if (cmd.type === "rest_upgrade") {
-      await page.getByRole("button", { name: "♙ a2의 폰 → 템페스트" }).click();
+      await page.locator('[data-square="a2"]').click();
+      await page
+        .getByRole("button", { name: "폰 → 템페스트 폰 강화 미리보기" })
+        .click();
+      await page
+        .getByRole("button", { name: "강화 확정", exact: true })
+        .click();
       await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
     } else if (cmd.type === "claim_treasure") {
       await expect(
