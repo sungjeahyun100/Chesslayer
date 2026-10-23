@@ -1,6 +1,6 @@
 # 기물 추가
 
-정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 기존 8종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시 이름·능력 설명, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
+정의 파일은 `crates/chesslayer/src/content/pieces/`에 만든다. 기존 16종도 각 파일에서 숫자 ID, Chesssembly 이름, 표시 이름·능력 설명, 행마, AI 가치를 정의한다. 합법 수 계산은 기존 `chessembly::Program`과 `Battle`을 그대로 사용한다.
 
 ## 1. 완전한 정의 파일 만들기
 
@@ -12,7 +12,7 @@
 use super::{movement, PieceDefinition};
 use crate::PieceType;
 
-pub const DANCER: PieceType = 9;
+pub const DANCER: PieceType = 17;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 30,
@@ -25,7 +25,7 @@ fn movement() -> String {
 }
 ```
 
-9는 현재 비어 있는 다음 ID다. 다른 기물을 먼저 추가했다면 사용하지 않는 ID를 선택한다. 종류 ID와 실제 보드 위 `Piece.id`는 다른 값이다.
+17은 현재 비어 있는 다음 ID다. 다른 기물을 먼저 추가했다면 사용하지 않는 ID를 선택한다. 종류 ID와 실제 보드 위 `Piece.id`는 다른 값이다.
 
 ### 기본 속성
 
@@ -33,7 +33,7 @@ fn movement() -> String {
 
 | 속성 | 설명 |
 | --- | --- |
-| `kind: PieceType` | `u16` 숫자 종류 ID. 0은 예약, 기존 1~8 재사용·변경 금지 |
+| `kind: PieceType` | `u16` 숫자 종류 ID. 0은 예약, 기존 1~16 재사용·변경 금지 |
 | `key: &'static str` | 보드 카탈로그/DSL의 고유 이름. `piece(dancer)`, `transition(dancer)` 등이 참조하므로 단순한 영문 식별자를 권장 |
 | `name: &'static str` | UI·기록의 한글 이름 |
 | `movement: fn() -> String` | Chesssembly 소스를 반환. 각 전투 시작 때 파싱 |
@@ -44,7 +44,8 @@ fn movement() -> String {
 | --- | --- | --- |
 | `value: i32` | `10` | 적 AI의 포획 점수. 기존 킹 ID 포획 최우선과 가호 점수 처리는 코어에 남음 |
 | `description: &'static str` | `""` | 실제 능력 설명. 등록 시 반드시 작성하며 UI가 그대로 표시 |
-| `upgrade: Option<UpgradeDefinition>` | `None` | 강화 대상 ID·이력 key·능력 변화·선행 조건. 현재는 종류당 단일 경로 |
+| `upgrades: &'static [UpgradeDefinition]` | `&[]` | 휴식 강화 분기 목록. 각 항목은 대상 ID·이력 key·능력 변화·선행 조건 |
+| `promotions: &'static [PieceType]` | `&[]` | 최종 랭크 승격 대상. 휴식 강화와 독립적인 목록 |
 | `initial_double_step: bool` | `false` | 기존 폰 첫 두 칸 규칙 재사용. 일반 행마는 별도로 정의 |
 
 이미지는 `web/src/assets/pieces/<key>-white.svg`, `<key>-black.svg` 두 파일로 등록한다. `PieceImage.tsx`가 Rust의 key·진영으로 조회하므로 화면마다 매핑하지 않는다. 누락 파일은 오류 표식으로 표시하고 콘텐츠 등록 테스트도 실패한다. `provenance.json`에 원본 경로·변경 내용·라이선스 확인 상태를 기록한다. [에셋 안내](../ASSETS.md)를 참고한다.
@@ -83,7 +84,7 @@ dancer::DEFINITION,
 - `DIAGONAL`, `ORTHOGONAL`, `KNIGHT`: 기존 방향 순서.
 - `all_directions()`: 대각선 다음 직선 순서. 퀸·킹·아마존이 공유한다.
 
-퀸은 `movement::slides(&movement::all_directions())`, 아마존은 이 소스와 `movement::steps(movement::KNIGHT)`를 `;`로 합친다. 템페스트는 `pawn::PAWN_MOVEMENT`를 재사용한다. 공통 동작을 복사하지 않고 이 조합을 사용한다. **후보 순서는 동점 AI의 시드 선택에 영향을 준다.** 기존 기물에서 의미 없이 방향/체인 순서를 바꾸지 않는다.
+퀸은 `movement::slides(&movement::all_directions())`, 아마존은 이 소스와 `movement::steps(movement::KNIGHT)`를 `;`로 합친다. 바운싱 폰은 `pawn::PAWN_MOVEMENT`를 재사용한다. 템페스트 폰은 독립 DSL을 사용한다. 템페스트/바운싱 퀸은 각 계열 룩+비숍의 `movement()`를 합친다. 공통 동작을 복사하지 않고 이 조합을 사용한다. **후보 순서는 동점 AI의 시드 선택에 영향을 준다.** 기존 기물에서 의미 없이 방향/체인 순서를 바꾸지 않는다.
 
 ### 직접 DSL 반환
 
@@ -123,15 +124,15 @@ if index == 0 {
 
 ### 휴식 강화·다른 콘텐츠의 참조 — 필요할 때만
 
-현재 휴식의 폰 → 템페스트 폰 경로는 `pawn.rs`의 `upgrade`에 정의한다. `RestUpgrade`, `rest_options`, `upgrade_paths`는 같은 정의를 읽는다. 새 단일 경로는 해당 기물 정의의 `upgrade`에 추가하며 대상 ID도 등록해야 한다. 여러 분기나 자원 비용을 도입하려면 명령의 대상 선택과 실제 비용 검증도 함께 구현해야 한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
+현재 폰 → 템페스트 폰/바운싱 폰 경로는 `pawn.rs`의 `upgrades`에 정의한다. `RestUpgrade { id, target }`, `rest_options`, `upgrade_paths`는 같은 정의를 읽는다. 새 분기는 `upgrades`에 추가하고 대상 ID와 SVG를 등록한다. 최종 랭크 승격은 `promotions`에 등록하며 `Move { from, to, promotion }`과 공통 선택 UI로 처리한다. 새 자원 비용을 도입한다면 실제 비용 검증도 구현해야 한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
 
 ## 5. 특수 능력의 경계
 
 - 기존 DSL로 표현 가능한 조건부 행마·제자리 포획·교환·종류 변환은 정의의 `movement()`에서 작성할 수 있다. 기존 액션 적용기가 실행한다.
-- `initial_double_step: true`는 폰/템페스트의 현재 첫 두 칸 규칙을 재사용한다. 이동한 적이 없고 플레이어 rank 6 / 적 rank 1일 때, 두 칸 모두 비어 있는 후보만 일반 후보 뒤에 붙인다. DSL은 `movement.rs`, 이동 이력 검사는 `Battle`이 담당한다.
+- `initial_double_step: true`는 일반 폰/바운싱 폰의 첫 두 칸 규칙을 재사용한다. 이동한 적이 없고 플레이어 rank 6 / 적 rank 1일 때, 두 칸 모두 비어 있는 후보만 일반 후보 뒤에 붙인다. DSL은 `movement.rs`, 이동 이력 검사는 `Battle`이 담당한다.
 - 가호·역습·로얄 보호는 종류별 행마가 아니라 공통 전투 규칙이다. 새 기물에도 기존 규칙이 적용된다.
 - 매 턴 발동, 포획 후 자원 획득, 새로운 지속 상태 효과 등은 현재 정의에 콜백이 없다. `battle.rs` 또는 `game.rs`의 해당 실행 시점에 실제 규칙을 추가해야 한다. `persistent`에 값을 저장하는 것만으로 능력이 실행되지 않는다.
-- `transition(name)`은 등록된 `key`를 사용한다. 자동 승격을 뜻하지 않으며 어떤 경우에 변환할지는 DSL에 명시한다. 로얄 인스턴스는 전투 중 ID로 추적하고 다음 전투의 아군 킹 검사는 `KING` 종류를 요구하므로 아군 킹을 다른 종류로 변환하는 규칙은 별도 검토가 필요하다.
+- `transition(name)`은 등록된 `key`를 사용한다. 자체적으로 승격 조건을 판정하지 않는다. 최종 랭크 승격은 Battle이 `promotions`를 확인해 같은 transition 효과를 붙인다. 로얄 인스턴스는 전투 중 ID로 추적하고 다음 전투의 아군 킹 검사는 `KING` 종류를 요구하므로 아군 킹을 다른 종류로 변환하는 규칙은 별도 검토가 필요하다.
 - `danger`, `check`, `state`, `set-state`, `if-state`는 현재 DSL에서 지원하지 않는다. 체스의 체크메이트·캐슬링·앙파상도 새로 구현되지 않는다.
 
 ## 6. 확인하기

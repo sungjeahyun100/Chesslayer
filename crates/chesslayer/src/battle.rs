@@ -10,7 +10,9 @@ pub const ENEMY: PlayerId = 1;
 // Keep the existing crate-root API through battle's re-exports.
 use crate::content::pieces;
 pub use crate::content::pieces::{
-    piece_name, AMAZON, BISHOP, KING, KNIGHT, PAWN, QUEEN, ROOK, TEMPEST_PAWN,
+    piece_name, AMAZON, BISHOP, BOUNCING_BISHOP, BOUNCING_PAWN, BOUNCING_QUEEN, BOUNCING_ROOK,
+    KING, KNIGHT, PAWN, QUEEN, ROOK, TEMPEST_BISHOP, TEMPEST_KNIGHT, TEMPEST_PAWN, TEMPEST_QUEEN,
+    TEMPEST_ROOK,
 };
 
 #[derive(Debug, Clone, Copy)]
@@ -303,7 +305,30 @@ impl Battle {
                 actions.push(second.clone())
             }
         }
-        Ok(actions)
+        let definition = pieces::definition(piece.kind).ok_or(Error::InvalidSetup)?;
+        let last_rank = if piece.owner == PLAYER { 0 } else { 7 };
+        // A promotion is part of the validated move, including captures of the royal.
+        // No unpromoted action is offered on the final rank for these families.
+        let mut result = Vec::new();
+        for action in actions {
+            let destination = action.steps().last().unwrap().move_to;
+            if destination.rank == last_rank && !definition.promotions.is_empty() {
+                for &kind in definition.promotions {
+                    let mut promoted = action.clone();
+                    let step = promoted
+                        .continuation
+                        .last_mut()
+                        .unwrap_or(&mut promoted.first);
+                    step.transition = Some(pieces::definition(kind).unwrap().key.into());
+                    if !result.contains(&promoted) {
+                        result.push(promoted);
+                    }
+                }
+            } else if !result.contains(&action) {
+                result.push(action);
+            }
+        }
+        Ok(result)
     }
     pub fn apply_piece_action(&mut self, action: &DefaultAction) -> Result<(), Error> {
         if self.phase != Phase::Active {

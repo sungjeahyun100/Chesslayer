@@ -96,7 +96,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
     "aria-pressed",
     "true",
   );
-  await expect(page.locator(".tree-status")).toHaveText("선택 가능");
+  await expect(page.locator(".tree-status")).toHaveText(["선택 가능", "선택 가능"]);
   await page
     .getByRole("button", { name: "폰 → 템페스트 폰 강화 미리보기" })
     .click();

@@ -61,11 +61,12 @@ fn arity(n: &str) -> Option<i8> {
         | "corner-bottom-left"
         | "corner-bottom-right"
         | "enemy"
-        | "friendly" => 2,
+        | "friendly"
+        | "barrier" => 2,
         "piece-on" | "color-on" => 3,
-        "absolute-x" | "absolute-y" | "piece" | "color" | "repeat" | "label" | "jmp" | "jne"
-        | "write" | "read" | "read-and" | "read-or" | "read-xor" | "write-anchor"
-        | "read-anchor" => 1,
+        "wall-piece" | "absolute-x" | "absolute-y" | "piece" | "color" | "repeat" | "label"
+        | "jmp" | "jne" | "write" | "read" | "read-and" | "read-or" | "read-xor"
+        | "write-anchor" | "read-anchor" => 1,
         "transition" => -1,
         "not" | "true" | "false" | "end" | "do" | "while" => 0,
         _ => return None,
@@ -150,7 +151,7 @@ impl Program {
                 return Err(Error::Parse(format!("wrong arity: {name}")));
             }
             for (i, v) in args.iter().enumerate() {
-                if !matches!(name, "piece" | "color" | "transition")
+                if !matches!(name, "piece" | "color" | "transition" | "wall-piece")
                     && !(i == 0 && matches!(name, "piece-on" | "color-on"))
                 {
                     int(v)?;
@@ -224,6 +225,7 @@ impl Program {
                 registers,
                 anchors,
                 trans,
+                wall_piece,
                 out,
             } = &mut context;
             let (mut pc, mut fuel) = (0usize, 0usize);
@@ -338,6 +340,7 @@ impl Program {
                     "end" => break,
                     "piece" => frames[top].state = b.piece_name(actor)? == n.args[0],
                     "color" => frames[top].state = b.color_name(actor)? == n.args[0],
+                    "wall-piece" => *wall_piece = Some(n.args[0].clone()),
                     "transition" => *trans = n.args.first().cloned(),
                     "write-anchor" => anchors[slot(n)] = Some(frames[top].pos),
                     "read-anchor" => {
@@ -367,7 +370,16 @@ impl Program {
                         let offset = usize::from(matches!(op, "piece-on" | "color-on"));
                         let q = target(frames[top].pos, a(n, offset), a(n, offset + 1), d);
                         let w = wall(b, q, d);
-                        if wall_op(op) {
+                        let piece_wall = wall_piece.is_some()
+                            && b.contains(q)
+                            && b.piece_at(q)?.is_some_and(|piece| {
+                                wall_piece.as_ref().is_some_and(|key| {
+                                    b.piece_name(piece).is_ok_and(|name| name == key)
+                                })
+                            });
+                        if op == "barrier" {
+                            frames[top].state = w != Wall::None || piece_wall;
+                        } else if wall_op(op) {
                             frames[top].state = wall_test(op, w)
                         } else if w != Wall::None {
                             frames[top].state = false
@@ -410,7 +422,7 @@ impl Program {
                                     }
                                 }
                                 "take-move" => {
-                                    if friendly {
+                                    if friendly || piece_wall {
                                         frames[top].state = false
                                     } else {
                                         frames[top].pos = q;
@@ -490,6 +502,7 @@ struct ExecutionContext {
     registers: [Option<bool>; SLOT_COUNT],
     anchors: [Option<Position>; SLOT_COUNT],
     trans: Option<String>,
+    wall_piece: Option<String>,
     out: Vec<DefaultAction>,
 }
 impl ExecutionContext {
@@ -505,6 +518,7 @@ impl ExecutionContext {
             registers: [None; SLOT_COUNT],
             anchors: [None; SLOT_COUNT],
             trans: None,
+            wall_piece: None,
             out: Vec::new(),
         }
     }

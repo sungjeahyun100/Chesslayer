@@ -18,9 +18,13 @@ fn catalog_entries_are_unique_and_connected() {
             ));
             assert!(path.is_file(), "missing image: {}", path.display());
         }
-        if let Some(upgrade) = &definition.upgrade {
+        for upgrade in definition.upgrades {
             assert!(content::pieces::definition(upgrade.target).is_some());
             assert_ne!(upgrade.target, definition.kind);
+        }
+        for &target in definition.promotions {
+            assert!(content::pieces::definition(target).is_some());
+            assert_ne!(target, definition.kind);
         }
         assert!(keys.insert(definition.key), "duplicate Chesssembly name");
         let mut battle = Battle::new(BattleStart {

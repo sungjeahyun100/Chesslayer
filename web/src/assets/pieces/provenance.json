@@ -526,5 +526,149 @@
     "source": "pawn-black.svg",
     "changes": "Pawn silhouette with two original vector wind strokes; not the unrelated tempest queen or Sergeant",
     "license": "base-source-unverified"
+  },
+  {
+    "key": "tempest_rook",
+    "side": "white",
+    "file": "tempest_rook-white.svg",
+    "source": "web/src/assets/pieces/rook-white.svg",
+    "sha256": "c76468737203fb05526cbac8868bc57ccc8711e7ac737ba72abf582716826412",
+    "changes": "Existing framed base silhouette with hand-authored wind curves",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "tempest_rook",
+    "side": "black",
+    "file": "tempest_rook-black.svg",
+    "source": "web/src/assets/pieces/rook-black.svg",
+    "sha256": "732787b9571bffd76814210e927b239e264fbe231983b4d16f38c91a6ab8c17d",
+    "changes": "Existing framed base silhouette with hand-authored wind curves",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "tempest_bishop",
+    "side": "white",
+    "file": "tempest_bishop-white.svg",
+    "source": "web/src/assets/pieces/bishop-white.svg",
+    "sha256": "3000a97c2e035db723794368df3ef447055e1621b459c5d6fd71439f561ea72a",
+    "changes": "Existing framed base silhouette with hand-authored wind curves",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "tempest_bishop",
+    "side": "black",
+    "file": "tempest_bishop-black.svg",
+    "source": "web/src/assets/pieces/bishop-black.svg",
+    "sha256": "5abe78a89a323e2d36529c2355ed3999c98248a3d3cb7bc865dd018f723f49a9",
+    "changes": "Existing framed base silhouette with hand-authored wind curves",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "tempest_knight",
+    "side": "white",
+    "file": "tempest_knight-white.svg",
+    "source": "web/src/assets/pieces/knight-white.svg",
+    "sha256": "aa3d1f17e019931aaf1ad21ad9ac195365c8e7bb9af5dea8b0fd5693f82ac414",
+    "changes": "Existing framed base silhouette with hand-authored wind curves",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "tempest_knight",
+    "side": "black",
+    "file": "tempest_knight-black.svg",
+    "source": "web/src/assets/pieces/knight-black.svg",
+    "sha256": "5d1c3596f599621ae56ba9b1547ed6a903e676ec0b87dbfa0153158e25fc6f42",
+    "changes": "Existing framed base silhouette with hand-authored wind curves",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "tempest_queen",
+    "side": "white",
+    "file": "tempest_queen-white.svg",
+    "source": "chess_play/decoded-svg/194__kind_of_chess_piece_white4__tempest-queen-w__ff4ecbc87efdda218797cb5e713d055e.svg",
+    "sha256": "7ee58f737c0f94b53ac82f8e7e8071c4a7bb0735365956f0e541aff2fa52dd5d",
+    "changes": "45×45 frame; common baseline 40; original paths unchanged",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "tempest_queen",
+    "side": "black",
+    "file": "tempest_queen-black.svg",
+    "source": "chess_play/decoded-svg/193__kind_of_chess_piece_white4__tempest-queen-b__feed7719efab39e1424fa64b3bb98fd6.svg",
+    "sha256": "17f2dc4882c05a883dd400dc88e303009ce6d7e5711a4be2be37f0beddccb6a9",
+    "changes": "45×45 frame; common baseline 40; original paths unchanged",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_pawn",
+    "side": "white",
+    "file": "bouncing_pawn-white.svg",
+    "source": "web/src/assets/pieces/pawn-white.svg",
+    "sha256": "4c8885d36a53c93776a58bdbac09827f8c695ee52dc89950b5cb6db770a28093",
+    "changes": "Existing framed base silhouette with hand-authored paired wall-and-rebound arrows",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_pawn",
+    "side": "black",
+    "file": "bouncing_pawn-black.svg",
+    "source": "web/src/assets/pieces/pawn-black.svg",
+    "sha256": "1410adae63fea1ed137f8636869d0f1c600a4a020907a9bc4417bdca15405966",
+    "changes": "Existing framed base silhouette with hand-authored paired wall-and-rebound arrows",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_rook",
+    "side": "white",
+    "file": "bouncing_rook-white.svg",
+    "source": "web/src/assets/pieces/rook-white.svg",
+    "sha256": "c76468737203fb05526cbac8868bc57ccc8711e7ac737ba72abf582716826412",
+    "changes": "Existing framed base silhouette with hand-authored paired wall-and-rebound arrows",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_rook",
+    "side": "black",
+    "file": "bouncing_rook-black.svg",
+    "source": "web/src/assets/pieces/rook-black.svg",
+    "sha256": "732787b9571bffd76814210e927b239e264fbe231983b4d16f38c91a6ab8c17d",
+    "changes": "Existing framed base silhouette with hand-authored paired wall-and-rebound arrows",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_bishop",
+    "side": "white",
+    "file": "bouncing_bishop-white.svg",
+    "source": "chess_play/decoded-svg/126__kind_of_chess_piece_white4__bouncing_bishop__9f5dc67f7b91bbcce8a91a0700eb2bf5.svg",
+    "sha256": "2085b70a9e2f1ea67b644195dd41f073a9fe00a81a4aeefaae4c12ccff5cd034",
+    "changes": "45×45 frame; common baseline 40; original paths unchanged",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_bishop",
+    "side": "black",
+    "file": "bouncing_bishop-black.svg",
+    "source": "chess_play/decoded-svg/025__chess_pieces__bouncing_bishop_black__7589c4224b2f79e5e43efd6c9292129f.svg",
+    "sha256": "7d4ef46b0e8e090896731e60647cbc87b2e5e4b973f7cfc0145930a96af1f232",
+    "changes": "45×45 frame; common baseline 40; original paths unchanged",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_queen",
+    "side": "white",
+    "file": "bouncing_queen-white.svg",
+    "source": "web/src/assets/pieces/queen-white.svg",
+    "sha256": "6fb5d4d3bdf717b0dc8dd00d47c32132ae58368e43a0b8cd631defde8acb6d70",
+    "changes": "Existing framed base silhouette with hand-authored paired wall-and-rebound arrows",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "bouncing_queen",
+    "side": "black",
+    "file": "bouncing_queen-black.svg",
+    "source": "web/src/assets/pieces/queen-black.svg",
+    "sha256": "555361f9e98d146fa0dac684afb98dbdb485caf47050cc65d1f85593846755c7",
+    "changes": "Existing framed base silhouette with hand-authored paired wall-and-rebound arrows",
+    "license": "unverified-extracted-source"
   }
 ]

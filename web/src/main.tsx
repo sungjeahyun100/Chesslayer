@@ -7,13 +7,16 @@ import type {
   Character,
   Command,
   Piece,
+  Promotion,
   Snapshot,
 } from "./types";
 import "./style.css";
 import { ActMap, nodeTypes } from "./ActMap";
 import { PieceImage } from "./PieceImage";
 import { RestPanel, type RestChoice } from "./RestPanel";
+import { PromotionPicker } from "./PromotionPicker";
 
+// Keep the original storage slot so legacy saves receive the WASM version notice.
 const SAVE_KEY = "chesslayer.run.v1";
 
 const relicIcons = { haste: "»", whirlwind: "◎", self_defense: "◇" };
@@ -90,6 +93,11 @@ function App() {
   const [state, setState] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
+  const [promotion, setPromotion] = useState<{
+    from: number;
+    to: number;
+    options: Promotion[];
+  } | null>(null);
   const [hasSave, setHasSave] = useState(false);
   const [saveNotice, setSaveNotice] = useState("");
   const [targetCard, setTargetCard] = useState<Card | null>(null);
@@ -148,6 +156,7 @@ function App() {
       setState(JSON.parse(engine.current.dispatch(JSON.stringify(command))));
       persist(engine.current);
       setRestChoice(null);
+      setPromotion(null);
       setSelected(null);
       setTargetCard(null);
       setMapOpen(false);
@@ -173,6 +182,7 @@ function App() {
       if (e.key === "Escape") {
         setSelected(null);
         setRestChoice(null);
+        setPromotion(null);
         setTargetCard(null);
         setError("");
       }
@@ -201,6 +211,7 @@ function App() {
       setState(JSON.parse(next.snapshot()));
       persist(next);
       setRestChoice(null);
+      setPromotion(null);
       setSelected(null);
       setTargetCard(null);
       setMapOpen(false);
@@ -220,6 +231,7 @@ function App() {
       setState(JSON.parse(next.snapshot()));
       persist(next);
       setRestChoice(null);
+      setPromotion(null);
       setSelected(null);
       setTargetCard(null);
       setMapOpen(false);
@@ -230,6 +242,7 @@ function App() {
     }
   }
   function chooseCard(card: Card) {
+    if (promotion) return;
     if (card.disabled_reason) {
       setError(card.disabled_reason);
       return;
@@ -240,7 +253,7 @@ function App() {
     else send({ type: "play_card", id: card.id });
   }
   function clickSquare(cell: number) {
-    if (!state) return;
+    if (!state || promotion) return;
     if (state.phase === "rest") {
       const ally = state.rest_options.find((p) => !p.dead && p.cell === cell);
       const occupant = state.pieces.find((p) => p.cell === cell);
@@ -248,7 +261,7 @@ function App() {
         !occupant &&
         state.rest_options.find((p) => p.can_revive && p.origin === cell);
       const option = ally || candidate;
-      if (option) setRestChoice({ cell, id: option.id, upgrade: false });
+      if (option) setRestChoice({ cell, id: option.id });
       return;
     }
     if (state.phase !== "combat" || state.turn !== 0) return;
@@ -262,7 +275,11 @@ function App() {
       selected !== null &&
       state.moves.some((m) => m.from === selected && m.to === cell)
     ) {
-      send({ type: "move", from: selected, to: cell });
+      const options = state.moves
+        .filter((m) => m.from === selected && m.to === cell)
+        .flatMap((m) => (m.promotion ? [m.promotion] : []));
+      if (options.length) setPromotion({ from: selected, to: cell, options });
+      else send({ type: "move", from: selected, to: cell });
       return;
     }
     setSelected(piece?.owner === 0 && selected !== cell ? cell : null);
@@ -270,8 +287,10 @@ function App() {
   const turn = state?.turn === 0;
   const showMap = state?.phase === "map" || mapOpen;
   const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
-  const restPath = state?.upgrade_paths.find((p) => p.from === restPiece?.kind);
-  const previewKey = restChoice?.upgrade ? restPath?.to_key : undefined;
+  const restPath = state?.upgrade_paths.find(
+    (p) => p.from === restPiece?.kind && p.to === restChoice?.target,
+  );
+  const previewKey = restPath?.to_key;
   const selectedPiece = state?.pieces.find((p) => p.cell === selected);
   return (
     <>
@@ -313,7 +332,8 @@ function App() {
           <p>
             소멸: 사용 후 이번 전투에서 제외 · 보존: 턴 종료에도 손패 유지 ·
             선천성: 첫 손패 우선 · 휘발성: 쓰지 않고 턴 종료 시 소멸. 체크
-            제한·캐슬링·앙파상·자동 승격은 없습니다.
+            제한·캐슬링·앙파상은 없습니다. 강화된 폰은 최종 랭크로 이동할 때
+            승격할 기물을 선택합니다.
           </p>
         </section>
       )}
@@ -490,7 +510,7 @@ function App() {
                           onClick={() => clickSquare(i)}
                           disabled={
                             state.phase !== "rest" &&
-                            (state.phase !== "combat" || !turn)
+                            (state.phase !== "combat" || !turn || !!promotion)
                           }
                           aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}`}
                           aria-pressed={
@@ -536,6 +556,21 @@ function App() {
                         )}
                     </div>
                   </div>
+                  {promotion && (
+                    <PromotionPicker
+                      options={promotion.options}
+                      square={`${"abcdefgh"[promotion.to % 8]}${8 - Math.floor(promotion.to / 8)}`}
+                      onChoose={(kind) =>
+                        send({
+                          type: "move",
+                          from: promotion.from,
+                          to: promotion.to,
+                          promotion: kind,
+                        })
+                      }
+                      onCancel={() => setPromotion(null)}
+                    />
+                  )}
                   <div className="file-labels">
                     {"abcdefgh".split("").map((f) => (
                       <span key={f}>{f}</span>
@@ -616,7 +651,7 @@ function App() {
                       <button
                         className="primary end-turn"
                         onClick={() => send({ type: "end_turn" })}
-                        disabled={!turn || state.phase !== "combat"}
+                        disabled={!turn || state.phase !== "combat" || !!promotion}
                       >
                         턴 종료 <span>→</span>
                       </button>
@@ -696,7 +731,7 @@ function App() {
                     className={`playing-card ${targetCard?.id === card.id ? "active-card" : ""}`}
                     key={card.id}
                     onClick={() => chooseCard(card)}
-                    disabled={!!card.disabled_reason}
+                    disabled={!!card.disabled_reason || !!promotion}
                     title={card.disabled_reason || card.definition.description}
                   >
                     <CardFace card={card.definition} />

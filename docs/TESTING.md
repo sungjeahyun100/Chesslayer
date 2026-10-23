@@ -112,3 +112,68 @@ Rust만 빨리 다시 검증하려면 `cargo test -p chesslayer --test prototype
 | Chrome E2E | 5개 통과, 약 26초. 지도 생성·분기·합류·전체 원정 승리와 실제 킹 포획 패배 검증 |
 
 WASM 빌드 도구의 선택 메타데이터/라이선스 파일 안내와 테스트 런너의 `NO_COLOR` 환경 경고는 테스트 실패가 아닙니다. 이 환경의 읽기 전용 도구 캐시 때문에 wasm-bindgen CLI를 `/tmp`에 설치해 빌드했습니다. 패키지 자체는 일반 wasm-pack 빌드 흐름이며 `wasm-opt` 추가 다운로드는 비활성화했습니다. 런타임 UI는 외부 폰트·이미지·서비스 요청 없이 동작합니다.
+
+## 템페스트·바운싱 검증 — 2026-10-23
+
+현재 기준은 **Rust 39개, 실제 Chrome E2E 10개**다. 이전 절의 수량과 임시 템페스트 규칙은 당시 기록이며, 이번 변경에서는 기존 테스트를 유지·수정하고 핵심 Rust 시나리오 4개 및 브라우저 시나리오 3개만 추가했다. 구현 해석은 [VARIANTS.md](VARIANTS.md)에 있다.
+
+### 추가 Rust 시나리오 4개
+
+파일: `crates/chesslayer/tests/variants.rs`. 외부 테스트 프레임워크 없이 `cargo test -p chesslayer --test variants`로 실행한다. 테스트 함수끼리는 상태를 공유하지 않는다. 작은 고정 보드는 Rust 테스트 안에서만 만들며 제품에는 상태 주입 API나 디버그 UI가 없다.
+
+| 테스트 / 목적 | 입력과 실행 방법 | 기대 결과 |
+| --- | --- | --- |
+| `tempest_paths_capture_and_block_for_both_colors` / 원본 복합 단계 보존 | 백·흑의 중앙 보드에서 폰의 앞/옆 빈칸, 뒤/빈 대각/빈 두 칸 거부를 검사. 전방 한 칸을 아군으로 막고 두 칸 적 포획 실행. 룩·비숍·나이트의 경유 칸을 빈칸/아군/적 순으로 바꾸고 먼 목적지와 경유 포획 실행. 퀸 결과는 룩+비숍 합집합과 비교 | 옆 포획/후진/두 칸 빈 이동 없음, `take(0,2)`는 중간 점유와 무관. 경유 아군은 차단, 경유 적은 포획 후 종료. 나이트 직교 3칸과 경유 뒤 추가 도약은 원본처럼 해당 단계의 중간 칸 무시. 양측 퀸도 실제 포획 성공 |
+| `bouncing_walls_blockers_captures_and_finite_paths` / 반사의 경계와 차단 | 백·흑 × 벽 폰의 백·흑 조합에서 룩/비숍의 반사 칸 확인. 반사 경로를 아군/일반 적/두 번째 바운싱 폰으로 차단. 보드 끝 반사와 퀸 합집합·폰 벽 확인. 일반 룩의 폰 포획 실행. `wall-piece` 설정 뒤 세미콜론과 기존 `edge` 동작 확인. 3종×2진영×64개 시작 칸의 유한 스캔 | 벽 폰은 진입·포획 불가, 일반 적만 포획하고 이후 정지. 정상 기물은 폰 포획 가능. 체인 밖으로 설정이 새지 않고 `edge`는 폰을 경계로 오인하지 않음. 모든 후보가 보드 안이고 중복·원점 재진입 없이 최대 63개, 생성된 모든 후보를 `apply_piece_action`으로 실행 가능 |
+| `pawn_start_rules_and_all_promotions_preserve_instances` / 폰 규칙과 승격 계승 | 두 계열×백·흑에서 초기 랭크 두 칸 확인, 바운싱 중간 차단 및 이동 후 시작점 복귀 검사. 두 계열의 7개 승격 대상을 양측에서 각각 선택. transition을 제거한 위조 액션 거부 후 정상 실행. 가호·강화 이력·moved가 있는 아군을 다음 Battle로 전달 | 템페스트는 처음에도 두 칸 빈 이동 불가. 바운싱만 양 칸이 비고 아직 이동하지 않았을 때 두 칸 가능. 승격 선택 없는 최종 랭크 액션 거부. 모든 승격이 ID·위치·moved·강화 이력·persistent·가호를 유지하고 다음 전투에서 동일 |
+| `real_rest_branches_promotion_validation_and_enemy_ai` / 실제 획득·명령 검증·AI | 선봉대/2026 새 원정에서 두 `*-promotion.json` 기보를 재생하고 적 턴은 정상 AI 실행. 쉼터에서 잘못된 상위 강화 대상들을 시도. 최종 랭크에서 대상 누락·일반 퀸·다른 계열·알 수 없는 ID를 시도. 별도 고정 보드에서 적 강화 폰이 킹을 포획하며 승격하도록 AI 실행. 가호를 준 복제 보드에서도 같은 액션 실행 | 휴식 경로는 두 개이며 오류 명령은 스냅샷 불변. 실제 승격·새 행마 이동·전투 승리 뒤 다음 전투까지 생존. 쉼터 밖 강화 거부. 적도 같은 합법 후보로 승격하며 로얄 포획 판정 유지. 가호 취소 시 적 폰은 원래 종류·위치에 남고 킹 생존 |
+
+성공 출력은 `4 passed; 0 failed`다. 경계 스캔은 무작위 테스트가 아니라 8×8 보드의 고정된 시작 칸 검사이며, 반사 횟수 제한을 제품 규칙에 추가하지 않고 종료를 검증한다.
+
+### 수정한 기존 테스트
+
+- `tests/content.rs`: 단일 `upgrade` 검사에서 `upgrades` 목록 검사로 변경하고 `promotions`의 대상 등록·자기 참조도 검사한다. 모든 등록 종류의 양측 SVG 존재·고유 ID/key·파싱·합법 수 생성을 계속 검증한다.
+- `tests/prototype.rs::amazon_movement_and_capture_work_for_both_sides`: 기존 `variant_movement_and_capture_work_for_both_sides`의 아마존 검증을 유지했다. 더 이상 맞지 않는 템페스트 옆 포획/후진/첫 두 칸 기대값은 위 새 4개 시나리오의 확정 규칙 검증으로 대체했다.
+- `tests/prototype.rs::revived_upgrade_keeps_identity_history_and_ward_immediately`: 기존 템페스트 폰뿐 아니라 템페스트 퀸·바운싱 퀸도 같은 시나리오로 검사한다. 사망 기물을 실제 휴식에서 되살리고 ID·현재 종류·강화 이력·가호·moved·초기 위치 및 다음 전투를 비교한다. 두 번째 부활은 거부되어야 한다.
+- 기존 Rust `Move` 생성자에 `promotion: None`, 휴식 강화에 `target`을 명시했다. `act_map.rs`의 변화는 이 명령 스키마 대응뿐이다.
+- `winning-run.json`: `rest_upgrade.target=8` 추가. 마지막 옆 포획을 `d4→d5`, `g7→b2`로 교체했다. 임시 폰 규칙에 기대지 않고 기존 승리/맵/카드/부활 검증을 유지한다. 현재 27명령(이동 12회)이다.
+- `web/tests/rest.spec.ts`: 테크트리의 선택 가능한 경로가 두 개임을 기대하도록 수정했다. 기존 취소·Esc·부활·보드 고정·저장 복원 검사는 유지한다.
+
+### 추가 브라우저 시나리오 3개
+
+파일: `web/tests/variants.spec.ts`. 실제 Chrome에서 실제 WASM과 React를 사용한다. 정상 시작부터 휴식까지의 성공한 명령으로만 저장을 준비한 뒤, **분기 강화·승격 7가지 선택·새 행마 이동·다음 전투 진입은 모두 UI를 클릭**한다. HTTP 응답 가로채기나 보드 스냅샷 주입은 없다.
+
+| 테스트 / 목적 | 방법 | 기대 결과 |
+| --- | --- | --- |
+| `tempest: 정상 원정에서 분기 강화·모든 승격 선택·이동·저장·다음 전투` | 1440×1000. 정상 휴식 저장 복원 → a2 선택 → 두 경로 전환 → 템페스트 확정 → 재시작/이어하기 → 최종 랭크까지 기보 클릭. 승격 직전의 동일한 실제 명령 저장을 사용해 룩·비숍·나이트·퀸 각각 선택, 이동·복원 검사. 퀸으로 전투를 끝내고 다음 전투 진입 | 선택한 경로만 강조. 4개 SVG 선택지, Esc는 원본 저장 불변. `promotion` 명시 저장, 4종 실제 이동, 전투 승리 후 퀸/ID 9/`tempest` 이력 생존. 이미지 누락·JS 오류·가로 넘침 없음 |
+| `bouncing: 정상 원정에서 분기 강화·모든 승격 선택·이동·저장·다음 전투` | 같은 방식, 390×844. 바운싱 폰 강화 후 초기 두 칸 포함 정상 전진. 룩·비숍·퀸의 3개 선택과 하이라이트된 합법 이동을 실제 클릭. 퀸으로 승리 후 다음 전투/복원 | 반사벽 폰과 상위 3종 전용 SVG, 보드 내 간결한 승격 UI. 모든 선택이 Rust가 제공한 합법 수로 실행되고 명시 저장. 다음 전투에서 퀸/ID 9/`bouncing` 이력 생존, 모바일 가로 넘침 없음 |
+| `이전 저장 버전은 설명을 표시하고 원본 기록을 보존한다` | 버전 1 저장(JSON, 옛 `rest_upgrade` 포함)을 localStorage에 두고 실제 이어하기 클릭 | 누락 target 파싱 오류 대신 규칙 변경과 새 원정 필요 안내. 실패 후 저장 문자열이 원본과 정확히 같음 |
+
+`tempest-promotion.json`과 `bouncing-promotion.json`은 표준 새 게임의 명령 기록이다. 전자는 전방 두 칸 포획으로 c8에서 승격하고, 후자는 a8에서 전진 승격한다. 두 기보 모두 선봉대/2026, 기존 휴식 경로, 두 계열 퀸의 실제 이동·포획, 보상과 보물, 다음 보스 노드 18까지 포함한다. 테스트의 기보 준비 도구는 제품에 남기지 않았다.
+
+승격 직전 저장을 다시 읽어 7개 선택을 비교하는 것은 같은 합법적인 명령을 반복 재생하는 방식이다. 테스트가 임의로 종류·위치·턴·행동·AI를 변경하지 않는다. 승격 확정 전은 미리보기이므로 취소/새로고침 시 이동 전의 실제 보드로 돌아간다.
+
+스크린샷은 `web/test-results/tempest-tree.png`, `bouncing-tree.png`, `tempest-promotion.png`, `bouncing-promotion.png`에 생성한다. 기존 전투·지도·부활 스크린샷도 유지한다. 실제 데스크톱/모바일 이미지를 열어 글자·SVG·보드·선택 창 배치를 확인했다.
+
+### 실행 명령과 결과
+
+```sh
+cargo fmt --all --check
+cargo clippy --workspace --all-targets -- -D warnings
+cargo test --workspace
+cargo check --workspace --target wasm32-unknown-unknown
+npm run wasm --prefix web
+npm run build --prefix web
+CHESSLAYER_CHROME=/usr/bin/google-chrome npm run test:e2e --prefix web
+```
+
+이 환경의 `npm run wasm`은 release Rust 컴파일 후 읽기 전용 wasm-pack 도구 캐시에서 바인딩 도구 설치가 막혔다. 이미 설치된 Cargo.lock과 같은 버전의 wasm-bindgen CLI를 사용해 다음 동등한 빌드를 실행했다. 새 도구 설치나 저장소 빌드 설정 변경은 하지 않았다.
+
+```sh
+cargo build -p chesslayer-web --target wasm32-unknown-unknown --release
+/tmp/chesslayer-tools/bin/wasm-bindgen --target web --out-dir web/src/wasm \
+  target/wasm32-unknown-unknown/release/chesslayer_web.wasm
+npm run build --prefix web
+```
+
+이 대체 경로로 만든 **최신 실제 WASM**을 Chrome 테스트가 로드했다. 브라우저와 localhost 서버는 실행 환경의 샌드박스 외 실행 권한으로 구동했다. 결과는 fmt/Clippy/wasm32 검사·release WASM 바인딩·TypeScript/Vite 빌드 통과, Rust 39개·Chrome 10개 통과다. E2E 전체는 약 1분이며, 기존 7개는 전부 유지했다. `NO_COLOR` 환경 경고는 테스트 실패가 아니다.

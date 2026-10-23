@@ -1,0 +1,134 @@
+[
+  {
+    "type": "select_node",
+    "id": 2
+  },
+  {
+    "type": "play_card",
+    "id": 10,
+    "target": 5
+  },
+  {
+    "type": "play_card",
+    "id": 5,
+    "target": 4
+  },
+  {
+    "type": "move",
+    "from": 51,
+    "to": 35
+  },
+  {
+    "type": "move",
+    "from": 58,
+    "to": 30
+  },
+  {
+    "type": "move",
+    "from": 30,
+    "to": 12
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 6
+  },
+  {
+    "type": "claim_treasure"
+  },
+  {
+    "type": "select_node",
+    "id": 8
+  },
+  {
+    "type": "move",
+    "from": 12,
+    "to": 5
+  },
+  {
+    "type": "move",
+    "from": 59,
+    "to": 43
+  },
+  {
+    "type": "move",
+    "from": 5,
+    "to": 14
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 10
+  },
+  {
+    "type": "rest_upgrade",
+    "id": 9,
+    "target": 13
+  },
+  {
+    "type": "select_node",
+    "id": 14
+  },
+  {
+    "type": "move",
+    "from": 48,
+    "to": 32
+  },
+  {
+    "type": "move",
+    "from": 32,
+    "to": 24
+  },
+  {
+    "type": "move",
+    "from": 24,
+    "to": 16
+  },
+  {
+    "type": "move",
+    "from": 16,
+    "to": 8
+  },
+  {
+    "type": "move",
+    "from": 8,
+    "to": 0,
+    "promotion": 16
+  },
+  {
+    "type": "move",
+    "from": 0,
+    "to": 2
+  },
+  {
+    "type": "move",
+    "from": 2,
+    "to": 5
+  },
+  {
+    "type": "move",
+    "from": 5,
+    "to": 14
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 17
+  },
+  {
+    "type": "claim_treasure"
+  },
+  {
+    "type": "select_node",
+    "id": 18
+  }
+]

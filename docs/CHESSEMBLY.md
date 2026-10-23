@@ -127,3 +127,9 @@ Chesssembly는 기물의 이동과 조건을 명령식으로 기술합니다. `P
 `danger(dx,dy)`는 `unsupported expression: danger` 파싱 오류를 반환합니다. `check`, `state`, `set-state`, `if-state`도 현재 지원하지 않아 파싱 오류가 납니다.
 
 동작 예시는 `crates/chessembly/tests/behavior.rs`와 `crates/chessembly/tests/commands.rs`에서, 액션 순서와 적용 후 보드 결과는 `crates/chessembly/tests/fixtures/action_snapshots.txt`에서 확인할 수 있습니다.
+
+## 체인별 반사벽 설정
+
+`wall-piece(key)`는 현재 체인에서 `take-move`가 해당 종류 앞에서 정지하게 한다. 소유자와 무관하며, 그 칸에 후보를 내거나 탐색 좌표를 옮기지 않고 조건을 거짓으로 만든다. 설정은 블록에서 공유되지만 다음 세미콜론 체인에서 초기화된다. `move`, `take` 등 다른 효과와 기존 `edge` 의미는 바꾸지 않는다.
+
+`barrier(dx,dy)`는 해당 상대 칸이 보드 밖/마스크 밖이거나, `wall-piece`로 지정한 종류에 점유되어 있을 때 참이다. 두 식의 조합으로 일반 DSL의 분기·반복을 이용해 반사 경로를 정의한다. 바운싱의 구체적인 경로 선택과 종료 의미는 [VARIANTS.md](VARIANTS.md#반사의-실제-해석)를 참고한다.

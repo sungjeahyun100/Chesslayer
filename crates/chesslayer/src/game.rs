@@ -15,15 +15,32 @@ pub enum RunPhase {
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum Command {
-    Move { from: usize, to: usize },
-    PlayCard { id: u32, target: Option<u32> },
+    Move {
+        from: usize,
+        to: usize,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        promotion: Option<PieceType>,
+    },
+    PlayCard {
+        id: u32,
+        target: Option<u32>,
+    },
     EndTurn,
     EnemyStep,
-    ChooseReward { index: usize },
-    SelectNode { id: usize },
+    ChooseReward {
+        index: usize,
+    },
+    SelectNode {
+        id: usize,
+    },
     ClaimTreasure,
-    RestUpgrade { id: u32 },
-    RestRevive { id: u32 },
+    RestUpgrade {
+        id: u32,
+        target: PieceType,
+    },
+    RestRevive {
+        id: u32,
+    },
     RestSkip,
 }
 #[derive(Clone)]
@@ -215,16 +232,31 @@ impl Game {
     }
     pub fn dispatch(&mut self, command: Command) -> Result<(), String> {
         match command {
-            Command::Move { from, to } => {
+            Command::Move {
+                from,
+                to,
+                promotion,
+            } => {
                 self.require_player()?;
                 let from = pos(from)?;
                 let to = pos(to)?;
+                let promotion_key = promotion
+                    .map(|kind| {
+                        content::pieces::definition(kind)
+                            .map(|d| d.key)
+                            .ok_or("등록되지 않은 승격 대상입니다.")
+                    })
+                    .transpose()?;
                 let action = self
                     .battle
                     .legal_actions(from)
                     .map_err(engine_error)?
                     .into_iter()
-                    .find(|a| a.steps().last().is_some_and(|s| s.move_to == to))
+                    .find(|a| {
+                        a.steps().last().is_some_and(|s| {
+                            s.move_to == to && s.transition.as_deref() == promotion_key
+                        })
+                    })
                     .ok_or("합법적인 이동이 아닙니다.")?;
                 self.perform_action(action)?;
             }
@@ -285,7 +317,7 @@ impl Game {
                 self.grant_node_relic();
                 self.complete_node();
             }
-            Command::RestUpgrade { id } => {
+            Command::RestUpgrade { id, target } => {
                 if self.phase != RunPhase::Rest {
                     return Err("쉼터에서만 강화할 수 있습니다.".into());
                 }
@@ -295,14 +327,17 @@ impl Game {
                     .find(|p| p.id == id && p.position.is_some())
                     .ok_or("살아 있는 일반 폰을 선택하세요.")?;
                 let upgrade = content::pieces::definition(p.kind)
-                    .and_then(|d| d.upgrade.as_ref())
+                    .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
                     .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
                 p.kind = upgrade.target;
                 p.upgrades.push(upgrade.key.into());
                 self.battle
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
-                self.log("휴식: 폰이 템페스트 폰으로 강화되었습니다.");
+                self.log(format!(
+                    "휴식: 폰이 {}으로 강화되었습니다.",
+                    piece_name(target)
+                ));
                 self.complete_node();
             }
             Command::RestRevive { id } => {
@@ -380,6 +415,13 @@ impl Game {
                     .unwrap_or_default()
             }
         ));
+        if !still_at {
+            if let Some(key) = action.steps().last().and_then(|s| s.transition.as_deref()) {
+                if let Some(d) = content::pieces::ALL.iter().find(|d| d.key == key) {
+                    self.log(format!("승격: {} → {}", piece_name(piece.kind), d.name));
+                }
+            }
+        }
         self.events();
         self.check_finish();
         if self.phase == RunPhase::Combat && self.battle.turn != side {
@@ -532,6 +574,18 @@ impl Game {
                         .map(move |a| MoveView {
                             from: p.cell,
                             to: cell(a.steps().last().unwrap().move_to),
+                            promotion: a.steps().last().unwrap().transition.as_ref().and_then(
+                                |key| {
+                                    content::pieces::ALL.iter().find(|d| d.key == key).map(|d| {
+                                        PromotionView {
+                                            kind: d.kind,
+                                            key: d.key,
+                                            name: d.name,
+                                            description: d.description,
+                                        }
+                                    })
+                                },
+                            ),
                         })
                 })
                 .collect()
@@ -592,10 +646,10 @@ impl Game {
                     square: p.position.or(origin).map(square).unwrap_or_default(),
                     can_upgrade: self.phase == RunPhase::Rest
                         && p.position.is_some()
-                        && content::pieces::definition(p.kind)
+                        && !content::pieces::definition(p.kind)
                             .unwrap()
-                            .upgrade
-                            .is_some(),
+                            .upgrades
+                            .is_empty(),
                     can_revive: self.phase == RunPhase::Rest
                         && origin.is_some()
                         && p.position.is_none()
@@ -654,8 +708,8 @@ impl Game {
             rest_options,
             upgrade_paths: content::pieces::ALL
                 .iter()
-                .filter_map(|d| {
-                    d.upgrade.as_ref().map(|u| UpgradeView {
+                .flat_map(|d| {
+                    d.upgrades.iter().map(|u| UpgradeView {
                         from: d.kind,
                         from_key: d.key,
                         from_name: d.name,
@@ -724,6 +778,14 @@ pub struct PieceView {
 pub struct MoveView {
     pub from: usize,
     pub to: usize,
+    pub promotion: Option<PromotionView>,
+}
+#[derive(Serialize)]
+pub struct PromotionView {
+    pub kind: PieceType,
+    pub key: &'static str,
+    pub name: &'static str,
+    pub description: &'static str,
 }
 #[derive(Serialize)]
 pub struct CardView {

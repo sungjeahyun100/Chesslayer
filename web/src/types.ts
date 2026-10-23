@@ -54,7 +54,7 @@ export interface Snapshot {
   actions_left: number;
   mana: number;
   pieces: Piece[];
-  moves: { from: number; to: number }[];
+  moves: { from: number; to: number; promotion: Promotion | null }[];
   hand: Card[];
   draw_count: number;
   discard_count: number;
@@ -70,11 +70,12 @@ export interface Snapshot {
 }
 export type Command =
   | { type: "select_node"; id: number }
-  | { type: "move"; from: number; to: number }
+  | { type: "move"; from: number; to: number; promotion?: number }
   | { type: "play_card"; id: number; target?: number }
   | { type: "end_turn" | "enemy_step" | "claim_treasure" | "rest_skip" }
   | { type: "choose_reward"; index: number }
-  | { type: "rest_upgrade" | "rest_revive"; id: number };
+  | { type: "rest_upgrade"; id: number; target: number }
+  | { type: "rest_revive"; id: number };
 
 export type NodeKind = "combat" | "elite" | "rest" | "treasure" | "boss";
 export interface MapNode {
@@ -115,4 +116,11 @@ export interface UpgradePath {
   to_name: string;
   effect: string;
   requirement: string;
+}
+
+export interface Promotion {
+  kind: number;
+  key: string;
+  name: string;
+  description: string;
 }

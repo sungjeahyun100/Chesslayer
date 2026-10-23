@@ -96,7 +96,12 @@ fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
         encounter: encounter(0),
     })
     .unwrap();
-    game.dispatch(Command::Move { from: 12, to: 4 }).unwrap();
+    game.dispatch(Command::Move {
+        from: 12,
+        to: 4,
+        promotion: None,
+    })
+    .unwrap();
     assert_eq!(game.phase, RunPhase::Reward);
     assert!(game.dispatch(Command::SelectNode { id: treasure }).is_err());
     game.dispatch(Command::ChooseReward { index: 0 }).unwrap();

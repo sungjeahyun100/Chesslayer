@@ -4,7 +4,7 @@ import type { Command, Snapshot } from "./types";
 export interface RestChoice {
   cell: number;
   id: number;
-  upgrade: boolean;
+  target?: number;
 }
 export function RestPanel({
   state,
@@ -25,8 +25,10 @@ export function RestPanel({
         (p) => p.from === piece.kind || p.to === piece.kind,
       )
     : [];
-  const path = paths.find((p) => p.from === piece?.kind);
-  const preview = !!choice?.upgrade && !!path;
+  const path = paths.find(
+    (p) => p.from === piece?.kind && p.to === choice?.target,
+  );
+  const preview = !!path;
   const reviving = !!piece?.dead;
   const candidates = state.rest_options.filter(
     (p) => p.can_revive && p.origin === choice?.cell,
@@ -115,7 +117,7 @@ export function RestPanel({
                         onChoose({
                           cell: choice!.cell,
                           id: p.id,
-                          upgrade: false,
+                          target: undefined,
                         })
                       }
                     >
@@ -155,10 +157,10 @@ export function RestPanel({
                 return (
                   <button
                     key={`${u.from}-${u.to}`}
-                    className={`upgrade-path ${preview ? "previewing" : ""}`}
+                    className={`upgrade-path ${path === u ? "previewing" : ""}`}
                     disabled={!available}
-                    aria-pressed={preview}
-                    onClick={() => onChoose({ ...choice!, upgrade: true })}
+                    aria-pressed={path === u}
+                    onClick={() => onChoose({ ...choice!, target: u.to })}
                     aria-label={`${u.from_name} → ${u.to_name} 강화 미리보기`}
                   >
                     <span className="tree-images">
@@ -190,7 +192,9 @@ export function RestPanel({
                 <div className="rest-confirm">
                   <button
                     className="primary"
-                    onClick={() => send({ type: "rest_upgrade", id: piece.id })}
+                    onClick={() =>
+                      send({ type: "rest_upgrade", id: piece.id, target: path!.to })
+                    }
                   >
                     강화 확정
                   </button>

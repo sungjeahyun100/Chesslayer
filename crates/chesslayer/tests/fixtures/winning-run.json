@@ -68,7 +68,8 @@
   },
   {
     "id": 9,
-    "type": "rest_upgrade"
+    "type": "rest_upgrade",
+    "target": 8
   },
   {
     "id": 14,
@@ -110,8 +111,13 @@
     "type": "move"
   },
   {
-    "from": 48,
-    "to": 49,
-    "type": "move"
+    "type": "move",
+    "from": 35,
+    "to": 27
+  },
+  {
+    "type": "move",
+    "from": 14,
+    "to": 49
   }
 ]

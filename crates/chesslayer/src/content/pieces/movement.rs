@@ -32,3 +32,14 @@ pub fn all_directions() -> Vec<(i32, i32)> {
 }
 
 pub(crate) const INITIAL_DOUBLE_STEP: &str = "move(0,1) move(0,1)";
+
+/// Original deck-chess topology: a straight approach, then two straight branches.
+/// `wall-piece` is scoped to each DSL chain; ordinary sliders remain unchanged.
+pub fn bouncing(directions: &[(i32, i32)]) -> String {
+    directions.iter().map(|&(x,y)| {
+        let (a,b) = if x == 0 { ((1,0),(-1,0)) }
+            else if y == 0 { ((0,1),(0,-1)) }
+            else { ((-x,y),(x,-y)) };
+        format!("wall-piece(bouncing_pawn) do take-move({x},{y}) while enemy(0,0) not barrier({x},{y}) {{ take-move({},{}) repeat(1) }} {{ take-move({},{}) repeat(1) }}", a.0,a.1,b.0,b.1)
+    }).collect::<Vec<_>>().join("; ")
+}

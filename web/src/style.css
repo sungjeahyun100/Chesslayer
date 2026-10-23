@@ -2163,3 +2163,29 @@ footer span {
     padding-bottom: 8px;
   }
 }
+
+/* Promotion stays next to the board; all options come from Rust legal actions. */
+.board-frame { position: relative; }
+.promotion-picker {
+  position: absolute;
+  z-index: 8;
+  left: 7%; right: 3%; top: 13%;
+  padding: 18px;
+  background: #faf6ed;
+  color: #263e36;
+  border: 1px solid #7e9681;
+  border-radius: 12px;
+  box-shadow: 0 12px 45px #172c3955;
+}
+.promotion-heading { display: flex; align-items: start; justify-content: space-between; gap: 8px; }
+.promotion-heading p { font-size: 12px; margin: 6px 0 14px; }
+.promotion-options { display: flex; gap: 6px; }
+.promotion-options button { flex: 1; min-width: 0; padding: 10px 3px; border: 1px solid #c5ccbe; border-radius: 8px; background: #fffdf7; }
+.promotion-options button:hover, .promotion-options button:focus-visible { background: #e2ece0; border-color: #39765e; }
+.promotion-options img { display: block; width: 64px; height: 64px; max-width: 100%; margin: 0 auto 8px; }
+.promotion-options span { font-size: 12px; }
+@media (max-width: 600px) {
+  .promotion-picker { left: 6%; right: 0; padding: 12px; }
+  .promotion-options img { width: 46px; height: 46px; }
+  .promotion-options span { font-size: 11px; }
+}

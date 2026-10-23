@@ -59,6 +59,6 @@ AI는 기존 합법 후보에서 킹 포획을 최우선으로, 그다음 포획
 
 ## 1차 폴리싱 연결
 
-- 기물 정의의 `description`, `upgrade`가 스냅샷과 실제 강화 명령을 함께 구동한다. 행마 계산기는 그대로 유지한다.
+- 기물 정의의 `description`, `upgrades`, `promotions`가 스냅샷과 실제 강화 명령을 함께 구동한다. 행마는 공통 Chesssembly를 사용하며, 체인별 반사벽 설정만 확장한다. [템페스트·바운싱 연결](VARIANTS.md)을 참고한다.
 - `PieceImage.tsx`가 key·진영으로 사용 중인 SVG만 조회한다. `RestPanel.tsx`는 로컬 선택/미리보기만 관리하고 확정할 때 기존 명령을 전송한다.
 - `WebGame.save/restore`는 버전·캐릭터 ID·시드·성공한 명령(적 행동 포함)을 JSON으로 저장/재생한다. UI는 매 확정 행동 후 localStorage에 쓴다. 별도 보드 복제나 임의 상태 주입 API가 아니다. 게임 규칙 변경으로 재생 결과가 달라지면 저장 버전도 변경해야 한다.

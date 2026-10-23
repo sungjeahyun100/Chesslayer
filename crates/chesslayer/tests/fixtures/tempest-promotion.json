@@ -1,0 +1,159 @@
+[
+  {
+    "type": "select_node",
+    "id": 2
+  },
+  {
+    "type": "play_card",
+    "id": 10,
+    "target": 5
+  },
+  {
+    "type": "play_card",
+    "id": 5,
+    "target": 4
+  },
+  {
+    "type": "move",
+    "from": 51,
+    "to": 35
+  },
+  {
+    "type": "move",
+    "from": 58,
+    "to": 30
+  },
+  {
+    "type": "move",
+    "from": 30,
+    "to": 12
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 6
+  },
+  {
+    "type": "claim_treasure"
+  },
+  {
+    "type": "select_node",
+    "id": 8
+  },
+  {
+    "type": "move",
+    "from": 12,
+    "to": 5
+  },
+  {
+    "type": "move",
+    "from": 59,
+    "to": 43
+  },
+  {
+    "type": "move",
+    "from": 5,
+    "to": 14
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 10
+  },
+  {
+    "type": "rest_upgrade",
+    "id": 9,
+    "target": 8
+  },
+  {
+    "type": "select_node",
+    "id": 14
+  },
+  {
+    "type": "move",
+    "from": 48,
+    "to": 40
+  },
+  {
+    "type": "move",
+    "from": 40,
+    "to": 32
+  },
+  {
+    "type": "move",
+    "from": 32,
+    "to": 24
+  },
+  {
+    "type": "move",
+    "from": 24,
+    "to": 25
+  },
+  {
+    "type": "move",
+    "from": 25,
+    "to": 26
+  },
+  {
+    "type": "move",
+    "from": 26,
+    "to": 27
+  },
+  {
+    "type": "move",
+    "from": 27,
+    "to": 26
+  },
+  {
+    "type": "move",
+    "from": 26,
+    "to": 18
+  },
+  {
+    "type": "move",
+    "from": 18,
+    "to": 2,
+    "promotion": 12
+  },
+  {
+    "type": "move",
+    "from": 2,
+    "to": 13
+  },
+  {
+    "type": "move",
+    "from": 43,
+    "to": 19
+  },
+  {
+    "type": "move",
+    "from": 19,
+    "to": 12
+  },
+  {
+    "type": "move",
+    "from": 12,
+    "to": 4
+  },
+  {
+    "type": "choose_reward",
+    "index": 0
+  },
+  {
+    "type": "select_node",
+    "id": 17
+  },
+  {
+    "type": "claim_treasure"
+  },
+  {
+    "type": "select_node",
+    "id": 18
+  }
+]

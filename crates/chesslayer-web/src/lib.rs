@@ -24,7 +24,7 @@ impl WebGame {
         Ok(Self {
             game: Game::new(character, seed).map_err(|e| JsValue::from_str(&e))?,
             save: SavedRun {
-                version: 1,
+                version: 2,
                 character: character.into(),
                 seed,
                 commands: vec![],
@@ -47,11 +47,13 @@ impl WebGame {
         serde_json::to_string(&self.save).expect("run history is serializable")
     }
     pub fn restore(saved: &str) -> Result<WebGame, JsValue> {
+        let header: serde_json::Value = serde_json::from_str(saved)
+            .map_err(|_| JsValue::from_str("저장된 원정을 읽을 수 없습니다."))?;
+        if header.get("version").and_then(|v| v.as_u64()) != Some(2) {
+            return Err(JsValue::from_str("이전 규칙으로 저장된 원정입니다. 템페스트 행마·강화·승격 규칙이 변경되어 이어갈 수 없습니다. 새 원정을 시작하세요. 기존 기록은 새 원정을 시작하기 전까지 보존됩니다."));
+        }
         let save: SavedRun = serde_json::from_str(saved)
             .map_err(|_| JsValue::from_str("저장된 원정을 읽을 수 없습니다."))?;
-        if save.version != 1 {
-            return Err(JsValue::from_str("지원하지 않는 저장 버전입니다."));
-        }
         let mut game = Game::new(&save.character, save.seed).map_err(|e| JsValue::from_str(&e))?;
         for command in &save.commands {
             game.dispatch(command.clone())
