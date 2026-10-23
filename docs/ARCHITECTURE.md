@@ -53,7 +53,3 @@ chessembly (보드, 액션, 파서와 이동 후보 계산)
 카드와 유물의 제거는 `remove_nonroyals()`를 통하며 양측 로얄을 보호합니다. 기존 `apply_resolved_card_effect()`에도 결과 보드를 검사하는 원자적 보호를 넣었습니다. 로얄을 없애는 효과라면 보드를 적용하지 않습니다. 직접 기물 포획은 `RoyalCaptured`, 시작 배치의 킹 역습 사망은 `Counterattack`으로 구분합니다.
 
 AI는 기존 합법 후보에서 킹 포획을 최우선으로, 그다음 포획할 기물의 가치로 점수를 매깁니다. 동점은 시드 RNG로 선택합니다. 학습·검색 트리·외부 서비스가 없습니다. 합법 수가 없으면 승리 판정 없이 턴을 넘깁니다.
-
-## 로컬의 기존 벤치마크
-
-작업 시작 전 미추적 상태였던 `README-BENCH.md`, `bench-results/`, `scripts/`, 두 crate의 `examples/`는 보존했습니다. 과거 crate 이름에 의존하는 이 로컬 자료는 통합 프로토타입 빌드에 포함하지 않습니다(`chessembly`의 `autoexamples = false`). 정식 검증은 [TESTING.md](TESTING.md)를 따릅니다. 과거 벤치마크를 다시 쓰려면 새 import/패키지 경로로 별도 이관해야 합니다.

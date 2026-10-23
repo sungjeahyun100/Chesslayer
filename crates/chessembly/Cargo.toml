@@ -1,7 +1,6 @@
 [package]
 name = "chessembly"
 version = "0.1.0"
-autoexamples = false
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
