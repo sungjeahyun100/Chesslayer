@@ -195,3 +195,64 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   expect(snapshot.phase).toBe("combat");
   expect(snapshot.pieces.find((p: any) => p.id === 1).cell).toBe(56);
 });
+
+test("휴식: 룩·비숍·나이트·퀸의 7개 분기 강화와 저장·진형 계승", async ({ page }) => {
+  await loadRest(page);
+  const original = (await saved(page))!;
+  const before = await restoreSnapshot(page);
+  const errors: string[] = [];
+  page.on("pageerror", (e) => errors.push(e.message));
+  const pieces = [
+    { id: 1, square: "a1", name: "룩", key: "rook", families: ["tempest", "bouncing"] },
+    { id: 3, square: "g7", name: "비숍", key: "bishop", families: ["tempest", "bouncing"] },
+    { id: 2, square: "b1", name: "나이트", key: "knight", families: ["tempest"] },
+    { id: 4, square: "d3", name: "퀸", key: "queen", families: ["tempest", "bouncing"] },
+  ];
+  for (const piece of pieces) {
+    for (const family of piece.families) {
+      // Replay a real rest save for each independent choice; never inject a board.
+      await page.evaluate(({ key, value }) => localStorage.setItem(key, value), {
+        key: saveKey, value: original,
+      });
+      await page.reload();
+      await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+      await page.locator(`[data-square="${piece.square}"]`).click();
+      await expect(page.locator(".upgrade-path")).toHaveCount(piece.families.length);
+      const name = `${family === "tempest" ? "템페스트" : "바운싱"} ${piece.name}`;
+      const key = `${family}_${piece.key}`;
+      await page.getByRole("button", { name: `${piece.name} → ${name} 강화 미리보기` }).click();
+      await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", key);
+      await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
+      expect(await saved(page)).toBe(original);
+      await allImagesLoaded(page);
+      if (key === "bouncing_queen") {
+        await page.screenshot({ path: "test-results/rest-queen-branches.png", fullPage: true, animations: "disabled" });
+      }
+      await page.getByRole("button", { name: "강화 확정", exact: true }).click();
+      await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
+      const after = await restoreSnapshot(page);
+      const prior = before.rest_options.find((p: any) => p.id === piece.id);
+      const upgraded = after.rest_options.find((p: any) => p.id === piece.id);
+      expect(upgraded).toMatchObject({
+        id: piece.id, key, cell: prior.cell, origin: prior.origin, ward: prior.ward,
+        upgrades: [...prior.upgrades, family],
+      });
+      expect(JSON.parse((await saved(page))!).commands.at(-1)).toMatchObject({
+        type: "rest_upgrade", id: piece.id, target: upgraded.kind,
+      });
+      expect(after.log.at(-1)).toContain(`${piece.name} → ${name}`);
+      await page.reload();
+      await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+      await page.locator('[data-node-id="14"]').click();
+      await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
+      const next = await restoreSnapshot(page);
+      expect(next.rest_options.find((p: any) => p.id === piece.id)).toMatchObject({
+        key, cell: prior.cell, ward: prior.ward, upgrades: [...prior.upgrades, family],
+      });
+      await page.locator(`[data-square="${piece.square}"]`).click();
+      const destinations = new Set(next.moves.filter((m: any) => m.from === prior.cell).map((m: any) => m.to));
+      await expect(page.locator('[data-legal="true"]')).toHaveCount(destinations.size);
+    }
+  }
+  expect(errors).toEqual([]);
+});

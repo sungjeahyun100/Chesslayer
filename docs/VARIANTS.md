@@ -7,16 +7,16 @@
 | ID / key | 행마 | 획득 |
 | --- | --- | --- |
 | 8 / tempest_pawn | 앞·좌우 빈칸 1칸, 앞 대각 포획, 전방 2칸 포획 | 일반 폰의 휴식 강화 |
-| 9 / tempest_rook | 대각 한 칸 후 그 대각을 구성하는 두 직교 방향으로 슬라이딩 | 템페스트 폰의 최종 랭크 승격 |
-| 10 / tempest_bishop | 직교 한 칸 후 같은 진행 방향의 두 대각선으로 슬라이딩 | 동일 |
-| 11 / tempest_knight | 대각 한 칸 후 `(3,2)`·`(2,3)`까지 추가 도약, 별도로 직교 3칸 도약 | 동일 |
-| 12 / tempest_queen | 템페스트 룩+비숍 정의 재사용 | 동일 |
+| 9 / tempest_rook | 대각 한 칸 후 그 대각을 구성하는 두 직교 방향으로 슬라이딩 | 일반 룩의 휴식 강화 또는 템페스트 폰 승격 |
+| 10 / tempest_bishop | 직교 한 칸 후 같은 진행 방향의 두 대각선으로 슬라이딩 | 일반 비숍의 휴식 강화 또는 템페스트 폰 승격 |
+| 11 / tempest_knight | 대각 한 칸 후 `(3,2)`·`(2,3)`까지 추가 도약, 별도로 직교 3칸 도약 | 일반 나이트의 휴식 강화 또는 템페스트 폰 승격 |
+| 12 / tempest_queen | 템페스트 룩+비숍 정의 재사용 | 일반 퀸의 휴식 강화 또는 템페스트 폰 승격 |
 | 13 / bouncing_pawn | 일반 폰 행마+진영에 관계없는 반사벽 | 일반 폰의 휴식 강화 |
-| 14 / bouncing_rook | 직교 진행 후 첫 벽에서 양쪽 직교 방향으로 꺾음 | 바운싱 폰의 최종 랭크 승격 |
-| 15 / bouncing_bishop | 대각 진행 후 첫 벽에서 x 또는 y 방향 성분 반전 | 동일 |
-| 16 / bouncing_queen | 바운싱 룩+비숍 정의 재사용 | 동일 |
+| 14 / bouncing_rook | 직교 진행 후 첫 벽에서 양쪽 직교 방향으로 꺾음 | 일반 룩의 휴식 강화 또는 바운싱 폰 승격 |
+| 15 / bouncing_bishop | 대각 진행 후 첫 벽에서 x 또는 y 방향 성분 반전 | 일반 비숍의 휴식 강화 또는 바운싱 폰 승격 |
+| 16 / bouncing_queen | 바운싱 룩+비숍 정의 재사용 | 일반 퀸의 휴식 강화 또는 바운싱 폰 승격 |
 
-모든 종류는 백·흑에 같은 정의를 사용한다. Chesssembly의 진영 방향 변환으로 흑을 처리하며, 별도 JavaScript 합법 수 계산은 없다. 이전 ID 1~8과 key는 유지한다. 폰 1의 휴식 경로는 8/13 두 개뿐이며 상위 기물로의 휴식 강화는 없다.
+모든 종류는 백·흑에 같은 정의를 사용한다. Chesssembly의 진영 방향 변환으로 흑을 처리하며, 별도 JavaScript 합법 수 계산은 없다. 이전 ID 1~8과 key는 유지한다. 폰 1의 휴식 경로는 8/13 두 개다. 후속 요청에 따라 일반 룩·비숍·퀸에도 템페스트/바운싱 경로를, 일반 나이트에는 템페스트 경로를 연결했다. 총 9개 휴식 강화 경로이며 바운싱 나이트는 정의되어 있지 않다. 강화된 폰에서 상위 기물로의 휴식 강화는 추가하지 않았다.
 
 ## 원본 템페스트의 의미
 
@@ -41,7 +41,7 @@ Chesssembly에 체인 범위의 `wall-piece(key)`와 `barrier(dx,dy)` 두 식만
 
 ## 강화·승격·지속 상태
 
-`PieceDefinition.upgrades: &[UpgradeDefinition]`가 휴식 분기 전체를 제공한다. 보드에서 일반 폰을 선택하면 두 SVG 경로와 효과·요구 조건을 표시한다. 분기를 바꾸면 해당 결과만 강조하며, 보드와 상세 이미지도 함께 미리보기한다. 확정에서 `{type:"rest_upgrade",id,target}`를 보내고 Rust가 살아 있는 기물·현재 종류의 경로·쉼터 상태를 검증한다. 다른 유효 기물 클릭·닫기·Esc·부활 및 행동 1회 제한은 기존 방식이다.
+`PieceDefinition.upgrades: &[UpgradeDefinition]`가 휴식 분기 전체를 제공한다. 보드에서 일반 폰·룩·비숍·퀸을 선택하면 두 SVG 경로와 효과·요구 조건을, 일반 나이트에는 템페스트 경로 하나를 표시한다. 분기를 바꾸면 해당 결과만 강조하며, 보드와 상세 이미지도 함께 미리보기한다. 확정에서 `{type:"rest_upgrade",id,target}`를 보내고 Rust가 살아 있는 기물·현재 종류의 경로·쉼터 상태를 검증한다. 다른 유효 기물 클릭·닫기·Esc·부활 및 행동 1회 제한은 기존 방식이다.
 
 `PieceDefinition.promotions`는 휴식 경로와 별개다. Battle은 최종 랭크로 향하는 후보를 각 승격 대상의 `ActionStep.transition`을 포함한 후보로 바꾼다. Game은 `{type:"move",from,to,promotion}`과 정확히 일치하는 후보만 실행한다. 선택 누락·다른 계열·등록되지 않은 종류·승격 아닌 이동에 승격을 붙인 요청은 거부한다. 적 AI도 같은 승격 후보를 선택하고 같은 검증으로 실행한다.
 
@@ -51,19 +51,19 @@ React는 Rust 스냅샷의 후보만 사용한다. 최종 랭크를 클릭하면
 
 ## 저장
 
-WASM 저장 JSON은 버전 **2**이다. 강화 대상은 필수 `target`, 승격 대상은 이동의 `promotion`에 명시한다. 일반 이동에서는 `promotion`을 생략한다. 성공한 명령과 적 행동을 저장하고 동일 엔진으로 재생하는 방식은 유지한다.
+WASM 저장 JSON은 버전 **2**이다. 강화 대상은 필수 `target`, 승격 대상은 이동의 `promotion`에 명시한다. 일반 이동에서는 `promotion`을 생략한다. 성공한 명령과 적 행동을 저장하고 동일 엔진으로 재생하는 방식은 유지한다. 일반 상위 기물의 휴식 경로 추가는 명령 스키마나 이전 행마를 바꾸지 않으므로 저장 버전 2와 기존 기록을 그대로 유지한다.
 
 localStorage 슬롯 `chesslayer.run.v1`은 이전 기록을 찾아 안내하기 위해 유지한다. 슬롯 이름과 JSON 스키마 버전은 다르다. 버전 1은 옆 포획 등 제거된 규칙을 포함할 수 있어 자동 이관하지 않는다. 헤더를 먼저 검사하여, 명령 파싱 실패 대신 규칙 변경과 새 원정 필요를 설명한다. 이어하기 실패는 기존 저장을 덮어쓰지 않으며 새 원정을 시작할 때만 교체된다.
 
 ## 범위와 남은 항목
 
-두 계열의 모든 9종은 실제 원정에서 강화·승격으로 획득하고 이동할 수 있다. 일반 폰 승격, 성벽 경로, 상위 기물로의 휴식 강화, 새 적 편성, 체크메이트·캐슬링·앙파상은 이번 범위에 넣지 않았다. 적 편성에 새 종류를 배치했을 때의 행마·승격은 지원하지만 기존 전투 편성은 유지한다. 제공 이미지의 원본 라이선스는 여전히 미확인이다.
+두 계열의 모든 9종은 실제 원정에서 강화·승격으로 획득하고 이동할 수 있다. 일반 폰 승격, 성벽 경로, 강화된 폰에서 상위 기물로의 휴식 강화, 새 적 편성, 체크메이트·캐슬링·앙파상은 이번 범위에 넣지 않았다. 적 편성에 새 종류를 배치했을 때의 행마·승격은 지원하지만 기존 전투 편성은 유지한다. 제공 이미지의 원본 라이선스는 여전히 미확인이다.
 
 검증 목적·실행 명령·브라우저 기보는 [TESTING.md](TESTING.md), SVG 원본과 수정은 [ASSETS.md](ASSETS.md)에 기록한다.
 
 ## 변경 파일 안내
 
-- `crates/chesslayer/src/content/pieces/`: `tempest_pawn.rs` 교정, `tempest_rook.rs`, `tempest_bishop.rs`, `tempest_knight.rs`, `tempest_queen.rs`, `bouncing_pawn.rs`, `bouncing_rook.rs`, `bouncing_bishop.rs`, `bouncing_queen.rs` 정의. `pawn.rs` 분기, `mod.rs` 등록/승격 목록, `movement.rs` 공통 반사 DSL.
+- `crates/chesslayer/src/content/pieces/`: `tempest_pawn.rs` 교정, `tempest_rook.rs`, `tempest_bishop.rs`, `tempest_knight.rs`, `tempest_queen.rs`, `bouncing_pawn.rs`, `bouncing_rook.rs`, `bouncing_bishop.rs`, `bouncing_queen.rs` 정의. `pawn.rs`, `rook.rs`, `bishop.rs`, `knight.rs`, `queen.rs`의 휴식 분기, `mod.rs` 등록/승격 목록, `movement.rs` 공통 반사 DSL.
 - `crates/chessembly/src/lib.rs`: 체인 범위의 반사벽 식 2개.
 - `crates/chesslayer/src/battle.rs`, `game.rs`: 승격 후보·정확한 선택 검증·실행·스냅샷·강화 대상.
 - `crates/chesslayer-web/src/lib.rs`: 저장 버전 2와 이전 기록 안내.

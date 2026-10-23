@@ -325,17 +325,19 @@ impl Game {
                 let p = roster
                     .iter_mut()
                     .find(|p| p.id == id && p.position.is_some())
-                    .ok_or("살아 있는 일반 폰을 선택하세요.")?;
+                    .ok_or("살아 있는 아군 기물을 선택하세요.")?;
                 let upgrade = content::pieces::definition(p.kind)
                     .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
                     .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
+                let previous_kind = p.kind;
                 p.kind = upgrade.target;
                 p.upgrades.push(upgrade.key.into());
                 self.battle
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
                 self.log(format!(
-                    "휴식: 폰이 {}으로 강화되었습니다.",
+                    "휴식: {} → {} 강화",
+                    piece_name(previous_kind),
                     piece_name(target)
                 ));
                 self.complete_node();

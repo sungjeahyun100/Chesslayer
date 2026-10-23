@@ -391,7 +391,14 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
                     assert!(g.dispatch(Command::RestUpgrade { id, target }).is_err());
                 }
                 assert_eq!(serde_json::to_string(&g.snapshot()).unwrap(), before);
-                assert_eq!(g.snapshot().upgrade_paths.len(), 2);
+                assert_eq!(
+                    g.snapshot()
+                        .upgrade_paths
+                        .iter()
+                        .filter(|p| p.from == PAWN)
+                        .count(),
+                    2,
+                );
             }
             if let Command::Move {
                 from,
@@ -495,5 +502,100 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
             .contains(&promoted.kind));
         assert_eq!((promoted.id, promoted.owner), (101, ENEMY));
         assert_eq!(ai.phase, RunPhase::Defeat);
+    }
+}
+
+#[test]
+fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
+    let mut rest = Game::new("vanguard", 2026).unwrap();
+    let commands: Vec<Command> =
+        serde_json::from_str(include_str!("fixtures/winning-run.json")).unwrap();
+    for command in commands {
+        if rest.phase == RunPhase::Rest {
+            break;
+        }
+        rest.dispatch(command).unwrap();
+        while rest.phase == RunPhase::Combat && rest.battle.turn == ENEMY {
+            rest.dispatch(Command::EnemyStep).unwrap();
+        }
+    }
+    assert_eq!(rest.phase, RunPhase::Rest);
+    assert_eq!(rest.snapshot().upgrade_paths.len(), 9);
+    for (id, source, targets) in [
+        (1, ROOK, vec![TEMPEST_ROOK, BOUNCING_ROOK]),
+        (3, BISHOP, vec![TEMPEST_BISHOP, BOUNCING_BISHOP]),
+        (2, KNIGHT, vec![TEMPEST_KNIGHT]),
+        (4, QUEEN, vec![TEMPEST_QUEEN, BOUNCING_QUEEN]),
+    ] {
+        let snapshot = rest.snapshot();
+        assert!(
+            snapshot
+                .rest_options
+                .iter()
+                .find(|p| p.id == id)
+                .unwrap()
+                .can_upgrade
+        );
+        let paths: Vec<_> = snapshot
+            .upgrade_paths
+            .iter()
+            .filter(|p| p.from == source)
+            .collect();
+        assert_eq!(paths.iter().map(|p| p.to).collect::<Vec<_>>(), targets);
+        for target in targets {
+            let mut g = rest.clone();
+            let before = serde_json::to_string(&g.snapshot()).unwrap();
+            for invalid in [BOUNCING_PAWN, source, KING] {
+                assert!(g
+                    .dispatch(Command::RestUpgrade {
+                        id,
+                        target: invalid
+                    })
+                    .is_err());
+            }
+            assert!(g
+                .dispatch(Command::RestUpgrade { id: 100, target })
+                .is_err());
+            assert_eq!(serde_json::to_string(&g.snapshot()).unwrap(), before);
+            let mut expected = g.battle.outcome().into_iter().find(|p| p.id == id).unwrap();
+            let path = pieces::definition(source)
+                .unwrap()
+                .upgrades
+                .iter()
+                .find(|p| p.target == target)
+                .unwrap();
+            expected.kind = target;
+            expected.upgrades.push(path.key.into());
+            g.dispatch(Command::RestUpgrade { id, target }).unwrap();
+            assert_eq!(g.phase, RunPhase::Map);
+            assert_eq!(
+                g.battle.outcome().into_iter().find(|p| p.id == id).unwrap(),
+                expected
+            );
+            assert!(g.log.last().unwrap().contains(piece_name(source)));
+            assert!(g.log.last().unwrap().contains(piece_name(target)));
+            assert!(g
+                .dispatch(Command::RestUpgrade {
+                    id: 9,
+                    target: TEMPEST_PAWN
+                })
+                .is_err());
+            g.dispatch(Command::SelectNode { id: 14 }).unwrap();
+            assert_eq!(
+                g.battle.outcome().into_iter().find(|p| p.id == id).unwrap(),
+                expected
+            );
+        }
+    }
+    // Pawn promotion remains distinct from rest upgrades; no extra stages are implied.
+    for kind in [
+        TEMPEST_PAWN,
+        BOUNCING_PAWN,
+        TEMPEST_QUEEN,
+        BOUNCING_QUEEN,
+        KING,
+        AMAZON,
+    ] {
+        assert!(pieces::definition(kind).unwrap().upgrades.is_empty());
     }
 }

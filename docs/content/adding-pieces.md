@@ -124,7 +124,7 @@ if index == 0 {
 
 ### 휴식 강화·다른 콘텐츠의 참조 — 필요할 때만
 
-현재 폰 → 템페스트 폰/바운싱 폰 경로는 `pawn.rs`의 `upgrades`에 정의한다. `RestUpgrade { id, target }`, `rest_options`, `upgrade_paths`는 같은 정의를 읽는다. 새 분기는 `upgrades`에 추가하고 대상 ID와 SVG를 등록한다. 최종 랭크 승격은 `promotions`에 등록하며 `Move { from, to, promotion }`과 공통 선택 UI로 처리한다. 새 자원 비용을 도입한다면 실제 비용 검증도 구현해야 한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
+일반 폰·룩·비숍·퀸의 템페스트/바운싱 분기, 일반 나이트의 템페스트 분기는 각 기본 기물 파일의 `upgrades`에 정의한다. `RestUpgrade { id, target }`, `rest_options`, `upgrade_paths`는 같은 정의를 읽는다. 새 분기는 `upgrades`에 추가하고 대상 ID와 SVG를 등록한다. 최종 랭크 승격은 `promotions`에 등록하며 `Move { from, to, promotion }`과 공통 선택 UI로 처리한다. 새 자원 비용을 도입한다면 실제 비용 검증도 구현해야 한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
 
 ## 5. 특수 능력의 경계
 
