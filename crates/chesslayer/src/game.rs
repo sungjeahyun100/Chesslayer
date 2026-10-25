@@ -185,11 +185,7 @@ impl Game {
         let saved: Vec<_> = roster
             .iter()
             .filter(|p| p.position.is_some())
-            .filter_map(|p| {
-                saved_positions
-                    .get(&p.id)
-                    .map(|&pos| (p.id, pos))
-            })
+            .filter_map(|p| saved_positions.get(&p.id).map(|&pos| (p.id, pos)))
             .collect();
         let hard_disk = self.relics.contains(&Relic::HardDisk)
             && !saved.is_empty()
