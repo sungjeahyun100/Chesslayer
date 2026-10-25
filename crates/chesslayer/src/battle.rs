@@ -20,6 +20,7 @@ pub struct BattleOptions {
     pub actions_per_turn: u8,
     pub self_defense: bool,
     pub initiative: bool,
+    pub enemy_initiative: bool,
     /// Only a restored Hard Disk deployment reverses setup collisions.
     pub hard_disk: bool,
 }
@@ -29,6 +30,7 @@ impl Default for BattleOptions {
             actions_per_turn: 1,
             self_defense: false,
             initiative: false,
+            enemy_initiative: false,
             hard_disk: false,
         }
     }
@@ -55,6 +57,8 @@ pub struct EnemyPiece {
 pub struct Encounter {
     pub enemies: Vec<EnemyPiece>,
     pub royal_id: PieceId,
+    /// Additional enemies that must also be captured to win.
+    pub additional_royal_ids: Vec<PieceId>,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BattleStart {
@@ -104,6 +108,7 @@ pub struct Battle {
     pub result: GameResult,
     pub phase: Phase,
     pub royal_id: PieceId,
+    additional_royal_ids: Vec<PieceId>,
     pub king_id: PieceId,
     pub actions_left: u8,
     normal_actions_used: u8,
@@ -115,6 +120,8 @@ pub struct Battle {
     limiter: HashMap<PieceId, LimiterState>,
     self_defense_target: Option<PieceId>,
     initiative_turns_left: u8,
+    enemy_initiative_turns_left: u8,
+    absorbed: HashMap<PieceId, HashSet<PieceType>>,
     players: Vec<PlayerPiece>,
     programs: BTreeMap<PieceType, Program>,
     initial_double_step: Program,
@@ -189,14 +196,25 @@ impl Battle {
         }
         let king_id = king_id.ok_or(Error::InvalidSetup)?;
         let mut players = start.players;
-        let mut found_royal = false;
+        let mut required_royals = start.encounter.additional_royal_ids.clone();
+        required_royals.push(start.encounter.royal_id);
+        if required_royals
+            .iter()
+            .copied()
+            .collect::<HashSet<_>>()
+            .len()
+            != required_royals.len()
+        {
+            return Err(Error::InvalidSetup);
+        }
+        let mut found_royals = HashSet::new();
         let mut enemy_positions = HashSet::new();
         for e in &start.encounter.enemies {
             if !ids.insert(e.id) || !valid_kind(e.kind) || !enemy_positions.insert(e.position) {
                 return Err(Error::InvalidSetup);
             }
-            if e.id == start.encounter.royal_id {
-                found_royal = true
+            if required_royals.contains(&e.id) {
+                found_royals.insert(e.id);
             }
             if let Some(old) = board.piece_at(e.position)? {
                 if old.owner == ENEMY {
@@ -228,7 +246,7 @@ impl Battle {
                 }),
             )?
         }
-        if !found_royal {
+        if found_royals.len() != required_royals.len() {
             return Err(Error::InvalidSetup);
         }
         let programs = pieces::ALL
@@ -243,11 +261,17 @@ impl Battle {
             temporary_upgrades: HashSet::new(),
             limiter: HashMap::new(),
             self_defense_target: None,
-            initiative_turns_left: if options.initiative {
+            initiative_turns_left: if options.initiative && !options.enemy_initiative {
                 INITIATIVE_TURNS
             } else {
                 0
             },
+            enemy_initiative_turns_left: if options.enemy_initiative && !options.initiative {
+                INITIATIVE_TURNS
+            } else {
+                0
+            },
+            absorbed: HashMap::new(),
             actions_left: options.actions_per_turn,
             normal_actions_used: 0,
             limiter_turn: false,
@@ -257,6 +281,7 @@ impl Battle {
             result: GameResult::Ongoing,
             phase: Phase::Active,
             royal_id: start.encounter.royal_id,
+            additional_royal_ids: start.encounter.additional_royal_ids,
             king_id,
             players,
             programs,
@@ -326,6 +351,8 @@ impl Battle {
         self.limiter.clear();
         self.self_defense_target = None;
         self.initiative_turns_left = 0;
+        self.enemy_initiative_turns_left = 0;
+        self.absorbed.clear();
         self.moved_ids = roster.iter().filter(|p| p.moved).map(|p| p.id).collect();
         self.board = next;
         self.players = roster;
@@ -366,6 +393,20 @@ impl Battle {
             .get(&piece.kind)
             .ok_or(Error::InvalidSetup)?
             .execute(&self.board, from)?;
+        if piece.kind == pieces::EMPEROR {
+            if let Some(absorbed) = self.absorbed.get(&piece.id) {
+                let mut kinds: Vec<_> = absorbed.iter().copied().collect();
+                kinds.sort_unstable();
+                for kind in kinds {
+                    actions.extend(
+                        self.programs
+                            .get(&kind)
+                            .ok_or(Error::InvalidSetup)?
+                            .execute(&self.board, from)?,
+                    );
+                }
+            }
+        }
         if pieces::definition(piece.kind).is_some_and(|d| d.initial_double_step)
             && !self.moved_ids.contains(&piece.id)
             && from.rank == if piece.owner == PLAYER { 6 } else { 1 }
@@ -384,6 +425,12 @@ impl Battle {
             if piece.owner == ENEMY
                 && self.initiative_turns_left > 0
                 && self.captures_player(&action)?
+            {
+                continue;
+            }
+            if piece.owner == PLAYER
+                && self.enemy_initiative_turns_left > 0
+                && self.captures_enemy(&action)?
             {
                 continue;
             }
@@ -408,10 +455,16 @@ impl Battle {
     }
     // Inspect each step on its actual intermediate board, including remote/jump captures.
     fn captures_player(&self, action: &DefaultAction) -> Result<bool, Error> {
+        self.captures_owner(action, PLAYER)
+    }
+    fn captures_enemy(&self, action: &DefaultAction) -> Result<bool, Error> {
+        self.captures_owner(action, ENEMY)
+    }
+    fn captures_owner(&self, action: &DefaultAction, owner: PlayerId) -> Result<bool, Error> {
         let mut next = self.board.clone();
         for step in action.steps() {
             if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
-                && next.piece_at(step.take)?.is_some_and(|p| p.owner == PLAYER)
+                && next.piece_at(step.take)?.is_some_and(|p| p.owner == owner)
             {
                 return Ok(true);
             }
@@ -498,6 +551,13 @@ impl Battle {
             if self.initiative_turns_left == 0 {
                 self.events
                     .push("선공권: 적 턴 10회가 지나 보호가 끝났습니다.".into());
+            }
+        }
+        if self.turn == PLAYER && self.enemy_initiative_turns_left > 0 {
+            self.enemy_initiative_turns_left -= 1;
+            if self.enemy_initiative_turns_left == 0 {
+                self.events
+                    .push("선공권: 아군 턴 10회가 지나 적의 보호가 끝났습니다.".into());
             }
         }
         self.turn = if self.turn == PLAYER { ENEMY } else { PLAYER };
@@ -662,6 +722,12 @@ impl Battle {
     pub fn initiative_turns_left(&self) -> u8 {
         self.initiative_turns_left
     }
+    pub fn enemy_initiative_turns_left(&self) -> u8 {
+        self.enemy_initiative_turns_left
+    }
+    pub fn is_enemy_royal(&self, id: PieceId) -> bool {
+        id == self.royal_id || self.additional_royal_ids.contains(&id)
+    }
     pub fn grant_ward(&mut self, id: PieceId) -> Result<(), Error> {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
@@ -692,7 +758,7 @@ impl Battle {
                 if let Some(piece) = self.board.piece_at(pos)? {
                     if ids.contains(&piece.id)
                         && (include_royals
-                            || (piece.id != self.king_id && piece.id != self.royal_id))
+                            || (piece.id != self.king_id && !self.is_enemy_royal(piece.id)))
                     {
                         self.board.set_piece(pos, None)?;
                         self.wards.remove(&piece.id);
@@ -709,18 +775,29 @@ impl Battle {
         let mut next = self.board.clone();
         let mut retaliation = None;
         let mut player_captured = false;
+        let mut enemy_captured = false;
         if source == ActionSource::ResolvedCardEffect {
             apply_default_action(&mut next, action)?;
-            for id in [self.king_id, self.royal_id] {
+            for id in std::iter::once(self.king_id)
+                .chain(std::iter::once(self.royal_id))
+                .chain(self.additional_royal_ids.iter().copied())
+            {
                 if !next.cells().iter().flatten().any(|p| p.id == id) {
                     return Err(Error::ProtectedRoyal);
                 }
             }
         } else {
+            let mut absorbed = vec![];
             for step in action.steps() {
                 // Resolve the actual captor and victim at this step, including multi-step moves.
                 let captor = next.piece_at(step.from)?;
                 let victim = next.piece_at(step.take)?;
+                if captor.is_some_and(|p| p.owner == ENEMY && p.kind == pieces::EMPEROR)
+                    && victim.is_some_and(|p| p.owner == PLAYER)
+                    && !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                {
+                    absorbed.push((captor.unwrap().id, victim.unwrap().kind));
+                }
                 let retaliates = !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                     && captor.is_some_and(|p| p.owner == ENEMY)
                     && victim.is_some_and(|p| p.owner == PLAYER && self.has_self_defense(p.id));
@@ -729,6 +806,10 @@ impl Battle {
                     !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                         && captor.is_some_and(|p| p.owner == PLAYER)
                         && victim.is_some_and(|p| p.owner == ENEMY);
+                enemy_captured |=
+                    !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                        && captor.is_some_and(|p| p.owner == ENEMY)
+                        && victim.is_some_and(|p| p.owner == PLAYER);
                 if retaliates {
                     let captor = captor.unwrap();
                     if let Some(index) = next
@@ -743,12 +824,22 @@ impl Battle {
                     break;
                 }
             }
+            for (id, kind) in absorbed {
+                if next.cells().iter().flatten().any(|p| p.id == id) {
+                    self.absorbed.entry(id).or_default().insert(kind);
+                }
+            }
         }
         self.board = next;
         if player_captured && self.initiative_turns_left > 0 {
             self.initiative_turns_left = 0;
             self.events
                 .push("선공권: 아군의 포획이 성공해 보호가 끝났습니다.".into());
+        }
+        if enemy_captured && self.enemy_initiative_turns_left > 0 {
+            self.enemy_initiative_turns_left = 0;
+            self.events
+                .push("선공권: 적의 포획이 성공해 보호가 끝났습니다.".into());
         }
         self.wards
             .retain(|id| self.board.cells().iter().flatten().any(|p| p.id == *id));
@@ -801,7 +892,7 @@ impl Battle {
             .cells()
             .iter()
             .flatten()
-            .any(|p| p.owner == ENEMY && p.id == self.royal_id);
+            .any(|p| p.owner == ENEMY && self.is_enemy_royal(p.id));
         self.result = if !king_alive {
             GameResult::Win {
                 winner: ENEMY,
@@ -823,6 +914,7 @@ impl Battle {
         if self.phase == Phase::Finished {
             self.self_defense_target = None;
             self.initiative_turns_left = 0;
+            self.enemy_initiative_turns_left = 0;
             self.limiter.clear();
         }
     }

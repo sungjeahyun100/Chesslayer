@@ -26,6 +26,7 @@ fn battle(players: Vec<PlayerPiece>, enemies: Vec<EnemyPiece>, royal: u32) -> Ba
         encounter: Encounter {
             enemies,
             royal_id: royal,
+            additional_royal_ids: vec![],
         },
     })
     .unwrap()

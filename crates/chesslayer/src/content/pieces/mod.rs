@@ -10,16 +10,20 @@ mod bouncing_tempest_bishop;
 mod bouncing_tempest_queen;
 mod bouncing_tempest_rook;
 mod cardinal;
+mod centaur;
+mod emperor;
 mod hook;
 mod king;
 mod knight;
 mod knightrider;
+mod lobster;
 pub mod movement;
 mod movement_god;
 mod pawn;
 mod queen;
 mod rook;
 mod tempest_bishop;
+mod tempest_king;
 mod tempest_knight;
 mod tempest_pawn;
 mod tempest_queen;
@@ -44,15 +48,19 @@ pub use bouncing_tempest_bishop::BOUNCING_TEMPEST_BISHOP;
 pub use bouncing_tempest_queen::BOUNCING_TEMPEST_QUEEN;
 pub use bouncing_tempest_rook::BOUNCING_TEMPEST_ROOK;
 pub use cardinal::CARDINAL;
+pub use centaur::CENTAUR;
+pub use emperor::EMPEROR;
 pub use hook::HOOK;
 pub use king::KING;
 pub use knight::KNIGHT;
 pub use knightrider::KNIGHTRIDER;
+pub use lobster::LOBSTER;
 pub use movement_god::MOVEMENT_GOD;
 pub use pawn::PAWN;
 pub use queen::QUEEN;
 pub use rook::ROOK;
 pub use tempest_bishop::TEMPEST_BISHOP;
+pub use tempest_king::TEMPEST_KING;
 pub use tempest_knight::TEMPEST_KNIGHT;
 pub use tempest_pawn::TEMPEST_PAWN;
 pub use tempest_queen::TEMPEST_QUEEN;
@@ -143,6 +151,10 @@ pub const ALL: &[PieceDefinition] = &[
     typhoon_rook::DEFINITION,
     typhoon_bishop::DEFINITION,
     typhoon_knight::DEFINITION,
+    emperor::DEFINITION,
+    centaur::DEFINITION,
+    lobster::DEFINITION,
+    tempest_king::DEFINITION,
 ];
 
 /// Permanent-roster prerequisites. The source piece still has to be alive at rest.

@@ -1257,6 +1257,73 @@ footer span {
   margin: 0 auto;
   padding: 32px 30px;
 }
+.act-map-screen[data-floor="2"] {
+  background: radial-gradient(ellipse at 55% 20%, #e5e0c9 0%, #f5f3ec 68%);
+}
+.act-map-screen[data-floor="2"] .map-chart {
+  background: radial-gradient(ellipse at 50% 50%, #b5a97336, transparent 75%);
+}
+.act-map-screen[data-floor="2"] .map-connections path.next { stroke: #a68045; }
+.map-progress .expedition-open { margin: 0 0 10px auto; }
+
+.floor-transition {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  color: #f9efcf;
+  background: #0e1917;
+  animation: floor-cover-in .6s ease-out both;
+}
+.floor-transition.act-1 { background: radial-gradient(circle at center, #284a3b, #0e1c18 75%); }
+.floor-transition.stage-in { animation: floor-cover-out 1.1s ease-in-out both; }
+.floor-transition-title { display: grid; gap: 8px; text-align: center; animation: floor-title .7s ease-out both; }
+.floor-transition-title small { color: #bda572; font-size: 11px; letter-spacing: .26em; }
+.floor-transition-title strong { font: 700 clamp(68px, 13vw, 150px) Georgia, serif; letter-spacing: .07em; text-shadow: 0 0 40px #cba86055; }
+.floor-transition-title span { font-size: 18px; letter-spacing: .16em; }
+.floor-transition button { position: absolute; right: 25px; bottom: 24px; padding: 8px 12px; border: 1px solid #bda572; background: #172824; color: #f9efcf; }
+@keyframes floor-cover-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes floor-cover-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes floor-title { from { opacity: 0; transform: translateY(16px) scale(.96); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .floor-transition, .floor-transition.stage-in, .floor-transition-title { animation: none; }
+}
+
+.expedition-backdrop { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 20px; background: #10231dcc; }
+.expedition-panel { width: min(1400px, 100%); max-height: min(90vh, 900px); overflow: auto; background: #f8f6ed; border: 1px solid #c3b186; box-shadow: 0 20px 70px #07150f88; padding: 24px; }
+.expedition-header { display: flex; justify-content: space-between; align-items: start; border-bottom: 1px solid var(--line); padding-bottom: 14px; margin-bottom: 18px; }
+.expedition-header h2 { font: 700 30px "Noto Serif KR", serif; }
+.expedition-columns { display: grid; grid-template-columns: minmax(260px, 1.1fr) minmax(200px, .9fr) minmax(290px, 1.3fr); gap: 24px; }
+.expedition-columns > section { min-width: 0; }
+.expedition-columns h3 { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 15px; margin-bottom: 14px; }
+.expedition-columns h3 strong { color: #a47c36; font: 700 30px Georgia, serif; }
+.expedition-board { display: grid; grid-template-columns: repeat(8, 1fr); aspect-ratio: 1; border: 4px solid #385743; }
+.expedition-board > div { position: relative; min-width: 0; }
+.expedition-board .light { background: #e8e8d3; }
+.expedition-board .dark { background: #86a080; }
+.expedition-board span { position: absolute; inset: 0; display: grid; place-items: center; }
+.expedition-board .piece-image { width: 94%; height: 94%; }
+.expedition-board i { position: absolute; right: 0; top: 0; color: #c18c2d; font-size: 10px; font-style: normal; }
+.expedition-position > p { margin-top: 10px; font-size: 11px; color: var(--muted); }
+.expedition-list { max-height: 590px; overflow: auto; }
+.expedition-list .relic { margin-bottom: 8px; }
+.expedition-cards { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-height: 590px; overflow: auto; }
+.expedition-cards .playing-card { width: 100%; min-width: 0; min-height: 270px; }
+.deck-quantity { position: absolute; top: 10px; right: 10px; color: #a47c36; }
+@media (max-width: 950px) {
+  .expedition-columns { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .expedition-deck { grid-column: 1 / -1; }
+  .expedition-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .expedition-backdrop { padding: 6px; }
+  .expedition-panel { max-height: 96vh; padding: 14px; }
+  .expedition-columns { grid-template-columns: 1fr; }
+  .expedition-deck { grid-column: auto; }
+  .expedition-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .map-heading { align-items: start; }
+}
 .map-heading {
   display: flex;
   justify-content: space-between;

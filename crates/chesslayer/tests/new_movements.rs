@@ -35,6 +35,7 @@ fn scene(kind: PieceType, side: PlayerId) -> Battle {
         encounter: Encounter {
             enemies,
             royal_id: 100,
+            additional_royal_ids: vec![],
         },
     })
     .unwrap();

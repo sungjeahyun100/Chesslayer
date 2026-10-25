@@ -36,6 +36,7 @@ fn catalog_entries_are_unique_and_connected() {
                     position: Position::new(4, 0),
                 }],
                 royal_id: 100,
+                additional_royal_ids: vec![],
             },
         })
         .unwrap();

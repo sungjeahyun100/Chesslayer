@@ -62,6 +62,7 @@ fn end_scene(g: &mut Game, survivor: &str, winning_square: &str) {
                 position: target,
             }],
             royal_id: 100,
+            additional_royal_ids: vec![],
         },
     })
     .unwrap();
@@ -162,6 +163,7 @@ fn initiative_scene(actions: u8) -> Battle {
                     },
                 ],
                 royal_id: 100,
+                additional_royal_ids: vec![],
             },
         },
         BattleOptions {
@@ -256,6 +258,7 @@ fn initiative_filters_engine_and_ai_counts_enemy_turns_including_haste_and_passe
                     position: at("a1"),
                 }],
                 royal_id: 100,
+                additional_royal_ids: vec![],
             },
         },
         BattleOptions {
@@ -400,9 +403,27 @@ fn hard_disk_rest_revival_missing_ids_and_shuffled_collisions_stay_consistent() 
         target: TEMPEST_BISHOP,
     })
     .unwrap();
+    let preview = g.snapshot().next_battle_pieces;
+    assert_eq!(
+        preview.iter().find(|p| p.id == 3).unwrap().kind,
+        TEMPEST_BISHOP
+    );
+    assert!(preview.iter().all(|p| p.id != 1));
     let mut replay = g.clone();
     start(&mut g, 2);
     start(&mut replay, 2);
+    for piece in preview {
+        let deployed = g
+            .battle
+            .outcome()
+            .into_iter()
+            .find(|p| p.id == piece.id)
+            .unwrap();
+        assert_eq!(
+            deployed.position.map(|p| (p.rank * 8 + p.file) as usize),
+            Some(piece.cell)
+        );
+    }
     assert_eq!(
         serde_json::to_string(&g.snapshot()).unwrap(),
         serde_json::to_string(&replay.snapshot()).unwrap()
@@ -470,6 +491,46 @@ fn hard_disk_rest_revival_missing_ids_and_shuffled_collisions_stay_consistent() 
             assert_eq!(g.phase, RunPhase::Reward); // Shuffled royal collided.
         }
     }
+}
+
+#[test]
+fn map_preview_matches_next_battle_and_does_not_advance_rng() {
+    let mut game = Game::new("guardian", 91).unwrap();
+    game.relics.extend([Relic::QueensIndian, Relic::HardDisk]);
+    let mut roster = game.battle.outcome();
+    roster[0].position = None;
+    roster[8].kind = TEMPEST_PAWN;
+    roster[8].upgrades.push("tempest".into());
+    game.battle = Battle::new(BattleStart {
+        players: roster,
+        encounter: encounter(0),
+    })
+    .unwrap();
+    game.phase = RunPhase::Map;
+    let before = serde_json::to_string(&game.snapshot()).unwrap();
+    let preview = game.snapshot().next_battle_pieces;
+    assert_eq!(serde_json::to_string(&game.snapshot()).unwrap(), before);
+    let mut untouched = game.clone();
+    start(&mut game, 0);
+    start(&mut untouched, 0);
+    assert_eq!(
+        serde_json::to_string(&game.snapshot()).unwrap(),
+        serde_json::to_string(&untouched.snapshot()).unwrap()
+    );
+    for piece in preview {
+        let actual = game
+            .battle
+            .outcome()
+            .into_iter()
+            .find(|p| p.id == piece.id)
+            .unwrap();
+        assert_eq!(actual.kind, piece.kind);
+        assert_eq!(
+            actual.position.map(|p| (p.rank * 8 + p.file) as usize),
+            Some(piece.cell)
+        );
+    }
+    assert!(game.battle.outcome()[0].position.is_none());
 }
 
 #[test]

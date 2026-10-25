@@ -1,4 +1,5 @@
 import { test, expect } from "@playwright/test";
+import type { Command } from "../src/types";
 
 async function startMap(
   page: import("@playwright/test").Page,
@@ -46,6 +47,126 @@ async function layout(page: import("@playwright/test").Page) {
     })),
   );
 }
+
+test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 연출을 반복하지 않는다", async ({ page }) => {
+  await page.goto("/");
+  await expect(page.locator(".home-version")).toHaveText("v0.2.0");
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await expect(page.getByRole("status", { name: "제1층 진입" })).toContainText("ACT I");
+  await expect(page.locator(".floor-transition")).toHaveCount(0);
+  await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "1");
+  const saved = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
+  expect(JSON.parse(saved!).commands).toHaveLength(0);
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  await expect(page.locator(".floor-transition")).toHaveCount(0);
+  await expect(page.locator(".map-node:enabled")).toHaveCount(3);
+
+  await page.reload();
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await expect(page.getByRole("status", { name: "제1층 진입" })).toBeVisible();
+  await page.getByRole("button", { name: "층 전환 연출 건너뛰기" }).click();
+  await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "1");
+
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.reload();
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await expect(page.locator(".floor-transition")).toHaveCount(0);
+  await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "1");
+});
+
+test("갈림길 원정 현황은 배치·유물·전체 덱을 보여주고 저장 기록을 바꾸지 않는다", async ({ page }) => {
+  await startMap(page);
+  const before = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
+  await page.getByRole("button", { name: "원정 현황" }).click();
+  const dialog = page.getByRole("dialog", { name: "원정 현황" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator(".expedition-board [data-piece-id]")).toHaveCount(16);
+  await expect(dialog.getByRole("heading", { name: "보유 유물 1" })).toBeVisible();
+  await expect(dialog.getByRole("heading", { name: "전체 카드 덱 0장" })).toBeVisible();
+  await page.screenshot({ path: "test-results/expedition-status-desktop.png" });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/expedition-status-mobile.png" });
+  await page.keyboard.press("Escape");
+  await expect(dialog).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(before);
+  await expect(page.locator(".map-node:enabled")).toHaveCount(3);
+});
+
+test("보스 보상 뒤 ACT II 연출을 건너뛰어도 저장된 2층 진행은 한 번만 적용된다", async ({ page }) => {
+  const { readFileSync } = await import("node:fs");
+  const fixture: Command[] = JSON.parse(readFileSync("../crates/chesslayer/tests/fixtures/winning-run.json", "utf8"));
+  const commands: Command[] = [
+    ...fixture.slice(0, 15),
+    { type: "move", from: 60, to: 4 },
+    { type: "choose_reward", index: 0 },
+    { type: "select_node", id: 17 },
+    { type: "claim_treasure" },
+    { type: "select_node", id: 18 },
+  ];
+  const reward: Extract<Command, { type: "choose_reward" }> = { type: "choose_reward", index: 2 };
+  await page.goto("/");
+  await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
+  const saved = await page.evaluate(async (commands) => {
+    const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+    await init();
+    const game = new WebGame("vanguard", 2026);
+    try {
+      for (const [index, command] of commands.entries()) {
+        let state;
+        try { state = JSON.parse(game.dispatch(JSON.stringify(command))); }
+        catch (error) { throw new Error(`fixture command ${index} ${JSON.stringify(command)}: ${String(error)} state ${game.snapshot()}`); }
+        while (state.phase === "combat" && state.turn === 1)
+          state = JSON.parse(game.dispatch(JSON.stringify({ type: "enemy_step" })));
+      }
+      const boss = JSON.parse(game.snapshot());
+      const royal = boss.pieces.find((piece: { owner: number; royal: boolean }) => piece.owner === 1 && piece.royal);
+      const winningMove = boss.moves.find((move: { to: number }) => move.to === royal?.cell);
+      if (!winningMove) throw new Error(`no direct boss capture: ${JSON.stringify({ royal, moves: boss.moves, pieces: boss.pieces })}`);
+      game.dispatch(JSON.stringify({ type: "move", from: winningMove.from, to: winningMove.to, promotion: winningMove.promotion?.kind }));
+      return game.save();
+    } finally { game.free(); }
+  }, commands);
+  await page.evaluate((value) => localStorage.setItem("chesslayer.run.v1", value), saved);
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  await expect(page.locator("main")).toHaveAttribute("data-phase", "reward");
+  await page.locator(".reward-cards button").nth(reward.index).click();
+  await expect(page.getByRole("status", { name: "제2층 진입" })).toBeVisible();
+  await page.getByRole("button", { name: "층 전환 연출 건너뛰기" }).click();
+  await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "2");
+  await expect(page.getByRole("heading", { name: "두 번째 층" })).toBeVisible();
+  const after = await page.evaluate(async ({ saved, reward }) => {
+    const { WebGame } = await import("/src/wasm/chesslayer_web.js");
+    const expected = WebGame.restore(saved);
+    const actual = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
+    try {
+      expected.dispatch(JSON.stringify(reward));
+      return { equal: expected.snapshot() === actual.snapshot(), snapshot: JSON.parse(actual.snapshot()) };
+    } finally { expected.free(); actual.free(); }
+  }, { saved, reward });
+  expect(after.equal).toBe(true);
+  expect(after.snapshot.floor).toBe(2);
+  expect(after.snapshot.rest_options.every((piece: { dead: boolean }) => !piece.dead)).toBe(true);
+  expect(after.snapshot.next_battle_pieces).toHaveLength(after.snapshot.rest_options.length);
+  await page.getByRole("button", { name: "원정 현황" }).click();
+  await expect(page.getByRole("dialog", { name: "원정 현황" }).locator(".expedition-cards .playing-card")).toHaveCount(new Set(after.snapshot.deck.map((card: { kind: string }) => card.kind)).size);
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  await expect(page.locator(".floor-transition")).toHaveCount(0);
+  await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "2");
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.evaluate((value) => localStorage.setItem("chesslayer.run.v1", value), saved);
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  await page.locator(".reward-cards button").nth(reward.index).click();
+  await expect(page.locator(".floor-transition")).toHaveCount(0);
+  await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "2");
+});
 
 test("실제 WASM: 빈 초기 덱, 합법 수, 적 행동", async ({ page }) => {
   const errors: string[] = [];
@@ -101,18 +222,18 @@ test("모바일 빈 덱 전투 보드가 화면 안에서 조작된다", async (
   });
 });
 
-test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·보스까지 완주", async ({
+test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행", async ({
   page,
 }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   const { readFileSync } = await import("node:fs");
-  const commands = JSON.parse(
+  const commands = (JSON.parse(
     readFileSync(
       "../crates/chesslayer/tests/fixtures/winning-run.json",
       "utf8",
     ),
-  );
+  ) as Command[]).slice(0, 14);
   const square = (cell: number) =>
     `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
   await startMap(page);
@@ -217,7 +338,7 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
       ).toBeVisible();
       await expect(page.locator(".reward-cards button")).toHaveCount(3);
       await page.locator(".reward-cards button").nth(cmd.index).click();
-      await expect(page.locator("main")).toHaveAttribute("data-phase", visitedKinds.has("boss") ? "victory" : "map");
+      await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
       if (!visitedKinds.has("boss")) await expect(page.locator(".map-supplies")).toContainText("덱");
     } else if (cmd.type === "rest_upgrade") {
       await page.locator('[data-square="a2"]').click();
@@ -237,24 +358,15 @@ test("생성된 맵을 유지하며 분기·합류·보물·엘리트·휴식·�
       await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
     }
   }
-  expect(selections).toBe(7);
-  expect(branches).toBeGreaterThanOrEqual(2);
-  expect(merges).toBeGreaterThanOrEqual(2);
-  expect([...visitedKinds].sort()).toEqual([
-    "boss",
-    "combat",
-    "elite",
-    "rest",
-    "treasure",
-  ]);
-  await expect(page.locator("main")).toHaveAttribute("data-phase", "victory");
-  await expect(
-    page.getByRole("heading", { name: "마지막 왕관까지." }),
-  ).toBeVisible();
-  await expect(page.getByText("구행 보스를 쓰러뜨렸습니다. 첫 번째 원정을 완수했습니다.")).toBeVisible();
-  await expect(page.getByRole("log")).toContainText("시작 칸으로 복귀");
+  expect(selections).toBe(4);
+  expect(branches).toBeGreaterThanOrEqual(1);
+  expect(merges).toBeGreaterThanOrEqual(1);
+  expect(visitedKinds).toContain("rest");
+  await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
+  await expect(page.getByRole("heading", { name: "갈림길의 숲" })).toBeVisible();
+  await expect(page.getByRole("log")).toContainText("휴식: 폰 → 템페스트 폰 강화");
   await page.screenshot({
-    path: "test-results/map-run-victory.png",
+    path: "test-results/map-rest-route.png",
     fullPage: true,
   });
   expect(errors).toEqual([]);

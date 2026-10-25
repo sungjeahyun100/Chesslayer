@@ -1,4 +1,6 @@
-use chesslayer::{cards::CardKind, content::*, game::*, map::NodeKind, *};
+use chesslayer::{
+    cards::CardKind, content::pieces::TEMPEST_KNIGHT, content::*, game::*, map::NodeKind, *,
+};
 
 // A real royal capture on a short test board isolates reward rules from AI tactics.
 fn win(g: &mut Game) {
@@ -20,6 +22,67 @@ fn win(g: &mut Game) {
 }
 fn snapshot(g: &Game) -> String {
     serde_json::to_string(&g.snapshot()).unwrap()
+}
+
+#[test]
+fn ascending_after_boss_revives_every_piece_without_losing_growth_or_hard_disk_positions() {
+    let mut game = Game::new("guardian", 2026).unwrap();
+    game.relics.push(Relic::HardDisk);
+    game.current_node = Some(
+        game.map
+            .nodes
+            .iter()
+            .find(|node| node.kind == NodeKind::Boss)
+            .unwrap()
+            .id,
+    );
+    let mut players = Battle::standard_roster();
+    players[0].position = None;
+    players[1].position = None;
+    players[1].kind = TEMPEST_KNIGHT;
+    players[1].upgrades.push("tempest".into());
+    players[1].persistent.insert("growth".into(), 3);
+    players[2].position = Some(Position::new(0, 7)); // Blocks the dead rook's home.
+    players[3].position = Some(Position::new(4, 1)); // Captures the royal on e8.
+    game.battle = Battle::new(BattleStart {
+        players,
+        encounter: encounter(0),
+    })
+    .unwrap();
+    game.phase = RunPhase::Combat;
+    game.dispatch(Command::Move {
+        from: 12,
+        to: 4,
+        promotion: None,
+    })
+    .unwrap();
+    assert_eq!(game.phase, RunPhase::Reward);
+    assert_eq!(
+        game.battle
+            .outcome()
+            .iter()
+            .filter(|piece| piece.position.is_none())
+            .count(),
+        2
+    );
+    let mut replay = game.clone();
+    game.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    replay.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    assert_eq!(snapshot(&game), snapshot(&replay));
+    assert_eq!(game.floor, 2);
+    assert_eq!(game.phase, RunPhase::Map);
+    let roster = game.battle.outcome();
+    assert!(roster.iter().all(|piece| piece.position.is_some()));
+    assert_eq!(roster[0].position, Some(Position::new(1, 7)));
+    assert_eq!(roster[1].position, Some(Position::new(2, 7)));
+    assert_eq!(roster[2].position, Some(Position::new(0, 7)));
+    assert_eq!(roster[1].kind, TEMPEST_KNIGHT);
+    assert_eq!(roster[1].upgrades, ["tempest"]);
+    assert_eq!(roster[1].persistent.get("growth"), Some(&3));
+    assert_eq!(game.snapshot().next_battle_pieces.len(), roster.len());
+    let after = snapshot(&game);
+    assert!(game.dispatch(Command::ChooseReward { index: 0 }).is_err());
+    assert_eq!(snapshot(&game), after);
 }
 
 #[test]
@@ -147,11 +210,29 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
     win(&mut g);
     assert_eq!(g.snapshot().rewards.len(), 3);
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    assert_eq!(g.phase, RunPhase::Map);
+    assert_eq!(g.floor, 2);
+    assert_eq!(g.available_nodes().len(), 3);
+    assert!(g
+        .map
+        .nodes
+        .iter()
+        .filter(|n| n.kind == NodeKind::Boss)
+        .all(|n| encounters::FLOOR_TWO_BOSSES.contains(&n.encounter.unwrap())));
+    g.current_node = Some(
+        g.map
+            .nodes
+            .iter()
+            .find(|n| n.kind == NodeKind::Boss)
+            .unwrap()
+            .id,
+    );
+    win(&mut g);
+    g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     assert_eq!(g.phase, RunPhase::Victory);
-    assert!(g.completed.contains(&g.current_node.unwrap()));
     assert_eq!(
         g.deck.iter().map(|c| c.id).collect::<Vec<_>>(),
-        (1..=14).collect::<Vec<_>>()
+        (1..=15).collect::<Vec<_>>()
     );
 
     // Selecting the elite's advertised relic first makes its extra relic a Ward.

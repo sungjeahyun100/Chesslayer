@@ -8,6 +8,7 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 10,
     description: "앞으로 한 칸 이동하고 앞 대각선 한 칸의 적을 포획합니다. 이동하지 않은 폰은 초기 랭크에서 두 칸 전진할 수 있습니다.",
     initial_double_step: true,
+    promotions: &[super::QUEEN, super::ROOK, super::BISHOP, super::KNIGHT],
     upgrades: &[
         super::UpgradeDefinition {
             target: super::TEMPEST_PAWN,

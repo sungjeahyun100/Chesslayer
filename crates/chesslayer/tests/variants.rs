@@ -35,11 +35,50 @@ fn scene(kind: u16, side: u16) -> Battle {
         encounter: Encounter {
             enemies,
             royal_id: 100,
+            additional_royal_ids: vec![],
         },
     })
     .unwrap();
     b.turn = side;
     b
+}
+
+#[test]
+fn royal_horde_pawn_promotes_to_queen_without_losing_royal_id() {
+    let mut players = Battle::standard_roster();
+    for player in &mut players {
+        player.position = None;
+    }
+    players[4].position = Some(Position::new(7, 7));
+    let mut game = Game::new("vanguard", 12).unwrap();
+    game.battle = Battle::new(BattleStart {
+        players,
+        encounter: Encounter {
+            enemies: vec![EnemyPiece {
+                id: 100,
+                kind: PAWN,
+                position: Position::new(0, 6),
+            }],
+            royal_id: 100,
+            additional_royal_ids: vec![],
+        },
+    })
+    .unwrap();
+    game.phase = RunPhase::Combat;
+    game.battle.turn = ENEMY;
+    let actions = game.battle.legal_actions(Position::new(0, 6)).unwrap();
+    assert_eq!(actions.len(), 4);
+    assert!(actions.iter().all(|a| a.first.transition.is_some()));
+    game.dispatch(Command::EnemyStep).unwrap();
+    let promoted = game
+        .battle
+        .board
+        .piece_at(Position::new(0, 7))
+        .unwrap()
+        .unwrap();
+    assert_eq!((promoted.id, promoted.kind), (100, QUEEN));
+    assert!(game.battle.is_enemy_royal(promoted.id));
+    assert_eq!(game.battle.result, GameResult::Ongoing);
 }
 fn put(b: &mut Battle, side: u16, x: i32, y: i32, kind: u16, owner: u16) {
     b.board
@@ -327,6 +366,7 @@ fn pawn_start_rules_and_all_promotions_preserve_instances() {
                     encounter: Encounter {
                         enemies,
                         royal_id: 100,
+                        additional_royal_ids: vec![],
                     },
                 })
                 .unwrap();
@@ -359,6 +399,7 @@ fn pawn_start_rules_and_all_promotions_preserve_instances() {
                                 position: Position::new(7, 0),
                             }],
                             royal_id: 100,
+                            additional_royal_ids: vec![],
                         },
                     })
                     .unwrap();

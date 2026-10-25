@@ -76,6 +76,163 @@ fn floor_one_formations_have_exact_squares_kinds_and_royals() {
     }
 }
 
+#[test]
+fn floor_two_rosters_and_random_royals() {
+    let expected = [
+        (TWO_AMAZON, 1),
+        (TWO_UNICORN, 1),
+        (TWO_LOBSTERS, 4),
+        (TWO_TEMPEST_PAWNS, 8),
+        (TWO_TEMPEST_STOCKFISH, 16),
+        (TWO_EMPEROR, 1),
+        (TWO_MONGOLS, 16),
+        (TWO_HORDE, 36),
+        (TWO_TWINS, 2),
+    ];
+    for (index, count) in expected {
+        let roster = encounter(index);
+        assert_eq!(roster.enemies.len(), count, "{}", ENCOUNTERS[index].id);
+        Battle::new(BattleStart {
+            players: Battle::standard_roster(),
+            encounter: roster,
+        })
+        .unwrap();
+    }
+    assert_eq!(
+        encounter(TWO_LOBSTERS)
+            .enemies
+            .iter()
+            .map(|p| p.position)
+            .collect::<Vec<_>>(),
+        ["a8", "b8", "g8", "h8"].map(p)
+    );
+    assert_eq!(
+        encounter(TWO_MONGOLS)
+            .enemies
+            .iter()
+            .filter(|p| p.kind == KNIGHT)
+            .count(),
+        15
+    );
+    assert_eq!(encounter(TWO_TWINS).additional_royal_ids, vec![101]);
+    for index in [TWO_LOBSTERS, TWO_TEMPEST_PAWNS] {
+        let mut selected = HashSet::new();
+        for seed in 0..64 {
+            let mut roster = encounter(index);
+            choose_random_royal(index, &mut roster, &mut chesslayer::content::Rng::new(seed));
+            selected.insert(roster.royal_id);
+            assert!(roster.enemies.iter().any(|p| p.id == roster.royal_id));
+        }
+        assert!(selected.len() > 1);
+    }
+}
+
+#[test]
+fn twins_require_both_captures_and_surviving_god_can_act() {
+    let mut players = Battle::standard_roster();
+    for player in &mut players {
+        if player.kind != KING {
+            player.position = None;
+        }
+    }
+    players[0].position = Some(p("e7"));
+    players[7].position = Some(p("d7"));
+    let mut battle = Battle::new(BattleStart {
+        players,
+        encounter: encounter(TWO_TWINS),
+    })
+    .unwrap();
+    let first = battle
+        .legal_actions(p("e7"))
+        .unwrap()
+        .into_iter()
+        .find(|a| a.first.move_to == p("e8"))
+        .unwrap();
+    battle.apply_piece_action(&first).unwrap();
+    assert_eq!(battle.result, GameResult::Ongoing);
+    assert!(battle.is_enemy_royal(101));
+    assert!(!battle.legal_actions(p("d8")).unwrap().is_empty());
+    let mut game = Game::new("vanguard", 7).unwrap();
+    game.phase = RunPhase::Combat;
+    game.battle = battle.clone();
+    game.battle.grant_ward(game.battle.king_id).unwrap();
+    game.dispatch(Command::EnemyStep).unwrap();
+    assert_eq!(game.phase, RunPhase::Combat);
+    battle.end_turn().unwrap();
+    let second = battle
+        .legal_actions(p("d7"))
+        .unwrap()
+        .into_iter()
+        .find(|a| a.first.move_to == p("d8"))
+        .unwrap();
+    battle.apply_piece_action(&second).unwrap();
+    assert_eq!(
+        battle.result,
+        GameResult::Win {
+            winner: PLAYER,
+            reason: ResultReason::RoyalCaptured
+        }
+    );
+}
+
+#[test]
+fn emperor_absorbs_captured_movement_and_initiative_cancels() {
+    let mut players = Battle::standard_roster();
+    for player in &mut players {
+        if player.kind != KING {
+            player.position = None;
+        }
+    }
+    players[0].position = Some(p("e7"));
+    players[4].position = Some(p("h1"));
+    let start = BattleStart {
+        players,
+        encounter: encounter(TWO_EMPEROR),
+    };
+    let both = Battle::with_options(
+        start.clone(),
+        BattleOptions {
+            initiative: true,
+            enemy_initiative: true,
+            ..BattleOptions::default()
+        },
+        &mut chesslayer::content::Rng::new(1),
+    )
+    .unwrap();
+    assert_eq!(both.initiative_turns_left(), 0);
+    assert_eq!(both.enemy_initiative_turns_left(), 0);
+    let protected = Battle::with_options(
+        start.clone(),
+        BattleOptions {
+            enemy_initiative: true,
+            ..BattleOptions::default()
+        },
+        &mut chesslayer::content::Rng::new(1),
+    )
+    .unwrap();
+    assert_eq!(protected.enemy_initiative_turns_left(), 10);
+    assert!(!protected
+        .legal_actions(p("e7"))
+        .unwrap()
+        .iter()
+        .any(|a| a.first.move_to == p("e8")));
+    let mut battle = Battle::new(start).unwrap();
+    battle.end_turn().unwrap();
+    let capture = battle
+        .legal_actions(p("e8"))
+        .unwrap()
+        .into_iter()
+        .find(|a| a.first.move_to == p("e7"))
+        .unwrap();
+    battle.apply_piece_action(&capture).unwrap();
+    battle.end_turn().unwrap();
+    assert!(battle
+        .legal_actions(p("e7"))
+        .unwrap()
+        .iter()
+        .any(|a| a.first.move_to == p("e3")));
+}
+
 fn scene(side: PlayerId) -> Battle {
     let mut b = Battle::new(BattleStart {
         players: Battle::standard_roster(),

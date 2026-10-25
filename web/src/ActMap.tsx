@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { ExpeditionStatus } from "./ExpeditionStatus";
 import { PieceImage } from "./PieceImage";
 import type { Command, MapNode, NodeKind, Snapshot } from "./types";
 
@@ -7,7 +8,7 @@ export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
   elite: { icon: <PieceImage pieceKey="rook" owner={1} />, label: "엘리트" },
   rest: { icon: "⌂", label: "휴식" },
   treasure: { icon: "◇", label: "보물" },
-  boss: { icon: <PieceImage pieceKey="hook" owner={1} />, label: "보스" },
+  boss: { icon: "♛", label: "보스" },
 };
 const status = (node: MapNode) =>
   node.current
@@ -30,6 +31,7 @@ export function ActMap({
   onClose: () => void;
 }) {
   const [inspected, inspect] = useState<number | null>(null);
+  const [statusOpen, setStatusOpen] = useState(false);
   const top = useRef<HTMLElement>(null);
   useEffect(() => {
     top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -51,14 +53,15 @@ export function ActMap({
   const y = (node: MapNode) => 58 + (map.rows - 1 - node.row) * 95;
   const choose = (id: number) => send({ type: "select_node", id });
   return (
-    <main className="act-map-screen" data-phase={state.phase} ref={top}>
+    <main className="act-map-screen" data-phase={state.phase} data-floor={state.floor} ref={top}>
       <div className="map-heading">
         <div>
-          <p className="eyebrow">ACT I / {state.character}</p>
-          <h1>갈림길의 숲</h1>
+          <p className="eyebrow">{state.floor}층 / {state.character}</p>
+          <h1>{state.floor === 1 ? "갈림길의 숲" : "두 번째 층"}</h1>
           <p>하나의 원정, 당신이 고르는 길.</p>
         </div>
         <div className="map-progress">
+          {state.phase === "map" && <button className="primary expedition-open" onClick={() => setStatusOpen(true)}>원정 현황 ↗</button>}
           <strong>{map.nodes.filter((n) => n.visited).length}</strong>
           <span> / {map.rows}개 지점 완료</span>
           {state.phase !== "map" && (
@@ -77,7 +80,7 @@ export function ActMap({
         ))}
       </div>
       <div className="map-content">
-        <section className="map-chart" aria-label="제1막 전체 경로">
+        <section className="map-chart" aria-label={`${state.floor}층 전체 경로`}>
           <div className="map-direction">보스를 향해 ↑</div>
           <svg
             className="map-connections"
@@ -260,6 +263,7 @@ export function ActMap({
           ))}
         </div>
       )}
+      {statusOpen && <ExpeditionStatus state={state} onClose={() => setStatusOpen(false)} />}
     </main>
   );
 }

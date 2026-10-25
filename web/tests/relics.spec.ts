@@ -43,7 +43,7 @@ test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·�
         return { start, saved, next: JSON.parse(game.snapshot()) as Snapshot, nextSave: game.save() };
       } finally { game.free(); }
     }, run);
-    expect(JSON.parse(result.saved).version).toBe(8);
+    expect(JSON.parse(result.saved).version).toBe(9);
     expect(result.start.relics.some((r) => r.id === run.relic)).toBe(true);
     if (run.relic === "initiative") {
       expect(result.start.initiative_turns_left).toBe(10);

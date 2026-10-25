@@ -37,6 +37,7 @@ fn scene(kind: PieceType, side: PlayerId) -> Battle {
         encounter: Encounter {
             enemies,
             royal_id: 100,
+            additional_royal_ids: vec![],
         },
     })
     .unwrap();
@@ -305,6 +306,7 @@ fn resting_game(source_kind: PieceType, donor_kinds: &[PieceType], source_alive:
                 position: Position::new(7, 0),
             }],
             royal_id: 100,
+            additional_royal_ids: vec![],
         },
     })
     .unwrap();
@@ -473,6 +475,7 @@ fn temporary_card_upgrade_uses_permanent_kinds_for_unlock() {
                     position: Position::new(7, 0),
                 }],
                 royal_id: 100,
+                additional_royal_ids: vec![],
             },
         })
         .unwrap()

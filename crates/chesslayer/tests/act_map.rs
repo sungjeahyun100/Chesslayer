@@ -77,6 +77,39 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
 }
 
 #[test]
+fn second_floor_nodes_draw_only_registered_encounters() {
+    let mut normal = HashSet::new();
+    let mut elite = HashSet::new();
+    let mut boss = HashSet::new();
+    for seed in 0..128 {
+        let map = ActMap::generate_for_floor(seed, 2);
+        for node in &map.nodes {
+            match node.kind {
+                NodeKind::Combat => {
+                    let id = node.encounter.unwrap();
+                    assert!(encounters::FLOOR_TWO_NORMALS.contains(&id));
+                    normal.insert(id);
+                }
+                NodeKind::Elite => {
+                    let id = node.encounter.unwrap();
+                    assert!(encounters::FLOOR_TWO_ELITES.contains(&id));
+                    elite.insert(id);
+                }
+                NodeKind::Boss => {
+                    let id = node.encounter.unwrap();
+                    assert!(encounters::FLOOR_TWO_BOSSES.contains(&id));
+                    boss.insert(id);
+                }
+                _ => {}
+            }
+        }
+    }
+    assert_eq!(normal, encounters::FLOOR_TWO_NORMALS.into());
+    assert_eq!(elite, encounters::FLOOR_TWO_ELITES.into());
+    assert_eq!(boss, encounters::FLOOR_TWO_BOSSES.into());
+}
+
+#[test]
 fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
     let mut game = Game::new("vanguard", 2026).unwrap();
     let original = game.map.clone();

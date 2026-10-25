@@ -970,5 +970,77 @@
     "sha256": "49dea522266a9a131b4bf559cfc3c1faac1cda4bb217e33f89332c67385ae8d8",
     "changes": "Original small-board silhouette with a distinct movement or storm motif. No extracted image used.",
     "license": "original"
+  },
+  {
+    "key": "emperor",
+    "side": "white",
+    "file": "emperor-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "18df7a675c48fe14f870cf58b118c9f511e1e2c729a9b98b38b7eee6986bbfc7",
+    "changes": "Original compact silhouette for this piece.",
+    "license": "original"
+  },
+  {
+    "key": "emperor",
+    "side": "black",
+    "file": "emperor-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "07d761e5b0b1396031e2a4c24b4a47306033e1c48e98d290d9ccef1c2a0f2ae9",
+    "changes": "Original compact silhouette for this piece.",
+    "license": "original"
+  },
+  {
+    "key": "centaur",
+    "side": "white",
+    "file": "centaur-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "5ec477ab9ef6b9d9a1bcfbf839ba6e3ef66f677960573956b795fe930293a38e",
+    "changes": "Original compact silhouette for this piece.",
+    "license": "original"
+  },
+  {
+    "key": "centaur",
+    "side": "black",
+    "file": "centaur-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "efbcb1f46de0632d8a1127ed738c9237273d80be3bf358c3321acabc8cc90ae7",
+    "changes": "Original compact silhouette for this piece.",
+    "license": "original"
+  },
+  {
+    "key": "lobster",
+    "side": "white",
+    "file": "lobster-white.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "4162ff6a162106efc9711443de1bcd00b2943033e126ff34b88eb5069740983b",
+    "changes": "Original compact silhouette for this piece.",
+    "license": "original"
+  },
+  {
+    "key": "lobster",
+    "side": "black",
+    "file": "lobster-black.svg",
+    "source": "self-authored vector for Chesslayer",
+    "sha256": "225ed92395f7a196c548db872ac55730f7462605ec10885c233ece29a9800870",
+    "changes": "Original compact silhouette for this piece.",
+    "license": "original"
+  },
+  {
+    "key": "tempest_king",
+    "side": "white",
+    "file": "tempest_king-white.svg",
+    "source": "king silhouette already in Chesslayer; original added storm marks",
+    "sha256": "a48e422bc561beebbc96c6b40494af44aae60bc12884ed21c974b0b8d8244718",
+    "changes": "Added original green storm arcs to the existing king artwork.",
+    "license": "project asset derivative"
+  },
+  {
+    "key": "tempest_king",
+    "side": "black",
+    "file": "tempest_king-black.svg",
+    "source": "king silhouette already in Chesslayer; original added storm marks",
+    "sha256": "cdd0c44cbc146278311cd2e5acd728adcb69a44c70c69baaae27b9ec0c75b31f",
+    "changes": "Added original green storm arcs to the existing king artwork.",
+    "license": "project asset derivative"
   }
 ]

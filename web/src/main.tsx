@@ -3,7 +3,6 @@ import { createRoot } from "react-dom/client";
 import init, { WebGame, catalog } from "./wasm/chesslayer_web";
 import type {
   Card,
-  CardDefinition,
   Character,
   Command,
   Piece,
@@ -16,7 +15,8 @@ import { PieceImage } from "./PieceImage";
 import { RestPanel, type RestChoice } from "./RestPanel";
 import { PromotionPicker } from "./PromotionPicker";
 import { UpgradeTree } from "./UpgradeTree";
-import { CardArt, RelicIcon } from "./ContentArt";
+import { RelicIcon } from "./ContentArt";
+import { CardFace } from "./CardFace";
 import { version } from "../package.json";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
@@ -25,32 +25,6 @@ const starterRelicNames: Record<Character["relic"], string> = {
   haste: "가속", whirlwind: "소용돌이", self_defense: "호신용품",
 };
 
-function Tags({ card }: { card: CardDefinition }) {
-  return (
-    <div className="tags">
-      {card.innate && <span>선천성</span>}
-      {card.exhaust && <span>소멸</span>}
-      {card.retain && <span>보존</span>}
-      {card.ethereal && <span>휘발성</span>}
-    </div>
-  );
-}
-function CardFace({ card, selectedCount = 0 }: { card: CardDefinition; selectedCount?: number }) {
-  return (
-    <>
-      <div className="card-top">
-        <span className="cost" aria-label={card.cost_per_target ? `선택 비용 ${selectedCount}` : `비용 ${card.cost}`}>
-          {card.cost_per_target ? (selectedCount || "N") : card.cost}
-        </span>
-        <span>전술 카드</span>
-      </div>
-      <div className="card-symbol"><CardArt kind={card.kind} name={card.name} /></div>
-      <h3>{card.name}</h3>
-      <p>{card.description}</p>
-      <Tags card={card} />
-    </>
-  );
-}
 function BoardPiece({
   piece,
   focused = false,
@@ -106,6 +80,7 @@ function App() {
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
+  const [floorTransition, setFloorTransition] = useState<{ next: Snapshot; stage: "out" | "in" } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const outcomeRef = useRef<HTMLElement>(null);
@@ -155,7 +130,13 @@ function App() {
   const send = useCallback((command: Command) => {
     if (!engine.current) return;
     try {
-      setState(JSON.parse(engine.current.dispatch(JSON.stringify(command))));
+      const before: Snapshot = JSON.parse(engine.current.snapshot());
+      const next: Snapshot = JSON.parse(engine.current.dispatch(JSON.stringify(command)));
+      if (command.type === "choose_reward" && before.floor === 1 && next.floor === 2 && next.phase === "map" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        setFloorTransition({ next, stage: "out" });
+      } else {
+        setState(next);
+      }
       persist(engine.current);
       if (command.type === "rest_upgrade") {
         setRestCompleted(true);
@@ -176,6 +157,29 @@ function App() {
       setError(String(e));
     }
   }, []);
+  useEffect(() => {
+    if (!floorTransition) return;
+    const timer = window.setTimeout(() => {
+      if (floorTransition.stage === "out") {
+        setState(floorTransition.next);
+        setScreen("game");
+        setFloorTransition({ ...floorTransition, stage: "in" });
+      } else setFloorTransition(null);
+    }, floorTransition.stage === "out" ? 600 : 1100);
+    return () => window.clearTimeout(timer);
+  }, [floorTransition]);
+  const skipFloorTransition = () => {
+    if (!floorTransition) return;
+    setState(floorTransition.next);
+    setScreen("game");
+    setFloorTransition(null);
+  };
+  useEffect(() => {
+    if (!floorTransition) return;
+    const escape = (event: KeyboardEvent) => { if (event.key === "Escape") skipFloorTransition(); };
+    window.addEventListener("keydown", escape);
+    return () => window.removeEventListener("keydown", escape);
+  }, [floorTransition]);
   useEffect(() => {
     if (screen !== "game" || state?.phase !== "combat" || state.turn !== 1)
       return;
@@ -229,6 +233,7 @@ function App() {
       engine.current?.free();
       engine.current = next;
       setState(JSON.parse(next.snapshot()));
+      setFloorTransition(null);
       persist(next);
       setRestChoice(null);
       setRestCompleted(false);
@@ -252,7 +257,14 @@ function App() {
       const next = new WebGame(character, seed);
       engine.current?.free();
       engine.current = next;
-      setState(JSON.parse(next.snapshot()));
+      const snapshot: Snapshot = JSON.parse(next.snapshot());
+      if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        setState(snapshot);
+        setFloorTransition(null);
+        setScreen("game");
+      } else {
+        setFloorTransition({ next: snapshot, stage: "out" });
+      }
       persist(next);
       setRestChoice(null);
       setRestCompleted(false);
@@ -264,7 +276,6 @@ function App() {
       setUpgradeFocus(null);
       setMapOpen(false);
       setError("");
-      setScreen("game");
     } catch (e) {
       setError(String(e));
     }
@@ -366,6 +377,10 @@ function App() {
   }
   return (
     <>
+      {floorTransition && <div className={`floor-transition stage-${floorTransition.stage} act-${floorTransition.next.floor}`} role="status" aria-label={`제${floorTransition.next.floor}층 진입`}>
+        <div className="floor-transition-title"><small>CHESSLAYER · {floorTransition.next.floor === 1 ? "EXPEDITION BEGINS" : "NEXT ACT"}</small><strong>ACT {floorTransition.next.floor === 1 ? "I" : "II"}</strong><span>{floorTransition.next.floor === 1 ? "제1막 · 갈림길의 숲" : "제2층에 도착했습니다"}</span><small>{floorTransition.next.floor === 1 ? "원정 시작" : "아군 전원 회복"}</small></div>
+        <button onClick={skipFloorTransition} aria-label="층 전환 연출 건너뛰기">건너뛰기 ↗</button>
+      </div>}
       <header className="topbar">
         <a
           className="brand"
@@ -378,7 +393,7 @@ function App() {
           <PieceImage pieceKey="knight" owner={1} /> CHESSLAYER
         </a>
         <div className="top-right">
-          <span className="edition">FIRST EXPEDITION / 01</span>
+          <span className="edition">FIRST EXPEDITION / {screen === "game" && state?.floor === 2 ? "ACT II" : "ACT I"}</span>
           <button
             className="text-button"
             onClick={() => setHelp(!help)}
@@ -404,7 +419,7 @@ function App() {
           <p>
             소멸: 사용 후 이번 전투에서 제외 · 보존: 턴 종료에도 손패 유지 ·
             선천성: 첫 손패 우선 · 휘발성: 쓰지 않고 턴 종료 시 소멸. 체크
-            제한·캐슬링·앙파상은 없습니다. 강화된 폰은 최종 랭크로 이동할 때
+            제한·캐슬링·앙파상은 없습니다. 폰 계열은 최종 랭크로 이동할 때
             승격할 기물을 선택합니다.
           </p>
         </section>
@@ -519,7 +534,7 @@ function App() {
         <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined}>
           <nav className="node-navigation" aria-label="원정 위치">
             <span>
-              ACT I / {state.map.nodes.find((n) => n.current)!.row + 1}번째 지점
+              {state.floor}층 / {state.map.nodes.find((n) => n.current)!.row + 1}번째 지점
               · {state.node_kind && nodeTypes[state.node_kind].label}
             </span>
             <button className="text-button" onClick={() => { setRestCompleted(false); setMapOpen(true); }}>
@@ -655,6 +670,8 @@ function App() {
                       ? "강화 · 부활은 확정 후 적용"
                       : state.phase === "combat" && state.hard_disk_deployed
                         ? "하드디스크 · 직전 전투 종료 배치 적용"
+                        : state.phase === "combat" && state.enemy_initiative_turns_left > 0
+                          ? `★ 적 로얄: ${state.royal_name} · 적 선공권 ${state.enemy_initiative_turns_left}턴`
                         : `★ 적 로얄: ${state.royal_name}`}
                   </span>
                 </div>
@@ -927,7 +944,7 @@ function App() {
                   </h2>
                   <p>
                     {state.phase === "victory"
-                      ? `${state.encounter} 보스를 쓰러뜨렸습니다. 첫 번째 원정을 완수했습니다.`
+                      ? `${state.encounter} 보스를 쓰러뜨렸습니다. 2층 원정을 완수했습니다.`
                       : "진형은 여기에서 멈추지만, 다음 원정의 한 수는 달라질 수 있습니다."}
                   </p>
                   <button

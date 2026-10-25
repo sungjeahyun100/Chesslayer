@@ -1,6 +1,6 @@
 //! One immutable, seeded Act graph. Run traversal is kept separately by Game.
 use crate::content::{
-    encounters::{ELITES, HOOK_BOSS},
+    encounters::{ELITES, FLOOR_TWO_BOSSES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS, HOOK_BOSS},
     Relic, Rng, ENCOUNTERS, RELIC_REWARD_POOL,
 };
 use serde::Serialize;
@@ -54,8 +54,8 @@ impl MapNode {
             ),
             NodeKind::Boss => {
                 format!(
-                    "{} 승리하고 카드·유물 보상 3개 중 하나를 선택하면 원정을 완수합니다.",
-                    ENCOUNTERS[HOOK_BOSS].description
+                    "{} 승리하고 카드·유물 보상 3개 중 하나를 선택하면 다음 층으로 향하거나 원정을 완수합니다.",
+                    ENCOUNTERS[self.encounter.unwrap()].description
                 )
             }
         }
@@ -68,10 +68,14 @@ pub struct ActMap {
 }
 impl ActMap {
     pub fn generate(seed: u32) -> Self {
+        Self::generate_for_floor(seed, 1)
+    }
+    pub fn generate_for_floor(seed: u32, floor: u8) -> Self {
         // Map creation never consumes the combat/deck RNG stream.
-        let mut rng = Rng::new(seed ^ 0x41c7_9e35);
+        let mut rng = Rng::new(seed ^ 0x41c7_9e35 ^ (u32::from(floor - 1) << 24));
         // Keep the graph, normal encounters and relic stream stable when elite selection changes.
-        let mut elite_rng = Rng::new(seed ^ 0xe11e_0001);
+        let mut elite_rng = Rng::new(seed ^ 0xe11e_0001 ^ (u32::from(floor - 1) << 24));
+        let mut boss_rng = Rng::new(seed ^ 0xb055_0002);
         let widths = [3, 4, 2, 3 + rng.index(2), 2, 3 + rng.index(2), 1];
         let mut nodes = vec![];
         let mut layers = vec![];
@@ -107,10 +111,25 @@ impl ActMap {
             let mut layer = vec![];
             for (i, (lane, kind)) in lanes.into_iter().zip(kinds).enumerate() {
                 let encounter = match kind {
-                    NodeKind::Boss => Some(HOOK_BOSS),
-                    NodeKind::Elite => Some(ELITES[elite_rng.index(ELITES.len())]),
-                    NodeKind::Combat if row == 0 => Some(starting_encounters[i]),
-                    NodeKind::Combat => Some(1 + rng.index(3)),
+                    NodeKind::Boss => Some(if floor == 1 {
+                        HOOK_BOSS
+                    } else {
+                        FLOOR_TWO_BOSSES[boss_rng.index(FLOOR_TWO_BOSSES.len())]
+                    }),
+                    NodeKind::Elite => Some(if floor == 1 {
+                        // Preserve the former four-way roll so existing seeded paths
+                        // keep their encounter unless they rolled the retired Horde.
+                        match elite_rng.index(4) {
+                            0 | 1 => ELITES[0],
+                            2 => ELITES[1],
+                            _ => ELITES[2],
+                        }
+                    } else {
+                        FLOOR_TWO_ELITES[elite_rng.index(FLOOR_TWO_ELITES.len())]
+                    }),
+                    NodeKind::Combat if floor == 1 && row == 0 => Some(starting_encounters[i]),
+                    NodeKind::Combat if floor == 1 => Some(1 + rng.index(3)),
+                    NodeKind::Combat => Some(FLOOR_TWO_NORMALS[rng.index(FLOOR_TWO_NORMALS.len())]),
                     _ => None,
                 };
                 let relic = matches!(kind, NodeKind::Elite | NodeKind::Treasure)

@@ -41,6 +41,7 @@ fn protected_scene(kind: PieceType, royal: bool, king: bool) -> Battle {
         encounter: Encounter {
             enemies,
             royal_id: if royal { 100 } else { 101 },
+            additional_royal_ids: vec![],
         },
     };
     // Select a reproducible seed through the real random selection, never inject a target.
@@ -205,6 +206,7 @@ fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
                 position: at(1, 0),
             }],
             royal_id: 100,
+            additional_royal_ids: vec![],
         },
     })
     .unwrap();

@@ -75,6 +75,7 @@ pub struct Game {
     pub path: Vec<usize>,
     pub completed: Vec<usize>,
     pub seed: u32,
+    pub floor: u8,
     pub character: String,
     pub log: Vec<String>,
     pub round: u32,
@@ -121,6 +122,7 @@ impl Game {
             path: vec![],
             completed: vec![],
             seed,
+            floor: 1,
             character: choice.name.into(),
             log: vec![],
             round: 1,
@@ -205,12 +207,39 @@ impl Game {
         }
         Ok((roster, hard_disk))
     }
+    fn revive_for_next_floor(&mut self) -> Result<usize, String> {
+        let mut roster = self.battle.outcome();
+        let mut occupied: HashSet<_> = roster.iter().filter_map(|p| p.position).collect();
+        let mut revived = 0;
+        for piece in roster.iter_mut().filter(|p| p.position.is_none()) {
+            let position = if !occupied.contains(&piece.origin) {
+                piece.origin
+            } else {
+                (0..8)
+                    .rev()
+                    .flat_map(|rank| (0..8).map(move |file| Position::new(file, rank)))
+                    .find(|position| !occupied.contains(position))
+                    .ok_or("아군을 부활시킬 빈 칸이 없습니다.")?
+            };
+            occupied.insert(position);
+            piece.position = Some(position);
+            piece.moved = false;
+            revived += 1;
+        }
+        if revived > 0 {
+            self.battle
+                .replace_roster_at_rest(roster)
+                .map_err(engine_error)?;
+        }
+        Ok(revived)
+    }
     fn start_battle(&mut self) -> Result<(), String> {
         let index = self
             .current_node
             .and_then(|id| self.map.nodes[id].encounter)
             .ok_or("전투 노드가 아닙니다.")?;
         let mut encounter = encounter(index);
+        content::encounters::choose_random_royal(index, &mut encounter, &mut self.rng);
         self.log(format!("{} · 전투 시작", ENCOUNTERS[index].name));
         if self.relics.contains(&Relic::Whirlwind) {
             let mut positions: Vec<_> = encounter.enemies.iter().map(|e| e.position).collect();
@@ -231,11 +260,15 @@ impl Game {
             actions_per_turn: if haste { HASTE_ACTIONS } else { 1 },
             self_defense: self.relics.contains(&Relic::SelfDefense),
             initiative: self.relics.contains(&Relic::Initiative),
+            enemy_initiative: index == content::encounters::TWO_EMPEROR,
             hard_disk,
         };
         self.battle =
             Battle::with_options(BattleStart { players, encounter }, options, &mut self.rng)
                 .map_err(engine_error)?;
+        if options.initiative && options.enemy_initiative {
+            self.log("선공권: 양측 효과가 서로 상쇄되었습니다.");
+        }
         self.hard_disk_deployed = hard_disk;
         if haste {
             self.log(format!(
@@ -437,7 +470,17 @@ impl Game {
                 self.rewards.clear();
                 self.complete_node();
                 if self.map.nodes[self.current_node.unwrap()].kind == NodeKind::Boss {
-                    self.phase = RunPhase::Victory;
+                    if self.floor == 1 {
+                        let revived = self.revive_for_next_floor()?;
+                        self.floor = 2;
+                        self.map = ActMap::generate_for_floor(self.seed, 2);
+                        self.current_node = None;
+                        self.path.clear();
+                        self.completed.clear();
+                        self.log(format!("2층에 도착했습니다. 아군 전원이 회복되었습니다. 부활한 기물 {revived}기."));
+                    } else {
+                        self.phase = RunPhase::Victory;
+                    }
                 }
             }
             Command::SelectNode { id } => {
@@ -754,6 +797,17 @@ impl Game {
                         }
                     })
                     .sum();
+                if let Some(key) = action
+                    .steps()
+                    .last()
+                    .and_then(|step| step.transition.as_deref())
+                {
+                    if let Some(promoted) = content::pieces::ALL.iter().find(|d| d.key == key) {
+                        score += promoted.value
+                            - content::pieces::definition(piece.unwrap().kind)
+                                .map_or(10, |d| d.value);
+                    }
+                }
                 if self
                     .battle
                     .limiter_status(piece.unwrap().id)
@@ -806,7 +860,7 @@ impl Game {
                         owner: p.owner,
                         cell: i,
                         square: square(pos(i).unwrap()),
-                        royal: p.id == self.battle.royal_id || p.id == self.battle.king_id,
+                        royal: self.battle.is_enemy_royal(p.id) || p.id == self.battle.king_id,
                         ward: self.battle.has_ward(p.id),
                         self_defense: self.battle.has_self_defense(p.id),
                         temporary_upgrade: self.battle.has_temporary_upgrade(p.id),
@@ -884,6 +938,37 @@ impl Game {
             })
             .collect();
         let roster = self.battle.outcome();
+        let next_battle_pieces = if self.phase == RunPhase::Map {
+            self.starting_roster()
+                .map(|(players, _)| {
+                    players
+                        .into_iter()
+                        .filter_map(|p| {
+                            p.position.map(|position| {
+                                let definition = content::pieces::definition(p.kind).unwrap();
+                                PieceView {
+                                    id: p.id,
+                                    kind: p.kind,
+                                    name: definition.name,
+                                    key: definition.key,
+                                    description: definition.description,
+                                    owner: PLAYER,
+                                    cell: cell(position),
+                                    square: square(position),
+                                    royal: p.id == self.battle.king_id,
+                                    ward: false,
+                                    self_defense: false,
+                                    temporary_upgrade: false,
+                                    limiter: None,
+                                }
+                            })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            vec![]
+        };
         let rest_options = roster
             .iter()
             .map(|p| {
@@ -953,6 +1038,7 @@ impl Game {
                 "내 턴 시작 시 코스트가 3으로 회복됩니다."
             },
             initiative_turns_left: self.battle.initiative_turns_left(),
+            enemy_initiative_turns_left: self.battle.enemy_initiative_turns_left(),
             hard_disk_deployed: self.phase == RunPhase::Combat && self.hard_disk_deployed,
             pieces,
             moves,
@@ -961,6 +1047,12 @@ impl Game {
             discard_count: self.cards.discard.len(),
             exhausted_count: self.cards.exhausted.len(),
             deck_count: self.deck.len(),
+            deck: self
+                .deck
+                .iter()
+                .map(|card| card.kind.definition())
+                .collect(),
+            next_battle_pieces,
             relics: self
                 .relics
                 .iter()
@@ -1049,10 +1141,11 @@ impl Game {
                 .cells()
                 .iter()
                 .flatten()
-                .find(|p| p.id == self.battle.royal_id)
+                .find(|p| p.owner == ENEMY && self.battle.is_enemy_royal(p.id))
                 .map(|p| piece_name(p.kind))
                 .unwrap_or("포획됨"),
             seed: self.seed,
+            floor: self.floor,
         }
     }
 }
@@ -1070,6 +1163,7 @@ pub struct Snapshot {
     pub mana: u32,
     pub mana_rule: &'static str,
     pub initiative_turns_left: u8,
+    pub enemy_initiative_turns_left: u8,
     pub hard_disk_deployed: bool,
     pub pieces: Vec<PieceView>,
     pub moves: Vec<MoveView>,
@@ -1078,6 +1172,8 @@ pub struct Snapshot {
     pub discard_count: usize,
     pub exhausted_count: usize,
     pub deck_count: usize,
+    pub deck: Vec<CardDefinition>,
+    pub next_battle_pieces: Vec<PieceView>,
     pub relics: Vec<RelicView>,
     pub log: Vec<String>,
     pub rewards: Vec<RewardView>,
@@ -1085,6 +1181,7 @@ pub struct Snapshot {
     pub upgrade_paths: Vec<UpgradeView>,
     pub royal_name: &'static str,
     pub seed: u32,
+    pub floor: u8,
 }
 #[derive(Serialize)]
 #[serde(tag = "type", content = "definition", rename_all = "snake_case")]

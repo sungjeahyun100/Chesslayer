@@ -70,6 +70,7 @@ export interface Snapshot {
   mana: number;
   mana_rule: string;
   initiative_turns_left: number;
+  enemy_initiative_turns_left: number;
   hard_disk_deployed: boolean;
   pieces: Piece[];
   moves: { from: number; to: number; promotion: Promotion | null }[];
@@ -78,6 +79,8 @@ export interface Snapshot {
   discard_count: number;
   exhausted_count: number;
   deck_count: number;
+  deck: CardDefinition[];
+  next_battle_pieces: Piece[];
   relics: Relic[];
   log: string[];
   rewards: Reward[];
@@ -85,6 +88,7 @@ export interface Snapshot {
   upgrade_paths: UpgradePath[];
   royal_name: string;
   seed: number;
+  floor: number;
 }
 export type Command =
   | { type: "select_node"; id: number }
