@@ -138,24 +138,36 @@ test("엘리트 강화 보상을 건너뛴 뒤 노드에서 한 번만 받는다
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.getByRole("dialog", { name: "전투 승리" })).toBeVisible();
   await expect(page.locator(".reward-cards [data-reward-type=relic]")).toHaveCount(0);
-  await expect(page.locator(".upgrade-reward-pieces button:not(:disabled)")).not.toHaveCount(0);
+  await expect(page.getByRole("button", { name: "기물 강화", exact: true })).toBeEnabled();
   const initial = await page.evaluate(async () => {
     const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
     await init();
     const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
     try { return JSON.parse(game.snapshot()) as Snapshot; } finally { game.free(); }
   });
+  await page.locator(".reward-cards button").first().click();
+  await expect(page.locator(".reward-cards button").first()).toContainText("획득 완료");
   await page.getByRole("button", { name: /다음으로 진행/ }).click();
   await expect(page.locator(".map-reward-badge")).toHaveCount(1);
   const elite = initial.map.nodes.find((node) => node.current)!.id;
   await page.locator(`[data-node-id="${elite}"]`).click();
   await expect(page.getByRole("dialog", { name: "전투 승리" })).toBeVisible();
-  await page.locator(".upgrade-reward-pieces button:not(:disabled)").first().click();
-  await expect(page.locator(".upgrade-reward-pieces .is-selected")).toHaveCount(1);
-  await expect(page.locator(".upgrade-reward-tree .skill-tree")).toBeVisible();
-  await page.locator(".upgrade-reward-tree .skill-node.available").first().click();
+  await expect(page.locator(".reward-cards button").first()).toContainText("획득 완료");
+  await page.getByRole("button", { name: "기물 강화", exact: true }).click();
+  await expect(page.getByRole("dialog", { name: "전투 승리" })).toHaveCount(0);
+  await page.getByRole("button", { name: /보상 화면으로 돌아가기/ }).click();
+  await expect(page.getByRole("dialog", { name: "전투 승리" })).toBeVisible();
+  await expect(page.locator(".reward-cards button").first()).toContainText("획득 완료");
+  await page.getByRole("button", { name: "기물 강화", exact: true }).click();
+  const upgradePiece = initial.rest_options.find((piece) => piece.can_upgrade)!;
+  const boardPiece = initial.next_battle_pieces.find((piece) => piece.id === upgradePiece.id)!;
+  await page.locator(`[data-square="${boardPiece.square}"]`).click();
+  await expect(page.locator(".rest-workshop .skill-tree")).toBeVisible();
+  await page.locator(".rest-workshop .skill-node.available").first().click();
   await page.getByRole("button", { name: "강화 확정", exact: true }).click();
-  await expect(page.locator(".upgrade-reward-group")).toContainText("강화 보상을 수령했습니다");
+  await expect(page.getByRole("dialog", { name: "전투 승리" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "기물 강화", exact: true })).toBeDisabled();
+  await expect(page.locator(".reward-cards button").first()).toContainText("획득 완료");
   const claimed = await page.evaluate(async () => {
     const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
     await init();
@@ -163,10 +175,8 @@ test("엘리트 강화 보상을 건너뛴 뒤 노드에서 한 번만 받는다
     try { return JSON.parse(game.snapshot()) as Snapshot; } finally { game.free(); }
   });
   expect(claimed.upgrade_claimed).toBe(true);
-  expect(claimed.relics).toEqual(initial.relics);
+  expect(claimed.reward_choice).toBe(0);
   expect(claimed.rest_options.some((piece, index) => piece.kind !== initial.rest_options[index].kind)).toBe(true);
   await page.getByRole("button", { name: /맵으로 돌아가기/ }).click();
-  await expect(page.locator(".map-reward-badge")).toHaveCount(1);
-  await page.locator(`[data-node-id="${elite}"]`).click();
-  await expect(page.locator(".upgrade-reward-pieces button:not(:disabled)")).toHaveCount(0);
+  await expect(page.locator(".map-reward-badge")).toHaveCount(0);
 });

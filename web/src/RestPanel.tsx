@@ -8,15 +8,16 @@ export interface RestChoice {
   id: number;
   target?: number;
 }
-export function RestPanel({ state, choice, onChoose, onCancel, send, history, completed, onContinue }: {
+export function RestPanel({ state, choice, onChoose, onCancel, send, history, completed, onContinue, reward = false }: {
   state: Snapshot;
   choice: RestChoice | null;
   onChoose: (choice: RestChoice) => void;
   onCancel: () => void;
   send: (command: Command) => void;
-  history: Extract<Command, { type: "rest_upgrade" }>[];
+  history: { id: number; target: number }[];
   completed: boolean;
   onContinue: () => void;
+  reward?: boolean;
 }) {
   const piece = state.rest_options.find((p) => p.id === choice?.id);
   const panel = useRef<HTMLElement>(null);
@@ -27,6 +28,7 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
   const candidates = state.rest_options.filter((p) => p.can_revive && p.origin === choice?.cell);
 
   if (piece && !piece.dead) {
+    const square = reward && choice ? `${"abcdefgh"[choice.cell % 8]}${8 - Math.floor(choice.cell / 8)}` : piece.square;
     const preview = state.upgrade_paths.find((p) => p.to === choice?.target);
     const base = state.upgrade_paths.find((p) => p.from === choice?.target);
     const studyKey = preview?.to_key ?? base?.from_key ?? piece.key;
@@ -46,13 +48,13 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
           : !incoming.length ? "이 계열의 시작점입니다. 이전 종류로 되돌리는 강화는 없습니다."
             : !reachable.has(choice.target) ? `현재 ${piece.name}에서 이 가지로 변경하는 강화 경로는 없습니다.`
               : direct && !direct.unlocked ? `영구 로스터 필요: ${direct.required_pieces.filter((required) => !required.owned).map((required) => required.name).join(", ")}`
-                : completed ? "이번 쉼터의 행동을 사용했습니다. 다음 쉼터에서 다시 살펴보세요."
+                : completed ? reward ? "이번 보상 강화를 사용했습니다." : "이번 쉼터의 행동을 사용했습니다. 다음 쉼터에서 다시 살펴보세요."
                   : !direct ? `선행 기물 ${incoming.map((path) => path.from_name).join(" 또는 ")} 상태가 필요합니다.` : null;
     return (
-      <section className="rest-panel rest-workshop" ref={panel} aria-label="쉼터 기물 관리">
-        <div className="section-label">A MOMENT OF REST <span className="rest-budget">{completed ? "강화 완료" : "행동 1회"}</span></div>
+      <section className="rest-panel rest-workshop" ref={panel} aria-label={reward ? "보상 기물 강화" : "쉼터 기물 관리"}>
+        <div className="section-label">{reward ? "BATTLE REWARD" : "A MOMENT OF REST"} <span className="rest-budget">{completed ? "강화 완료" : reward ? "보상 1회" : "행동 1회"}</span></div>
         <div className="rest-detail-heading">
-          <span className="square-chip">{piece.square}</span><span>기물 육성 · 강화 테크트리</span>
+          <span className="square-chip">{square}</span><span>기물 육성 · 강화 테크트리</span>
           <button className="text-button" onClick={onCancel} aria-label="기물 선택 닫기">닫기 ×</button>
         </div>
         {completed && <p className="skill-complete" role="status">◆ {piece.name} 강화 완료 · 선택한 경로가 활성화되었습니다.</p>}
@@ -72,33 +74,33 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
               </div>}
               {reason && <p className="skill-lock-reason">{reason}</p>}
             </div>}
-            <div className="rest-growth-history"><strong>현재 진형</strong><p>{piece.name} · {piece.square}</p>
-              {!!acquired.length && <><strong>쉼터에서 획득한 강화</strong><ol>{acquired.map((kind, i) => <li key={i}>{state.upgrade_paths.find((p) => p.to === kind)?.to_name ?? "강화"}</li>)}</ol></>}
+            <div className="rest-growth-history"><strong>현재 진형</strong><p>{piece.name} · {square}</p>
+              {!!acquired.length && <><strong>획득한 강화</strong><ol>{acquired.map((kind, i) => <li key={i}>{state.upgrade_paths.find((p) => p.to === kind)?.to_name ?? "강화"}</li>)}</ol></>}
             </div>
             <p className="rest-note">연결된 가지를 따라<br />다음 성장 방향을 살펴보세요.<br />탐색 중에는 행동을 쓰지 않습니다.</p>
           </div>
           <UpgradeTree key={piece.id} piece={piece} paths={state.upgrade_paths} acquired={acquired}
             onSelect={(target) => onChoose({ ...choice!, target })}
-            onConfirm={(target) => send({ type: "rest_upgrade", id: piece.id, target })}
+            onConfirm={(target) => send(reward ? { type: "claim_upgrade", id: piece.id, target } : { type: "rest_upgrade", id: piece.id, target })}
             completed={completed} />
         </div>
-        <button className="text-button rest-depart" onClick={() => completed ? onContinue() : send({ type: "rest_skip" })}>
-          {completed ? "맵으로 돌아가기 →" : "휴식을 마치고 맵으로 →"}
+        <button className="text-button rest-depart" onClick={() => reward || completed ? onContinue() : send({ type: "rest_skip" })}>
+          {reward ? "보상 화면으로 돌아가기 →" : completed ? "맵으로 돌아가기 →" : "휴식을 마치고 맵으로 →"}
         </button>
       </section>
     );
   }
 
   return (
-    <section className="rest-panel" aria-label="쉼터 기물 관리">
-      <div className="section-label">A MOMENT OF REST <span className="rest-budget">행동 1회</span></div>
+    <section className="rest-panel" aria-label={reward ? "보상 기물 강화" : "쉼터 기물 관리"}>
+      <div className="section-label">{reward ? "BATTLE REWARD" : "A MOMENT OF REST"} <span className="rest-budget">{reward ? "보상 1회" : "행동 1회"}</span></div>
       {!piece ? (
         <div className="rest-intro">
-          <h2>진형을 돌보는 시간</h2>
-          <p>보드에서 아군 기물이나<br />돌아올 기물의 초기 칸을 선택하세요.</p>
+          <h2>{reward ? "기물 강화" : "진형을 돌보는 시간"}</h2>
+          <p>{reward ? "보드에서 강화할 아군 기물을 선택하세요." : <>보드에서 아군 기물이나<br />돌아올 기물의 초기 칸을 선택하세요.</>}</p>
           <div className="rest-instruction"><PieceImage pieceKey="tempest_pawn" /><div><strong>기물을 선택하면</strong><p>능력과 강화 경로를 살펴봅니다.</p></div></div>
-          <div className="rest-instruction"><span className="empty-tile" /><div><strong>초기 빈칸을 선택하면</strong><p>그 칸에서 시작한 사망 기물을 되살립니다.</p></div></div>
-          <p className="rest-note">미리보기는 행동을 사용하지 않습니다.<br />쉼터마다 강화 또는 부활을 한 번 확정할 수 있습니다.</p>
+          {!reward && <div className="rest-instruction"><span className="empty-tile" /><div><strong>초기 빈칸을 선택하면</strong><p>그 칸에서 시작한 사망 기물을 되살립니다.</p></div></div>}
+          <p className="rest-note">{reward ? "강화 확정 전에는 보상이 사용되지 않습니다." : <>미리보기는 행동을 사용하지 않습니다.<br />쉼터마다 강화 또는 부활을 한 번 확정할 수 있습니다.</>}</p>
         </div>
       ) : (
         <div className="rest-detail" key={piece.id}>
@@ -112,7 +114,7 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
           <div className="rest-confirm"><button className="primary" onClick={() => send({ type: "rest_revive", id: piece.id })}>부활 확정</button><button onClick={onCancel}>취소</button></div>
         </div>
       )}
-      <button className="text-button rest-depart" onClick={() => send({ type: "rest_skip" })}>휴식을 마치고 맵으로 →</button>
+      <button className="text-button rest-depart" onClick={() => reward ? onContinue() : send({ type: "rest_skip" })}>{reward ? "보상 화면으로 돌아가기 →" : "휴식을 마치고 맵으로 →"}</button>
     </section>
   );
 }

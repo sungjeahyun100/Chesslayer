@@ -69,6 +69,7 @@ function App() {
   const [enemyInspection, setEnemyInspection] = useState<EnemyInspection | null>(null);
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
   const [restCompleted, setRestCompleted] = useState(false);
+  const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const [upgradeHistory, setUpgradeHistory] = useState<Extract<Command, { type: "rest_upgrade" }>[]>([]);
   const [rewardUpgradeHistory, setRewardUpgradeHistory] = useState<{ id: number; target: number }[]>([]);
   const [promotion, setPromotion] = useState<{
@@ -151,6 +152,7 @@ function App() {
         setRestChoice(null);
         setRestCompleted(false);
       }
+      if (command.type === "claim_upgrade") setRewardUpgradeOpen(false);
       setPromotion(null);
       setSelected(null);
       setEnemyInspection(null);
@@ -202,6 +204,11 @@ function App() {
     const cancel = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (statusOpen) return;
+        if (rewardUpgradeOpen) {
+          setRewardUpgradeOpen(false);
+          setRestChoice(null);
+          return;
+        }
         setSelected(null);
         setEnemyInspection(null);
         setRestChoice(null);
@@ -216,7 +223,7 @@ function App() {
     };
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
-  }, [statusOpen]);
+  }, [statusOpen, rewardUpgradeOpen]);
   function persist(game: WebGame) {
     const saved = game.save();
     // Read the existing command history for presentation only. Promotions are
@@ -246,6 +253,7 @@ function App() {
       persist(next);
       setRestChoice(null);
       setRestCompleted(false);
+      setRewardUpgradeOpen(false);
       setPromotion(null);
       setSelected(null);
       setEnemyInspection(null);
@@ -278,6 +286,7 @@ function App() {
       persist(next);
       setRestChoice(null);
       setRestCompleted(false);
+      setRewardUpgradeOpen(false);
       setPromotion(null);
       setSelected(null);
       setEnemyInspection(null);
@@ -308,6 +317,12 @@ function App() {
   }
   function clickSquare(cell: number) {
     if (!state || promotion) return;
+    if (rewardUpgradeOpen) {
+      const boardPiece = boardPieces.find((p) => p.cell === cell);
+      const ally = state.rest_options.find((p) => p.can_upgrade && p.id === boardPiece?.id);
+      if (ally) setRestChoice({ cell, id: ally.id });
+      return;
+    }
     if (state.phase === "rest") {
       const ally = state.rest_options.find((p) => !p.dead && p.cell === cell);
       const occupant = state.pieces.find((p) => p.cell === cell);
@@ -371,13 +386,18 @@ function App() {
   }
   const turn = state?.turn === 0;
   const rewardRevisit = state?.phase === "reward" && state.map.nodes.some((node) => node.current && node.visited);
-  const showMap = (state?.phase === "map" || rewardRevisit) && !restCompleted;
+  const showMap = (state?.phase === "map" || rewardRevisit) && !restCompleted && !rewardUpgradeOpen;
   const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
-  const restView = state?.phase === "rest" || restCompleted;
+  const restView = state?.phase === "rest" || restCompleted || rewardUpgradeOpen;
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
+  const boardPieces = rewardUpgradeOpen ? state?.next_battle_pieces ?? [] : state?.pieces ?? [];
   function closeRest() {
     setRestChoice(null);
     setRestCompleted(false);
+  }
+  function closeRewardUpgrade() {
+    setRewardUpgradeOpen(false);
+    setRestChoice(null);
   }
   const restPath = state?.upgrade_paths.find(
     (p) => p.from === restPiece?.kind && p.to === restChoice?.target,
@@ -595,7 +615,7 @@ function App() {
                         <small>{state.actions_left}회 행동</small>
                       </>
                     ) : restView ? (
-                      restCompleted ? "쉼터 · 강화 완료" : "쉼터 · 행동 1회"
+                      rewardUpgradeOpen ? "전투 보상 · 기물 강화" : restCompleted ? "쉼터 · 강화 완료" : "쉼터 · 행동 1회"
                     ) : (
                       "진형 계승"
                     )}
@@ -609,7 +629,7 @@ function App() {
                   </div>
                   <div className="board" role="group" aria-label="체스 보드">
                     {Array.from({ length: 64 }, (_, i) => {
-                      const piece = state.pieces.find((p) => p.cell === i);
+                      const piece = boardPieces.find((p) => p.cell === i);
                       const legal =
                         selected !== null &&
                         state.moves.some(
@@ -628,16 +648,16 @@ function App() {
                           data-legal={legal || undefined}
                           data-enemy-move={enemyMove || undefined}
                           data-enemy-capture={enemyCapture || undefined}
-                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(state.phase === "rest" ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${state.phase === "rest" && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""}`}
+                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""}`}
                           title={piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined}
                           onClick={() => clickSquare(i)}
                           disabled={
-                            state.phase !== "rest" &&
+                            !restView &&
                             (state.phase !== "combat" || !!promotion || (!turn && piece?.owner !== 1 && !(!piece && inspectedEnemy)))
                           }
                           aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 효과 종료 후 사망` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
                           aria-pressed={
-                            (state.phase === "rest"
+                            (restView
                               ? restChoice?.cell
                               : inspectedEnemy?.cell ?? selected) === i
                           }
@@ -656,7 +676,7 @@ function App() {
                       {enemyRoutes.map((route) => <polyline key={route.join(",")} points={route.map((cell) => `${cell % 8 + 0.5},${Math.floor(cell / 8) + 0.5}`).join(" ")} />)}
                     </svg>}
                     <div className="piece-layer">
-                      {state.pieces.map((p) => (
+                      {boardPieces.map((p) => (
                         <BoardPiece
                           key={p.id}
                           piece={p}
@@ -709,7 +729,7 @@ function App() {
                   <span>백 · 나의 진형</span>
                   <span>
                     {restView
-                      ? "강화 · 부활은 확정 후 적용"
+                      ? rewardUpgradeOpen ? "강화는 확정 후 적용" : "강화 · 부활은 확정 후 적용"
                       : state.phase === "combat" && state.hard_disk_deployed
                         ? "하드디스크 · 직전 전투 종료 배치 적용"
                         : state.phase === "combat" && state.enemy_initiative_turns_left > 0
@@ -754,11 +774,12 @@ function App() {
                     state={state}
                     choice={restChoice}
                     onChoose={setRestChoice}
-                    onCancel={closeRest}
+                    onCancel={rewardUpgradeOpen ? closeRewardUpgrade : closeRest}
                     send={send}
-                    history={upgradeHistory}
+                    history={rewardUpgradeOpen ? rewardUpgradeHistory : upgradeHistory}
                     completed={restCompleted}
-                    onContinue={closeRest}
+                    onContinue={rewardUpgradeOpen ? closeRewardUpgrade : closeRest}
+                    reward={rewardUpgradeOpen}
                   />
                 ) : (
                   <>
@@ -971,8 +992,8 @@ function App() {
         </main>
       )}
       {screen === "game" && state && statusOpen && <ExpeditionStatus state={state} onClose={closeStatus} />}
-      {screen === "game" && state?.phase === "reward" && !floorTransition && (
-        <BattleRewards state={state} send={send} revisit={!!rewardRevisit} history={rewardUpgradeHistory} />
+      {screen === "game" && state?.phase === "reward" && !floorTransition && !rewardUpgradeOpen && (
+        <BattleRewards state={state} send={send} revisit={!!rewardRevisit} onUpgrade={() => { setRestChoice(null); setRewardUpgradeOpen(true); }} />
       )}
       <footer>
         CHESSLAYER <span>첫 번째 원정 · 진행은 이 브라우저에 저장됩니다.</span>
