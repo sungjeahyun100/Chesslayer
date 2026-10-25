@@ -61,7 +61,8 @@ test("일시 강화: 경로 선택과 취소는 무소모, 확정만 전투 보�
   await expect(card).toHaveCount(0);
   const rosterKind = await page.evaluate(async () => {
     const url = "/src/wasm/chesslayer_web.js";
-    const { WebGame } = await import(url);
+    const { default: init, WebGame } = await import(url);
+    await init();
     const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
     try { return JSON.parse(game.snapshot()).rest_options.find((p: { id: number }) => p.id === 9).kind; }
     finally { game.free(); }

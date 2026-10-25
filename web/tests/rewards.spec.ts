@@ -47,6 +47,10 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
     await page.reload();
     await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
     await expect(page.locator(".reward-cards button")).toHaveCount(3);
+    await page.getByRole("button", { name: "원정 현황" }).click();
+    await expect(page.getByRole("dialog", { name: "원정 현황" })).toBeVisible();
+    await page.getByRole("button", { name: "원정 현황 닫기" }).click();
+    await expect(page.locator(".reward-cards button")).toHaveCount(3);
     await expect(page.locator(".relic-reward .card-top").first()).toBeVisible();
     for (const [slot, reward] of prepared.snapshot.rewards.entries()) {
       await expect(page.locator(".reward-cards button").nth(slot)).toHaveAttribute("data-reward-type", reward.type);
@@ -64,7 +68,8 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
     await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
     const after: Snapshot = await page.evaluate(async ({ saved, index }) => {
       const url = "/src/wasm/chesslayer_web.js";
-      const { WebGame } = await import(url);
+      const { default: init, WebGame } = await import(url);
+      await init();
       const expected = WebGame.restore(saved);
       const resumed = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
       try {
@@ -135,7 +140,8 @@ test("엘리트 강화 보상을 건너뛴 뒤 노드에서 한 번만 받는다
   await expect(page.locator(".reward-cards [data-reward-type=relic]")).toHaveCount(0);
   await expect(page.locator(".upgrade-reward-pieces button:not(:disabled)")).not.toHaveCount(0);
   const initial = await page.evaluate(async () => {
-    const { WebGame } = await import("/src/wasm/chesslayer_web.js");
+    const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+    await init();
     const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
     try { return JSON.parse(game.snapshot()) as Snapshot; } finally { game.free(); }
   });
@@ -151,7 +157,8 @@ test("엘리트 강화 보상을 건너뛴 뒤 노드에서 한 번만 받는다
   await page.getByRole("button", { name: "강화 확정", exact: true }).click();
   await expect(page.locator(".upgrade-reward-group")).toContainText("강화 보상을 수령했습니다");
   const claimed = await page.evaluate(async () => {
-    const { WebGame } = await import("/src/wasm/chesslayer_web.js");
+    const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+    await init();
     const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
     try { return JSON.parse(game.snapshot()) as Snapshot; } finally { game.free(); }
   });

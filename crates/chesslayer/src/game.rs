@@ -171,12 +171,22 @@ impl Game {
     }
     fn starting_roster(&self) -> Result<(Vec<PlayerPiece>, bool), String> {
         let mut roster = self.battle.outcome();
+        // During combat, the eventual Hard Disk snapshot is the surviving
+        // formation at battle end. Preview it from the current roster.
+        let saved_positions: BTreeMap<_, _> = if self.phase == RunPhase::Combat {
+            roster
+                .iter()
+                .filter_map(|p| p.position.map(|pos| (p.id, pos)))
+                .collect()
+        } else {
+            self.last_battle_positions.clone()
+        };
         let mut occupied = HashSet::new();
         let saved: Vec<_> = roster
             .iter()
             .filter(|p| p.position.is_some())
             .filter_map(|p| {
-                self.last_battle_positions
+                saved_positions
                     .get(&p.id)
                     .map(|&pos| (p.id, pos))
             })
@@ -194,7 +204,7 @@ impl Game {
                 continue; // A snapshot or a preset must never revive a dead ID.
             }
             let desired = if hard_disk {
-                self.last_battle_positions.get(&p.id).copied()
+                saved_positions.get(&p.id).copied()
             } else {
                 formation.and_then(|r| r.position(p.id))
             };
@@ -1063,7 +1073,7 @@ impl Game {
             })
             .collect();
         let roster = self.battle.outcome();
-        let next_battle_pieces = if self.phase == RunPhase::Map {
+        let next_battle_pieces = if !matches!(self.phase, RunPhase::Victory | RunPhase::Defeat) {
             self.starting_roster()
                 .map(|(players, _)| {
                     players
@@ -1247,6 +1257,7 @@ impl Game {
                 .iter()
                 .flat_map(|d| {
                     d.upgrades.iter().map(|u| UpgradeView {
+                        key: u.key,
                         from: d.kind,
                         from_key: d.key,
                         from_name: d.name,
@@ -1457,6 +1468,7 @@ pub struct RestOption {
 
 #[derive(Serialize)]
 pub struct UpgradeView {
+    pub key: &'static str,
     pub from: PieceType,
     pub from_key: &'static str,
     pub from_name: &'static str,

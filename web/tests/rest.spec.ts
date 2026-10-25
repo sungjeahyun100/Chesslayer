@@ -234,6 +234,12 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   expect(snapshot.rest_options.find((p: any) => p.id === 9).upgrades).toEqual([
     "tempest",
   ]);
+  await page.getByRole("button", { name: "원정 현황" }).click();
+  await page.locator(".status-piece-group").filter({ hasText: "템페스트 폰" }).click();
+  await expect(page.locator(".status-upgrade-history")).toContainText("폰 → 템페스트 폰");
+  const entry = snapshot.next_battle_pieces.find((piece: any) => piece.id === 9);
+  await expect(page.locator(`.status-square[aria-label="${entry.square} 아군 템페스트 폰"]`)).toBeVisible();
+  await page.getByRole("button", { name: "원정 현황 닫기" }).click();
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await page.locator('[data-node-id="13"]').click();

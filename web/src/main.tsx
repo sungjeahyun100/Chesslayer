@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
+import { createPortal } from "react-dom";
 import init, { WebGame, catalog } from "./wasm/chesslayer_web";
 import type {
   Card,
@@ -19,6 +20,7 @@ import { UpgradeTree } from "./UpgradeTree";
 import { RelicIcon } from "./ContentArt";
 import { CardFace } from "./CardFace";
 import { BattleRewards } from "./BattleRewards";
+import { ExpeditionStatus } from "./ExpeditionStatus";
 import { version } from "../package.json";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
@@ -82,7 +84,8 @@ function App() {
   const [upgradeFocus, setUpgradeFocus] = useState<number | null>(null);
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
-  const [mapOpen, setMapOpen] = useState(false);
+  const [statusOpen, setStatusOpen] = useState(false);
+  const closeStatus = useCallback(() => setStatusOpen(false), []);
   const [floorTransition, setFloorTransition] = useState<{ next: Snapshot; stage: "out" | "in" } | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
   const boardRef = useRef<HTMLDivElement>(null);
@@ -155,7 +158,6 @@ function App() {
       setCardTargets([]);
       setCardUpgrades([]);
       setUpgradeFocus(null);
-      setMapOpen(false);
       setError("");
     } catch (e) {
       setError(String(e));
@@ -199,6 +201,7 @@ function App() {
   useEffect(() => {
     const cancel = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (statusOpen) return;
         setSelected(null);
         setEnemyInspection(null);
         setRestChoice(null);
@@ -213,7 +216,7 @@ function App() {
     };
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
-  }, []);
+  }, [statusOpen]);
   function persist(game: WebGame) {
     const saved = game.save();
     // Read the existing command history for presentation only. Promotions are
@@ -250,7 +253,7 @@ function App() {
       setCardTargets([]);
       setCardUpgrades([]);
       setUpgradeFocus(null);
-      setMapOpen(false);
+      setStatusOpen(false);
       setError("");
       setScreen("game");
     } catch (e) {
@@ -282,7 +285,7 @@ function App() {
       setCardTargets([]);
       setCardUpgrades([]);
       setUpgradeFocus(null);
-      setMapOpen(false);
+      setStatusOpen(false);
       setError("");
     } catch (e) {
       setError(String(e));
@@ -368,7 +371,7 @@ function App() {
   }
   const turn = state?.turn === 0;
   const rewardRevisit = state?.phase === "reward" && state.map.nodes.some((node) => node.current && node.visited);
-  const showMap = (state?.phase === "map" || mapOpen || rewardRevisit) && (!restCompleted || mapOpen);
+  const showMap = (state?.phase === "map" || rewardRevisit) && !restCompleted;
   const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
   const restView = state?.phase === "rest" || restCompleted;
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
@@ -435,7 +438,7 @@ function App() {
           </button>
         </div>
       </header>
-      {screen === "game" && state && <button className="primary expedition-status-trigger" onClick={() => setMapOpen(true)}>원정 현황</button>}
+      {screen === "game" && state && !floorTransition && createPortal(<button className="primary expedition-status-trigger" onClick={() => setStatusOpen(true)} aria-haspopup="dialog" aria-expanded={statusOpen}>원정 현황</button>, document.body)}
       {help && (
         <section className="guide">
           <strong>체크메이트 대신, 로얄을 포획하세요.</strong>
@@ -561,9 +564,9 @@ function App() {
         </main>
       )}
       {screen === "game" && state && showMap && (
-        <ActMap state={state} send={send} onClose={() => setMapOpen(false)} coveredByReward={rewardRevisit} overlay={mapOpen} />
+        <ActMap state={state} send={send} coveredByReward={rewardRevisit} />
       )}
-      {screen === "game" && state && (!showMap || (mapOpen && state.phase !== "map")) && (
+      {screen === "game" && state && !showMap && (
         <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined}>
           <nav className="node-navigation" aria-label="원정 위치">
             <span>
@@ -967,6 +970,7 @@ function App() {
           )}
         </main>
       )}
+      {screen === "game" && state && statusOpen && <ExpeditionStatus state={state} onClose={closeStatus} />}
       {screen === "game" && state?.phase === "reward" && !floorTransition && (
         <BattleRewards state={state} send={send} revisit={!!rewardRevisit} history={rewardUpgradeHistory} />
       )}

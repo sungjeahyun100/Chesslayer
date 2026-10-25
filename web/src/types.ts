@@ -144,6 +144,7 @@ export interface RestOption {
   dead: boolean;
 }
 export interface UpgradePath {
+  key: string;
   from: number;
   from_key: string;
   from_name: string;

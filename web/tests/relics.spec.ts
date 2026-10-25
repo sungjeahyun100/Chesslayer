@@ -73,6 +73,18 @@ test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·�
     await expect(page.locator(".relic").filter({ hasText: relic.name })).toBeVisible();
     const relicImage = page.locator(".relic").filter({ hasText: relic.name }).locator("img");
     expect(await relicImage.evaluate((el: HTMLImageElement) => el.complete && el.naturalWidth > 0)).toBe(true);
+    await page.getByRole("button", { name: "원정 현황" }).click();
+    await expect(page.locator(".status-relic").filter({ hasText: relic.name })).toHaveCount(1);
+    await expect(page.locator(".status-board .piece-image")).toHaveCount(result.next.next_battle_pieces.length);
+    if (run.relic === "hard_disk") {
+      for (const piece of result.next.next_battle_pieces) {
+        expect(piece.cell).toBe(result.next.rest_options.find((owned) => owned.id === piece.id)?.cell);
+        await expect(page.locator(`.status-square[data-cell="${piece.cell}"] img`)).toHaveAttribute("data-piece-key", piece.key);
+      }
+    }
+    await page.locator(".status-relic").filter({ hasText: relic.name }).click();
+    await expect(page.locator(".status-relic-detail")).toContainText(relic.description);
+    await page.getByRole("button", { name: "원정 현황 닫기" }).click();
     if (run.relic === "initiative") {
       await expect(page.locator(".relic-status")).toHaveText("보호 중 · 남은 적 턴 9회");
       await page.screenshot({ path: "test-results/relic-initiative-mobile.png", fullPage: true });

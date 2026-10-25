@@ -85,7 +85,7 @@ export function ActMap({
 }: {
   state: Snapshot;
   send: (command: Command) => void;
-  onClose: () => void;
+  onClose?: () => void;
   coveredByReward?: boolean;
   overlay?: boolean;
 }) {
@@ -120,7 +120,7 @@ export function ActMap({
           <span> / {map.rows}개 지점 완료</span>
           {state.phase === "map" && map.nodes.some((node) => node.current && node.visited && node.kind === "boss") &&
             <button className="primary" onClick={() => send({ type: "advance_floor" })}>{state.floor === 1 ? "다음 층으로 진행 →" : "원정 마치기 →"}</button>}
-          {overlay && (
+          {overlay && onClose && (
             <button className="primary" onClick={onClose}>
               {ended ? "원정 결과로 돌아가기" : "진행 중인 노드로 돌아가기"} →
             </button>

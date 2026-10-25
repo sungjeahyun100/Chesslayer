@@ -30,7 +30,8 @@ async function start(
 ) {
   await startMap(page, character);
   const firstEncounter = await page.evaluate(async () => {
-    const { WebGame } = await import("/src/wasm/chesslayer_web.js");
+    const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+    await init();
     const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
     try { return (JSON.parse(game.snapshot()).map.nodes as { id: number; name: string }[]).find((node) => node.name === "홀로 선 왕")!.id; }
     finally { game.free(); }
@@ -73,7 +74,7 @@ test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 �
 
 test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 연출을 반복하지 않는다", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".home-version")).toHaveText("v0.2.2");
+  await expect(page.locator(".home-version")).toHaveText("v0.2.3");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.getByRole("status", { name: "제1층 진입" })).toContainText("ACT I");
@@ -101,9 +102,16 @@ test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 
   await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "1");
 });
 
-test("원정 현황 버튼은 우측 상단에 고정되고 지도를 연다", async ({ page }) => {
+test("원정 현황 버튼은 우측 상단에 고정되고 실제 덱·진입 배치·유물을 연다", async ({ page }) => {
   await startMap(page);
   const before = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
+  const snapshot = await page.evaluate(async () => {
+    const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+    await init();
+    const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
+    try { return JSON.parse(game.snapshot()) as { rest_options: { kind: number }[]; next_battle_pieces: unknown[]; relics: unknown[] }; }
+    finally { game.free(); }
+  });
   await expect(page.locator(".map-aside, .map-legend")).toHaveCount(0);
   const trigger = page.getByRole("button", { name: "원정 현황" });
   const top = await trigger.boundingBox();
@@ -112,9 +120,17 @@ test("원정 현황 버튼은 우측 상단에 고정되고 지도를 연다", a
   expect(afterScroll?.x).toBeCloseTo(top!.x, 0);
   expect(afterScroll?.y).toBeCloseTo(top!.y, 0);
   await page.getByRole("button", { name: "원정 현황" }).click();
-  await expect(page.locator(".map-overlay")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "원정 현황" })).toBeVisible();
+  await expect(page.locator(".map-overlay")).toHaveCount(0);
+  await expect(page.locator(".status-piece-group")).toHaveCount(new Set(snapshot.rest_options.map((piece) => piece.kind)).size);
+  await expect(page.locator(".status-board .piece-image")).toHaveCount(snapshot.next_battle_pieces.length);
+  await expect(page.locator(".status-relic")).toHaveCount(snapshot.relics.length);
+  await page.locator(".status-piece-group").first().click();
+  await expect(page.locator(".status-piece-detail")).toBeVisible();
+  await page.locator(".status-relic").first().click();
+  await expect(page.locator(".status-relic-detail")).toBeVisible();
   await expect(page.locator(".map-aside, .map-legend")).toHaveCount(0);
-  await page.getByRole("button", { name: /진행 중인 노드로 돌아가기/ }).click();
+  await page.getByRole("button", { name: "원정 현황 닫기" }).click();
   await page.setViewportSize({ width: 390, height: 844 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(before);
@@ -187,10 +203,11 @@ test("지도 노드는 연결된 경로에 가까이 배치되고 서로 겹치�
   }
 });
 
-test("전투 전 적 정체를 숨기고 전투 중 지도 오버레이가 상태를 보존한다", async ({ page }) => {
+test("전투 전 적 정체를 숨기고 전투 중 현황 오버레이가 상태를 보존한다", async ({ page }) => {
   await startMap(page);
   const nodes = await page.evaluate(async () => {
-    const { WebGame } = await import("/src/wasm/chesslayer_web.js");
+    const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+    await init();
     const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
     try { return JSON.parse(game.snapshot()).map.nodes as { id: number; kind: string; name: string }[]; }
     finally { game.free(); }
@@ -207,11 +224,12 @@ test("전투 전 적 정체를 숨기고 전투 중 지도 오버레이가 상�
   const saved = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
   const before = await page.locator(".board").getAttribute("class");
   await page.getByRole("button", { name: "원정 현황" }).click();
-  await expect(page.locator(".map-overlay")).toBeVisible();
+  await expect(page.getByRole("dialog", { name: "원정 현황" })).toBeVisible();
+  await expect(page.locator(".status-board .piece-image")).toHaveCount(await page.locator(".piece.owner-0").count());
   await expect(page.locator(".map-node:enabled")).toHaveCount(0);
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(saved);
-  await page.getByRole("button", { name: /진행 중인 노드로 돌아가기/ }).click();
-  await expect(page.locator(".map-overlay")).toHaveCount(0);
+  await page.getByRole("button", { name: "원정 현황 닫기" }).click();
+  await expect(page.getByRole("dialog", { name: "원정 현황" })).toHaveCount(0);
   expect(await page.locator(".board").getAttribute("class")).toBe(before);
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(saved);
 });
@@ -334,11 +352,10 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
       selections++;
       if (selections === 1) {
         await page.getByRole("button", { name: "원정 현황" }).click();
-        expect(await layout(page)).toEqual(generated);
-        await expect(page.locator(".map-node:enabled")).toHaveCount(0);
-        await page
-          .getByRole("button", { name: "진행 중인 노드로 돌아가기" })
-          .click();
+        await expect(page.getByRole("dialog", { name: "원정 현황" })).toBeVisible();
+        await expect(page.locator(".map-overlay")).toHaveCount(0);
+        await expect(page.locator(".status-board .piece-image")).not.toHaveCount(0);
+        await page.getByRole("button", { name: "원정 현황 닫기" }).click();
       }
       if (kind === "boss") {
         await expect(
@@ -366,7 +383,8 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
       if (cmd.promotion) {
         const name = await page.evaluate(async (kind) => {
           const url = "/src/wasm/chesslayer_web.js";
-          const { WebGame } = await import(url);
+          const { default: init, WebGame } = await import(url);
+          await init();
           const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
           try {
             return JSON.parse(game.snapshot()).moves.find((m: any) => m.promotion?.kind === kind).promotion.name;
