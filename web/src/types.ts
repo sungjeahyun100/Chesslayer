@@ -21,6 +21,12 @@ export interface Piece {
   self_defense: boolean;
   temporary_upgrade: boolean;
   limiter: { active: boolean; moves_left: number } | null;
+  absorbed_moves: string[];
+}
+export interface EnemyInspection {
+  piece_id: number;
+  cell: number;
+  moves: { to: number; captures: number[]; route: number[] | null }[];
 }
 export interface CardDefinition {
   kind: string;

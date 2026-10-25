@@ -103,6 +103,57 @@ fn destinations(b: &Battle, side: u16) -> HashSet<Position> {
     assert!(squares.iter().all(|&p| b.board.contains(p)));
     squares
 }
+
+#[test]
+fn enemy_preview_is_read_only_and_reports_captures_and_confirmed_routes() {
+    let mut rook = scene(ROOK, ENEMY);
+    rook.turn = PLAYER;
+    let from = q(ENEMY, 0, 0);
+    let victim = Position::new(from.file, from.rank + 2);
+    rook.board
+        .set_piece(
+            victim,
+            Some(Piece {
+                id: 250,
+                kind: PAWN,
+                owner: PLAYER,
+            }),
+        )
+        .unwrap();
+    let before = rook.board.cells().to_vec();
+    let actions_left = rook.actions_left;
+    assert_eq!(rook.legal_actions(from), Err(Error::WrongTurn));
+    let preview = rook.preview_actions(from).unwrap();
+    assert!(preview
+        .iter()
+        .any(|a| a.destination == victim && a.captures == vec![victim]));
+    assert!(
+        preview
+            .iter()
+            .any(|a| a.destination == Position::new(from.file, from.rank + 1)
+                && a.captures.is_empty())
+    );
+    assert_eq!(rook.board.cells(), before);
+    assert_eq!((rook.turn, rook.actions_left), (PLAYER, actions_left));
+
+    let mut hook = scene(pieces::HOOK, ENEMY);
+    hook.turn = PLAYER;
+    assert!(hook
+        .preview_actions(q(ENEMY, 0, 0))
+        .unwrap()
+        .iter()
+        .any(|a| {
+            a.route
+                .as_ref()
+                .is_some_and(|route| route.len() >= 3 && route[0] == q(ENEMY, 0, 0))
+        }));
+    let unicorn = scene(pieces::UNICORN, ENEMY);
+    assert!(unicorn
+        .preview_actions(q(ENEMY, 0, 0))
+        .unwrap()
+        .iter()
+        .any(|a| { a.destination == Position::new(0, 0) && a.route.is_none() }));
+}
 fn has(b: &Battle, side: u16, x: i32, y: i32) -> bool {
     destinations(b, side).contains(&q(side, x, y))
 }

@@ -32,17 +32,28 @@ impl ActionStep {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct DefaultAction {
     pub first: ActionStep,
     pub continuation: Vec<ActionStep>,
+    /// Confirmed landing points from the DSL evaluator. None means the route is unknown.
+    pub route: Option<Vec<Position>>,
 }
+
+// A route describes an action; it is not part of its legality or identity.
+impl PartialEq for DefaultAction {
+    fn eq(&self, other: &Self) -> bool {
+        self.first == other.first && self.continuation == other.continuation
+    }
+}
+impl Eq for DefaultAction {}
 
 impl DefaultAction {
     pub fn one(first: ActionStep) -> Self {
         Self {
             first,
             continuation: Vec::new(),
+            route: None,
         }
     }
 

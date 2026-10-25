@@ -48,9 +48,31 @@ async function layout(page: import("@playwright/test").Page) {
   );
 }
 
+test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 바꾸지 않는다", async ({ page }) => {
+  await start(page);
+  const enemyCell = Number(await page.locator(".piece.owner-1").first().getAttribute("data-cell"));
+  const allyCell = Number(await page.locator(".piece.owner-0").first().getAttribute("data-cell"));
+  const saved = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
+  const turn = await page.locator(".section-label").first().textContent();
+  await page.locator(".square").nth(enemyCell).click();
+  await expect(page.locator(".square.enemy-selected")).toHaveCount(1);
+  await expect(page.locator(".enemy-move-dot")).not.toHaveCount(0);
+  await expect(page.locator(".enemy-piece-info")).toContainText("승리 목표");
+  expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(saved);
+  expect(await page.locator(".section-label").first().textContent()).toBe(turn);
+  await page.locator(".square").nth(enemyCell).click();
+  await expect(page.locator(".enemy-piece-info")).toHaveCount(0);
+  await page.locator(".square").nth(enemyCell).click();
+  await page.locator(".square").nth(allyCell).click();
+  await expect(page.locator(".selected-piece-info:not(.enemy-piece-info)")).toHaveCount(1);
+  await page.locator(".square").nth(enemyCell).click();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".enemy-piece-info")).toHaveCount(0);
+});
+
 test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 연출을 반복하지 않는다", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".home-version")).toHaveText("v0.2.0");
+  await expect(page.locator(".home-version")).toHaveText("v0.2.1");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.getByRole("status", { name: "제1층 진입" })).toContainText("ACT I");

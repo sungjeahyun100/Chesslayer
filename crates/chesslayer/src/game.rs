@@ -868,6 +868,12 @@ impl Game {
                             .battle
                             .limiter_status(p.id)
                             .map(|(active, moves_left)| LimiterView { active, moves_left }),
+                        absorbed_moves: self
+                            .battle
+                            .absorbed_kinds(p.id)
+                            .into_iter()
+                            .map(piece_name)
+                            .collect(),
                     })
             })
             .collect();
@@ -960,6 +966,7 @@ impl Game {
                                     self_defense: false,
                                     temporary_upgrade: false,
                                     limiter: None,
+                                    absorbed_moves: vec![],
                                 }
                             })
                         })
@@ -1148,6 +1155,70 @@ impl Game {
             floor: self.floor,
         }
     }
+    pub fn inspect_enemy(&self, index: usize) -> Result<EnemyInspectionView, String> {
+        if self.phase != RunPhase::Combat {
+            return Err("전투 중에만 적 기물을 조회할 수 있습니다.".into());
+        }
+        let from = pos(index)?;
+        let piece = self
+            .battle
+            .board
+            .piece_at(from)
+            .map_err(|e| engine_error(e.into()))?;
+        if !piece.is_some_and(|p| p.owner == ENEMY) {
+            return Err("해당 칸에 적 기물이 없습니다.".into());
+        }
+        let moves = self
+            .battle
+            .preview_actions(from)
+            .map_err(engine_error)?
+            .into_iter()
+            .map(|preview| {
+                let route = preview
+                    .route
+                    .filter(|points| {
+                        points.len() > 2
+                            && (points.windows(2).any(|pair| {
+                                (pair[1].file - pair[0].file).abs() > 1
+                                    || (pair[1].rank - pair[0].rank).abs() > 1
+                            }) || points.windows(3).any(|triple| {
+                                let (ax, ay) = (
+                                    triple[1].file - triple[0].file,
+                                    triple[1].rank - triple[0].rank,
+                                );
+                                let (bx, by) = (
+                                    triple[2].file - triple[1].file,
+                                    triple[2].rank - triple[1].rank,
+                                );
+                                ax * by != ay * bx
+                            }))
+                    })
+                    .map(|points| points.into_iter().map(cell).collect());
+                EnemyMoveView {
+                    to: cell(preview.destination),
+                    captures: preview.captures.into_iter().map(cell).collect(),
+                    route,
+                }
+            })
+            .collect();
+        Ok(EnemyInspectionView {
+            piece_id: piece.unwrap().id,
+            cell: index,
+            moves,
+        })
+    }
+}
+#[derive(Serialize)]
+pub struct EnemyInspectionView {
+    pub piece_id: PieceId,
+    pub cell: usize,
+    pub moves: Vec<EnemyMoveView>,
+}
+#[derive(Serialize)]
+pub struct EnemyMoveView {
+    pub to: usize,
+    pub captures: Vec<usize>,
+    pub route: Option<Vec<usize>>,
 }
 #[derive(Serialize)]
 pub struct Snapshot {
@@ -1204,6 +1275,7 @@ pub struct PieceView {
     pub self_defense: bool,
     pub temporary_upgrade: bool,
     pub limiter: Option<LimiterView>,
+    pub absorbed_moves: Vec<&'static str>,
 }
 #[derive(Serialize)]
 pub struct LimiterView {

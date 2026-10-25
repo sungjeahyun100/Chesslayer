@@ -75,6 +75,12 @@ pub enum ActionSource {
     PieceMove,
     ResolvedCardEffect,
 }
+/// Read-only, board-relative action details for the inspection UI.
+pub struct ActionPreview {
+    pub destination: Position,
+    pub captures: Vec<Position>,
+    pub route: Option<Vec<Position>>,
+}
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Board(BoardError),
@@ -364,15 +370,63 @@ impl Battle {
     pub fn has_temporary_upgrade(&self, id: PieceId) -> bool {
         self.temporary_upgrades.contains(&id)
     }
+    pub fn absorbed_kinds(&self, id: PieceId) -> Vec<PieceType> {
+        let mut kinds: Vec<_> = self
+            .absorbed
+            .get(&id)
+            .into_iter()
+            .flatten()
+            .copied()
+            .collect();
+        kinds.sort_unstable();
+        kinds
+    }
     pub fn outcome(&self) -> Vec<PlayerPiece> {
         self.players.clone()
     }
     pub fn legal_actions(&self, from: Position) -> Result<Vec<DefaultAction>, Error> {
+        self.actions_from(from, true)
+    }
+    /// Inspect another side's current movement without granting it a turn or an action.
+    pub fn preview_actions(&self, from: Position) -> Result<Vec<ActionPreview>, Error> {
+        let actions = self.actions_from(from, false)?;
+        let owner = self
+            .board
+            .piece_at(from)?
+            .ok_or(Error::IllegalAction)?
+            .owner;
+        actions
+            .into_iter()
+            .map(|action| {
+                let destination = action.steps().last().unwrap().move_to;
+                let mut board = self.board.clone();
+                let mut captures = Vec::new();
+                for step in action.steps() {
+                    if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                        && board.piece_at(step.take)?.is_some_and(|p| p.owner != owner)
+                    {
+                        captures.push(step.take);
+                    }
+                    apply_default_action(&mut board, &DefaultAction::one(step.clone()))?;
+                }
+                Ok(ActionPreview {
+                    destination,
+                    captures,
+                    route: action.route,
+                })
+            })
+            .collect()
+    }
+    fn actions_from(
+        &self,
+        from: Position,
+        enforce_turn: bool,
+    ) -> Result<Vec<DefaultAction>, Error> {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
         }
         let piece = self.board.piece_at(from)?.ok_or(Error::IllegalAction)?;
-        if piece.owner != self.turn {
+        if enforce_turn && piece.owner != self.turn {
             return Err(Error::WrongTurn);
         }
         if self
@@ -382,7 +436,8 @@ impl Battle {
         {
             return Ok(vec![]);
         }
-        if self.limiter_turn
+        if enforce_turn
+            && self.limiter_turn
             && !self.limiter.get(&piece.id).is_some_and(|s| s.active)
             && self.normal_actions_used >= self.actions_per_turn
         {

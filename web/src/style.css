@@ -431,6 +431,9 @@ footer span {
 .square.selected {
   background: #d1bf68;
 }
+.square.enemy-selected {
+  box-shadow: inset 0 0 0 4px #287ba8, inset 0 0 0 8px #d5eff5a8;
+}
 .square:focus-visible {
   outline-offset: -4px;
   z-index: 1;
@@ -473,6 +476,41 @@ footer span {
   border: 5px solid #a56642bb;
   border-radius: 50%;
   z-index: 3;
+}
+.enemy-move-dot {
+  width: 25%;
+  height: 25%;
+  border-radius: 50%;
+  background: #2187c9cf;
+  box-shadow: 0 0 0 2px #f2fbffb3;
+  pointer-events: none;
+  z-index: 3;
+}
+.enemy-capture-ring {
+  position: absolute;
+  inset: 4%;
+  border: 4px solid #c73637;
+  border-radius: 12%;
+  box-shadow: 0 0 0 1px #fff3ee;
+  pointer-events: none;
+  z-index: 3;
+}
+.enemy-routes {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+  pointer-events: none;
+  overflow: visible;
+}
+.enemy-routes polyline {
+  fill: none;
+  stroke: #156fa9;
+  stroke-width: .045;
+  stroke-dasharray: .11 .1;
+  stroke-linecap: round;
+  opacity: .72;
 }
 .piece-layer {
   z-index: 2;
@@ -1884,6 +1922,39 @@ footer span {
   color: #61725b;
   margin-top: 6px;
 }
+.selected-piece-info > div { min-width: 0; }
+.selected-piece-info .piece-side-label,
+.selected-piece-info .piece-info-heading,
+.selected-piece-info .effect-note,
+.selected-piece-info .royal-info { display: block; }
+.selected-piece-info .piece-side-label {
+  color: #61725b;
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.selected-piece-info .piece-info-heading {
+  margin-top: 10px;
+  color: #52674d;
+  font-size: 11px;
+  font-weight: 700;
+}
+.selected-piece-info .royal-info {
+  margin-top: 6px;
+  padding: 5px 7px;
+  border-radius: 4px;
+  color: #704715;
+  background: #f4e2b1;
+  font-size: 11px;
+  font-weight: 700;
+}
+.selected-piece-info .effect-note { margin-top: 4px; }
+.selected-piece-info.enemy-piece-info {
+  border-color: #8ab1c3;
+  background: #f1f8fa;
+}
+.selected-piece-info.enemy-piece-info .piece-side-label,
+.selected-piece-info.enemy-piece-info .piece-info-heading { color: #2c6d8c; }
 .game-layout[data-phase="rest"] {
   max-width: 1120px;
   grid-template-columns: minmax(0, 560px) minmax(300px, 350px);

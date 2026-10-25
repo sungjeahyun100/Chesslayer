@@ -5,6 +5,7 @@ import type {
   Card,
   Character,
   Command,
+  EnemyInspection,
   Piece,
   Promotion,
   Snapshot,
@@ -62,6 +63,7 @@ function App() {
   const [character, setCharacter] = useState("vanguard");
   const [state, setState] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
+  const [enemyInspection, setEnemyInspection] = useState<EnemyInspection | null>(null);
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
   const [restCompleted, setRestCompleted] = useState(false);
   const [upgradeHistory, setUpgradeHistory] = useState<Extract<Command, { type: "rest_upgrade" }>[]>([]);
@@ -147,6 +149,7 @@ function App() {
       }
       setPromotion(null);
       setSelected(null);
+      setEnemyInspection(null);
       setTargetCard(null);
       setCardTargets([]);
       setCardUpgrades([]);
@@ -196,6 +199,7 @@ function App() {
     const cancel = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSelected(null);
+        setEnemyInspection(null);
         setRestChoice(null);
         setRestCompleted(false);
         setPromotion(null);
@@ -239,6 +243,7 @@ function App() {
       setRestCompleted(false);
       setPromotion(null);
       setSelected(null);
+      setEnemyInspection(null);
       setTargetCard(null);
       setCardTargets([]);
       setCardUpgrades([]);
@@ -270,6 +275,7 @@ function App() {
       setRestCompleted(false);
       setPromotion(null);
       setSelected(null);
+      setEnemyInspection(null);
       setTargetCard(null);
       setCardTargets([]);
       setCardUpgrades([]);
@@ -288,6 +294,7 @@ function App() {
     }
     setError("");
     setSelected(null);
+    setEnemyInspection(null);
     setCardTargets([]);
     setCardUpgrades([]);
     setUpgradeFocus(null);
@@ -306,7 +313,7 @@ function App() {
       if (option) setRestChoice({ cell, id: option.id });
       return;
     }
-    if (state.phase !== "combat" || state.turn !== 0) return;
+    if (state.phase !== "combat") return;
     const piece = state.pieces.find((p) => p.cell === cell);
     if (targetCard) {
       if (piece && targetCard.targets.includes(piece.id)) {
@@ -328,6 +335,7 @@ function App() {
       return;
     }
     if (
+      state.turn === 0 &&
       selected !== null &&
       state.moves.some((m) => m.from === selected && m.to === cell)
     ) {
@@ -338,7 +346,24 @@ function App() {
       else send({ type: "move", from: selected, to: cell });
       return;
     }
-    setSelected(piece?.owner === 0 && selected !== cell ? cell : null);
+    if (piece?.owner === 1) {
+      if (enemyInspection?.piece_id === piece.id) {
+        setEnemyInspection(null);
+      } else {
+        try {
+          const inspected: EnemyInspection = JSON.parse(engine.current!.inspect_enemy(cell));
+          setEnemyInspection(inspected);
+          setError("");
+        } catch (e) {
+          setEnemyInspection(null);
+          setError(String(e));
+        }
+      }
+      setSelected(null);
+      return;
+    }
+    setEnemyInspection(null);
+    setSelected(state.turn === 0 && piece?.owner === 0 && selected !== cell ? cell : null);
   }
   const turn = state?.turn === 0;
   const showMap = (state?.phase === "map" || mapOpen) && !restCompleted;
@@ -353,7 +378,12 @@ function App() {
     (p) => p.from === restPiece?.kind && p.to === restChoice?.target,
   );
   const previewKey = restPath?.to_key;
-  const selectedPiece = state?.pieces.find((p) => p.cell === selected);
+  const inspectedEnemy = state?.phase === "combat" ? state.pieces.find((p) => p.id === enemyInspection?.piece_id && p.cell === enemyInspection?.cell) : undefined;
+  const selectedPiece = inspectedEnemy || state?.pieces.find((p) => p.cell === selected);
+  const initiativeRemaining = selectedPiece?.owner === 1 ? state?.enemy_initiative_turns_left ?? 0 : state?.initiative_turns_left ?? 0;
+  const enemyCaptures = new Set(enemyInspection?.moves.flatMap((m) => m.captures) ?? []);
+  const enemyMoves = new Set(enemyInspection?.moves.map((m) => m.to) ?? []);
+  const enemyRoutes = [...new Map((enemyInspection?.moves ?? []).filter((m) => m.route).map((m) => [m.route!.join(","), m.route!])).values()];
   const activeEffects = state?.pieces.filter((p) => p.limiter || p.temporary_upgrade || p.ward) ?? [];
   const focusedUpgrade = state?.pieces.find((p) => p.id === upgradeFocus);
   const stagedCount = targetCard?.definition.selection_mode === "upgrade" ? cardUpgrades.length : cardTargets.length;
@@ -582,6 +612,8 @@ function App() {
                         state.moves.some(
                           (m) => m.from === selected && m.to === i,
                         );
+                      const enemyCapture = !!inspectedEnemy && enemyCaptures.has(i);
+                      const enemyMove = !!inspectedEnemy && !piece && enemyMoves.has(i);
                       const target =
                         piece && targetCard?.targets.includes(piece.id);
                       const staged = piece && (cardTargets.includes(piece.id) || cardUpgrades.some((u) => u.id === piece.id));
@@ -591,18 +623,20 @@ function App() {
                           key={i}
                           data-square={square}
                           data-legal={legal || undefined}
-                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(state.phase === "rest" ? restChoice?.cell : selected) === i ? "selected" : ""} ${state.phase === "rest" && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""}`}
+                          data-enemy-move={enemyMove || undefined}
+                          data-enemy-capture={enemyCapture || undefined}
+                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(state.phase === "rest" ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${state.phase === "rest" && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""}`}
                           title={piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined}
                           onClick={() => clickSquare(i)}
                           disabled={
                             state.phase !== "rest" &&
-                            (state.phase !== "combat" || !turn || !!promotion)
+                            (state.phase !== "combat" || !!promotion || (!turn && piece?.owner !== 1 && !(!piece && inspectedEnemy)))
                           }
-                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 효과 종료 후 사망` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
+                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 효과 종료 후 사망` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
                           aria-pressed={
                             (state.phase === "rest"
                               ? restChoice?.cell
-                              : selected) === i
+                              : inspectedEnemy?.cell ?? selected) === i
                           }
                         >
                           {legal && (
@@ -610,9 +644,14 @@ function App() {
                               className={piece ? "capture-dot" : "move-dot"}
                             />
                           )}
+                          {enemyMove && <span className="enemy-move-dot" />}
+                          {enemyCapture && <span className="enemy-capture-ring" />}
                         </button>
                       );
                     })}
+                    {inspectedEnemy && enemyRoutes.length > 0 && <svg className="enemy-routes" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
+                      {enemyRoutes.map((route) => <polyline key={route.join(",")} points={route.map((cell) => `${cell % 8 + 0.5},${Math.floor(cell / 8) + 0.5}`).join(" ")} />)}
+                    </svg>}
                     <div className="piece-layer">
                       {state.pieces.map((p) => (
                         <BoardPiece
@@ -696,8 +735,10 @@ function App() {
                       </>
                     ) : selected !== null ? (
                       <span>표시된 칸을 클릭해 이동하세요.{state.pieces.find((p) => p.cell === selected)?.self_defense && <strong className="self-defense-info"> ◆ 호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다.</strong>}</span>
+                    ) : inspectedEnemy ? (
+                      <span>적 행마 조회 · 파란 원은 빈 도착 칸, 빨간 테두리는 포획 대상입니다. 점선은 확인된 경유 경로이며, 적의 다음 행동을 예측하지 않습니다.</span>
                     ) : turn ? (
-                      "카드를 사용하거나, 백 기물을 선택하세요."
+                      "카드를 사용하거나 기물을 선택하세요. 적 기물을 누르면 행마를 확인할 수 있습니다."
                     ) : (
                       "상대가 다음 수를 고르고 있습니다…"
                     )}
@@ -726,18 +767,26 @@ function App() {
                         onCancel={() => setUpgradeFocus(null)} completed={false} selectionOnly />
                     </section>}
                     {selectedPiece && (
-                      <section className="selected-piece-info">
+                      <section className={`selected-piece-info ${inspectedEnemy ? "enemy-piece-info" : ""}`} aria-label={`${inspectedEnemy ? "적" : "아군"} 기물 정보`}>
                         <PieceImage
                           pieceKey={selectedPiece.key}
                           owner={selectedPiece.owner}
                         />
                         <div>
+                          <small className="piece-side-label">{inspectedEnemy ? "적 기물 · 행마 조회" : "아군 기물"}</small>
                           <strong>
                             {selectedPiece.name} · {selectedPiece.square}
                           </strong>
+                          {selectedPiece.royal && <span className="royal-info">★ 로얄 · {inspectedEnemy ? "이 기물은 승리 목표입니다." : "이 기물을 잃으면 원정이 끝납니다."}</span>}
+                          <small className="piece-info-heading">행마법 · 특수 능력</small>
                           <p>{selectedPiece.description}</p>
+                          <small className="piece-info-heading">현재 적용 효과</small>
+                          {!selectedPiece.temporary_upgrade && !selectedPiece.ward && !selectedPiece.limiter && !selectedPiece.self_defense && selectedPiece.absorbed_moves.length === 0 && initiativeRemaining === 0 && <small className="effect-note">없음</small>}
+                          {initiativeRemaining > 0 && <small className="effect-note">선공권 보호 · 상대의 포획 제한 · 남은 상대 턴 {initiativeRemaining}회</small>}
                           {selectedPiece.temporary_upgrade && <small className="effect-note">일시 강화 · 현재 전투에서만 유지</small>}
                           {selectedPiece.ward && <small className="effect-note">가호 · 다음 포획 시 공격 무효</small>}
+                          {selectedPiece.self_defense && <small className="effect-note">호신용품 · 직접 포획되면 포획한 적도 사망</small>}
+                          {selectedPiece.absorbed_moves.length > 0 && <small className="effect-note">흡수한 행마 · {selectedPiece.absorbed_moves.join(", ")}</small>}
                           {selectedPiece.limiter && <small className="effect-note danger">리미터 해제 · {selectedPiece.limiter.active ? `남은 이동 ${selectedPiece.limiter.moves_left}회` : "다음 소속 턴에 최대 3회 이동"} · 턴 종료 후 사망</small>}
                         </div>
                       </section>

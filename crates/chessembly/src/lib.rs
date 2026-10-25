@@ -258,7 +258,7 @@ impl Program {
                     if frames.len() == 32 {
                         return Err(Error::BlockLimit);
                     }
-                    let mut child = frames[top];
+                    let mut child = frames[top].clone();
                     // 자식 블록은 현재 좌표를 이어받고 조건을 참으로 시작한다.
                     child.state = true;
                     child.close = n.partner;
@@ -353,6 +353,7 @@ impl Program {
                     "read-anchor" => {
                         frames[top].pos =
                             anchors[slot(n)].ok_or_else(|| Error::UninitializedAnchor(a(n, 0)))?;
+                        frames[top].route = None;
                     }
                     "absolute" | "absolute-x" | "absolute-y" => {
                         let current = frames[top].pos;
@@ -368,7 +369,9 @@ impl Program {
                         };
                         let q = Position::new(x, y);
                         if b.contains(q) {
-                            frames[top].pos = q
+                            frames[top].pos = q;
+                            // Absolute coordinates may teleport; no traversed route is known.
+                            frames[top].route = None;
                         } else {
                             frames[top].state = false
                         }
@@ -385,6 +388,7 @@ impl Program {
                             wall_key,
                             trans,
                             out,
+                            frames[top].route.as_deref(),
                         )?;
                     }
                     _ => {
@@ -426,12 +430,16 @@ impl Program {
                                         frames[top].state = false
                                     }
                                 }
-                                "anchor" => frames[top].pos = q,
+                                "anchor" => {
+                                    frames[top].pos = q;
+                                    frames[top].route = None;
+                                }
                                 "peek" => {
                                     if occupant.is_some() {
                                         frames[top].state = false
                                     } else {
-                                        frames[top].pos = q
+                                        frames[top].pos = q;
+                                        frames[top].route = None;
                                     }
                                 }
                                 "move" => {
@@ -439,7 +447,16 @@ impl Program {
                                         frames[top].state = false
                                     } else {
                                         frames[top].pos = q;
-                                        emit(out, origin, q, q, Effect::Move, trans)
+                                        extend_route(&mut frames[top].route, q);
+                                        emit(
+                                            out,
+                                            origin,
+                                            q,
+                                            q,
+                                            Effect::Move,
+                                            trans,
+                                            frames[top].route.as_deref(),
+                                        )
                                     }
                                 }
                                 "take-move" => {
@@ -447,7 +464,16 @@ impl Program {
                                         frames[top].state = false
                                     } else {
                                         frames[top].pos = q;
-                                        emit(out, origin, q, q, Effect::TakeMove, trans);
+                                        extend_route(&mut frames[top].route, q);
+                                        emit(
+                                            out,
+                                            origin,
+                                            q,
+                                            q,
+                                            Effect::TakeMove,
+                                            trans,
+                                            frames[top].route.as_deref(),
+                                        );
                                         if enemy {
                                             frames[top].state = false
                                         }
@@ -459,7 +485,17 @@ impl Program {
                                     } else {
                                         frames[top].pos = q;
                                         if enemy {
-                                            emit(out, origin, q, q, Effect::Take, trans);
+                                            let mut take_route = frames[top].route.clone();
+                                            extend_route(&mut take_route, q);
+                                            emit(
+                                                out,
+                                                origin,
+                                                q,
+                                                q,
+                                                Effect::Take,
+                                                trans,
+                                                take_route.as_deref(),
+                                            );
                                             frames[top].has_take = true;
                                             frames[top].take = q
                                         }
@@ -469,13 +505,13 @@ impl Program {
                                     if !enemy {
                                         frames[top].state = false
                                     } else {
-                                        emit(out, origin, q, origin, Effect::Catch, trans)
+                                        emit(out, origin, q, origin, Effect::Catch, trans, None)
                                     }
                                 }
                                 "shift" => {
                                     frames[top].pos = q;
                                     if occupant.is_some() {
-                                        emit(out, origin, q, q, Effect::Shift, trans)
+                                        emit(out, origin, q, q, Effect::Shift, trans, None)
                                     }
                                 }
                                 "jump" => {
@@ -487,6 +523,7 @@ impl Program {
                                     } else {
                                         let victim = frames[top].take;
                                         frames[top].pos = q;
+                                        extend_route(&mut frames[top].route, q);
                                         if let Some(i) = out.iter().position(|x: &DefaultAction| {
                                             x.continuation.is_empty()
                                                 && x.first.effect == Effect::Take
@@ -495,7 +532,15 @@ impl Program {
                                             // 앞서 만든 단순 잡기 후보를 잡고 점프하는 후보로 교체한다.
                                             out.remove(i);
                                         }
-                                        emit(out, origin, victim, q, Effect::TakeJump, trans)
+                                        emit(
+                                            out,
+                                            origin,
+                                            victim,
+                                            q,
+                                            Effect::TakeJump,
+                                            trans,
+                                            frames[top].route.as_deref(),
+                                        )
                                     }
                                 }
                                 _ => unreachable!(),
@@ -524,10 +569,11 @@ fn reflect_ray(
     wall_key: Option<&str>,
     trans: &Option<String>,
     out: &mut Vec<DefaultAction>,
+    route: Option<&[Position]>,
 ) -> Result<(), Error> {
-    let mut pending = vec![(start, direction)];
+    let mut pending = vec![(start, direction, route.map(|r| r.to_vec()))];
     let mut visited = HashSet::new();
-    while let Some((at, (dx, dy))) = pending.pop() {
+    while let Some((at, (dx, dy), route)) = pending.pop() {
         if !visited.insert((at, dx, dy)) {
             continue;
         }
@@ -542,24 +588,35 @@ fn reflect_ray(
                 wall_key.is_some_and(|key| b.piece_name(piece).is_ok_and(|name| name == key))
             });
         if is_wall {
-            pending.push((at, (-dx, dy)));
-            pending.push((at, (dx, -dy)));
+            pending.push((at, (-dx, dy), route.clone()));
+            pending.push((at, (dx, -dy), route));
         } else if !occupant.is_some_and(|piece| piece.owner == owner) {
-            emit(out, origin, next, next, Effect::TakeMove, trans);
+            let mut next_route = route;
+            extend_route(&mut next_route, next);
+            emit(
+                out,
+                origin,
+                next,
+                next,
+                Effect::TakeMove,
+                trans,
+                next_route.as_deref(),
+            );
             if occupant.is_none() {
-                pending.push((next, (dx, dy)));
+                pending.push((next, (dx, dy), next_route));
             }
         }
     }
     Ok(())
 }
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct Frame {
     pos: Position,
     state: bool,
     has_take: bool,
     take: Position,
     close: usize,
+    route: Option<Vec<Position>>,
 }
 struct ExecutionContext {
     frames: Vec<Frame>,
@@ -578,6 +635,7 @@ impl ExecutionContext {
                 has_take: false,
                 take: origin,
                 close: 0,
+                route: Some(vec![origin]),
             }],
             registers: [None; SLOT_COUNT],
             anchors: [None; SLOT_COUNT],
@@ -611,10 +669,21 @@ fn emit(
     to: Position,
     effect: Effect,
     t: &Option<String>,
+    route: Option<&[Position]>,
 ) {
     let mut s = ActionStep::new(from, take, to, effect);
     s.transition = t.clone();
-    out.push(DefaultAction::one(s))
+    let mut action = DefaultAction::one(s);
+    action.route = route.map(|r| r.to_vec());
+    out.push(action)
+}
+
+fn extend_route(route: &mut Option<Vec<Position>>, position: Position) {
+    if let Some(route) = route {
+        if route.last() != Some(&position) {
+            route.push(position);
+        }
+    }
 }
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Wall {

@@ -36,6 +36,14 @@ impl WebGame {
     pub fn snapshot(&self) -> String {
         serde_json::to_string(&self.game.snapshot()).expect("snapshot is serializable")
     }
+    /// Query only: no dispatch, turn advance, or saved command is written.
+    pub fn inspect_enemy(&self, cell: usize) -> Result<String, JsValue> {
+        let view = self
+            .game
+            .inspect_enemy(cell)
+            .map_err(|e| JsValue::from_str(&e))?;
+        Ok(serde_json::to_string(&view).expect("inspection is serializable"))
+    }
     pub fn dispatch(&mut self, command: &str) -> Result<String, JsValue> {
         let command: Command = serde_json::from_str(command)
             .map_err(|_| JsValue::from_str("잘못된 게임 명령입니다."))?;
