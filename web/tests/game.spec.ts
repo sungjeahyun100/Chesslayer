@@ -103,6 +103,18 @@ test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 
 });
 
 test("원정 현황 버튼은 우측 상단에 고정되고 실제 덱·진입 배치·유물을 연다", async ({ page }) => {
+  const expectUniformBoard = async () => {
+    const cells = await page.locator(".status-square").evaluateAll((squares) => squares.map((square) => {
+      const { width, height } = square.getBoundingClientRect();
+      return { width, height };
+    }));
+    expect(cells).toHaveLength(64);
+    for (const cell of cells) {
+      expect(Math.abs(cell.width - cell.height)).toBeLessThan(1);
+      expect(Math.abs(cell.width - cells[0].width)).toBeLessThan(1);
+      expect(Math.abs(cell.height - cells[0].height)).toBeLessThan(1);
+    }
+  };
   await startMap(page);
   const before = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
   const snapshot = await page.evaluate(async () => {
@@ -124,14 +136,19 @@ test("원정 현황 버튼은 우측 상단에 고정되고 실제 덱·진입 �
   await expect(page.locator(".map-overlay")).toHaveCount(0);
   await expect(page.locator(".status-piece-group")).toHaveCount(new Set(snapshot.rest_options.map((piece) => piece.kind)).size);
   await expect(page.locator(".status-board .piece-image")).toHaveCount(snapshot.next_battle_pieces.length);
+  await expectUniformBoard();
   await expect(page.locator(".status-relic")).toHaveCount(snapshot.relics.length);
   await page.locator(".status-piece-group").first().click();
   await expect(page.locator(".status-piece-detail")).toBeVisible();
   await page.locator(".status-relic").first().click();
   await expect(page.locator(".status-relic-detail")).toBeVisible();
+  await expectUniformBoard();
   await expect(page.locator(".map-aside, .map-legend")).toHaveCount(0);
   await page.getByRole("button", { name: "원정 현황 닫기" }).click();
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "원정 현황" }).click();
+  await expectUniformBoard();
+  await page.getByRole("button", { name: "원정 현황 닫기" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(before);
   await expect(page.locator(".map-node:enabled")).toHaveCount(3);
