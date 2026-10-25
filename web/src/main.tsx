@@ -18,6 +18,7 @@ import { PromotionPicker } from "./PromotionPicker";
 import { UpgradeTree } from "./UpgradeTree";
 import { RelicIcon } from "./ContentArt";
 import { CardFace } from "./CardFace";
+import { BattleRewards } from "./BattleRewards";
 import { version } from "../package.json";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
@@ -67,6 +68,7 @@ function App() {
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
   const [restCompleted, setRestCompleted] = useState(false);
   const [upgradeHistory, setUpgradeHistory] = useState<Extract<Command, { type: "rest_upgrade" }>[]>([]);
+  const [rewardUpgradeHistory, setRewardUpgradeHistory] = useState<{ id: number; target: number }[]>([]);
   const [promotion, setPromotion] = useState<{
     from: number;
     to: number;
@@ -78,7 +80,6 @@ function App() {
   const [cardTargets, setCardTargets] = useState<number[]>([]);
   const [cardUpgrades, setCardUpgrades] = useState<{ id: number; target: number }[]>([]);
   const [upgradeFocus, setUpgradeFocus] = useState<number | null>(null);
-  const [upgradePreview, setUpgradePreview] = useState<number | undefined>();
   const [error, setError] = useState("");
   const [help, setHelp] = useState(false);
   const [mapOpen, setMapOpen] = useState(false);
@@ -134,7 +135,7 @@ function App() {
     try {
       const before: Snapshot = JSON.parse(engine.current.snapshot());
       const next: Snapshot = JSON.parse(engine.current.dispatch(JSON.stringify(command)));
-      if (command.type === "choose_reward" && before.floor === 1 && next.floor === 2 && next.phase === "map" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if ((command.type === "choose_reward" || command.type === "continue_reward" || command.type === "advance_floor") && before.floor === 1 && next.floor === 2 && next.phase === "map" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         setFloorTransition({ next, stage: "out" });
       } else {
         setState(next);
@@ -219,6 +220,7 @@ function App() {
     // not rest upgrades and must not illuminate an unrelated upgrade edge.
     const commands: Command[] = JSON.parse(saved).commands;
     setUpgradeHistory(commands.filter((c): c is Extract<Command, { type: "rest_upgrade" }> => c.type === "rest_upgrade"));
+    setRewardUpgradeHistory(commands.filter((c): c is Extract<Command, { type: "rest_upgrade" | "claim_upgrade" }> => c.type === "rest_upgrade" || c.type === "claim_upgrade").map(({ id, target }) => ({ id, target })));
     try {
       localStorage.setItem(SAVE_KEY, saved);
       setHasSave(true);
@@ -323,7 +325,6 @@ function App() {
             return;
           }
           setUpgradeFocus(piece.id);
-          setUpgradePreview(cardUpgrades.find((u) => u.id === piece.id)?.target);
         } else if (targetCard.definition.selection_mode === "multiple") {
           setCardTargets((ids) => ids.includes(piece.id) ? ids.filter((id) => id !== piece.id) : [...ids, piece.id]);
         } else if (["limiter_release", "sacred_domain"].includes(targetCard.definition.kind)) {
@@ -366,7 +367,8 @@ function App() {
     setSelected(state.turn === 0 && piece?.owner === 0 && selected !== cell ? cell : null);
   }
   const turn = state?.turn === 0;
-  const showMap = (state?.phase === "map" || mapOpen) && !restCompleted;
+  const rewardRevisit = state?.phase === "reward" && state.map.nodes.some((node) => node.current && node.visited);
+  const showMap = (state?.phase === "map" || mapOpen || rewardRevisit) && (!restCompleted || mapOpen);
   const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
   const restView = state?.phase === "rest" || restCompleted;
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
@@ -433,6 +435,7 @@ function App() {
           </button>
         </div>
       </header>
+      {screen === "game" && state && <button className="primary expedition-status-trigger" onClick={() => setMapOpen(true)}>원정 현황</button>}
       {help && (
         <section className="guide">
           <strong>체크메이트 대신, 로얄을 포획하세요.</strong>
@@ -558,18 +561,15 @@ function App() {
         </main>
       )}
       {screen === "game" && state && showMap && (
-        <ActMap state={state} send={send} onClose={() => setMapOpen(false)} />
+        <ActMap state={state} send={send} onClose={() => setMapOpen(false)} coveredByReward={rewardRevisit} overlay={mapOpen} />
       )}
-      {screen === "game" && state && !showMap && (
+      {screen === "game" && state && (!showMap || (mapOpen && state.phase !== "map")) && (
         <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined}>
           <nav className="node-navigation" aria-label="원정 위치">
             <span>
               {state.floor}층 / {state.map.nodes.find((n) => n.current)!.row + 1}번째 지점
               · {state.node_kind && nodeTypes[state.node_kind].label}
             </span>
-            <button className="text-button" onClick={() => { setRestCompleted(false); setMapOpen(true); }}>
-              전체 지도 보기 ↗
-            </button>
           </nav>
           {state.phase !== "treasure" && (
             <>
@@ -761,10 +761,10 @@ function App() {
                   <>
                     {targetCard?.definition.selection_mode === "upgrade" && focusedUpgrade && <section className="card-upgrade-picker">
                       <p>일시 강화 경로 선택 · {focusedUpgrade.name}</p>
-                      <UpgradeTree key={focusedUpgrade.id} piece={{ ...focusedUpgrade, origin: focusedUpgrade.cell, upgrades: [], can_upgrade: true, can_revive: false, dead: false }} paths={state.upgrade_paths} acquired={[]} selected={upgradePreview}
-                        onSelect={setUpgradePreview}
+                      <UpgradeTree key={focusedUpgrade.id} piece={{ ...focusedUpgrade, origin: focusedUpgrade.cell, upgrades: [], can_upgrade: true, can_revive: false, dead: false }} paths={state.upgrade_paths} acquired={[]}
+                        onSelect={() => {}}
                         onConfirm={(target) => { setCardUpgrades((old) => [...old.filter((u) => u.id !== focusedUpgrade.id), { id: focusedUpgrade.id, target }]); setUpgradeFocus(null); }}
-                        onCancel={() => setUpgradeFocus(null)} completed={false} selectionOnly />
+                        completed={false} selectionOnly />
                     </section>}
                     {selectedPiece && (
                       <section className={`selected-piece-info ${inspectedEnemy ? "enemy-piece-info" : ""}`} aria-label={`${inspectedEnemy ? "적" : "아군"} 기물 정보`}>
@@ -913,52 +913,8 @@ function App() {
               </div>
             </section>
           )}
-          {state.phase !== "combat" && state.phase !== "rest" && !restCompleted && (
+          {state.phase !== "combat" && state.phase !== "rest" && state.phase !== "reward" && !restCompleted && (
             <section className="outcome" ref={outcomeRef} aria-live="polite">
-              {state.phase === "reward" && (
-                <>
-                  <p className="eyebrow">ROYAL DEFEATED</p>
-                  <h2>전투 승리</h2>
-                  <p>
-                    생존 기물은 시작 칸으로 돌아가며(하드디스크 보유 시 종료 위치 유지) 영구 강화는 유지됩니다. 카드 또는 유물 보상
-                    3개 중 하나를 선택하세요.
-                  </p>
-                  {state.node_kind === "elite" && state.node_reward && (
-                    <p className="elite-reward">
-                      추가 보상: {state.node_reward.name} ·{" "}
-                      {state.node_reward.description}
-                      {" "}선택 보상과 유물이 중복되면 가호 카드로 대체됩니다.
-                    </p>
-                  )}
-                  <div className="reward-cards">
-                    {state.rewards.map((reward, i) => (
-                      <button
-                        className={`playing-card ${reward.type === "relic" ? "relic-reward" : ""}`}
-                        key={i}
-                        data-reward-type={reward.type}
-                        onClick={() =>
-                          send({ type: "choose_reward", index: i })
-                        }
-                        aria-label={`${reward.type === "card" ? "카드" : "유물"} 보상 ${reward.definition.name}`}
-                      >
-                        {reward.type === "card" ? (
-                          <CardFace card={reward.definition} />
-                        ) : (
-                          <>
-                            <div className="card-top"><span className="relic-type">유물</span><span>영구 효과</span></div>
-                            <div className="card-symbol"><RelicIcon id={reward.definition.id} name={reward.definition.name} /></div>
-                            <h3>{reward.definition.name}</h3>
-                            <p>{reward.definition.description}</p>
-                          </>
-                        )}
-                        <span className="reward-select">
-                          {reward.type === "card" ? "덱에 추가 +" : "유물 획득 +"}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </>
-              )}
               {state.phase === "treasure" && (
                 <>
                   <p className="eyebrow">A GIFT ALONG THE WAY</p>
@@ -1010,6 +966,9 @@ function App() {
             </section>
           )}
         </main>
+      )}
+      {screen === "game" && state?.phase === "reward" && !floorTransition && (
+        <BattleRewards state={state} send={send} revisit={!!rewardRevisit} history={rewardUpgradeHistory} />
       )}
       <footer>
         CHESSLAYER <span>첫 번째 원정 · 진행은 이 브라우저에 저장됩니다.</span>

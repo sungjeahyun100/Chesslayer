@@ -320,3 +320,11 @@ git diff --check
 `cargo test -p chesslayer --test content`로 양 진영 에셋 등록을 확인하고 `npm run build --prefix web`으로 실제 번들을 생성한다. 기존 완주 E2E는 구행 보스의 SVG 로딩과 초기 배치 화면도 확인한다. 같은 원본의 양 진영 비교 화면과 실제 보스 화면을 열어 방향·글자 회전·색·잘림 여부를 확인한다. 새 테스트나 디버그 UI는 추가하지 않는다.
 
 후속 실행 결과: 콘텐츠 등록 Rust 테스트, TypeScript/Vite 빌드, 실제 Chrome 완주 E2E와 `git diff --check` 모두 통과했다. 양 진영 SVG의 내부 그림이 같고 바깥 변환만 0도/180도인지 XML로 확인했다. 비교 렌더와 `web/test-results/hook-boss.png`를 직접 열어 아군 위·적군 아래 방향, 같은 색, 반사되지 않은 글자와 보드 안의 정상 표시를 확인했다.
+
+### 전투 보상 회수 검증
+
+`crates/chesslayer/tests/rewards.rs`의 `elite_reward_can_be_skipped_reopened_and_claimed_once`는 엘리트 보상을 받지 않고 진행한 뒤 마지막 노드에서 같은 보상 목록을 재확인하고, 기물 강화와 카드 선택을 각각 한 번만 받는지 확인한다. `boss_upgrade_can_be_revisited_before_advancing_floor`는 보스 강화를 건너뛴 뒤 층 이동 전에 재방문하여 강화하는 흐름을 검증한다. 보상 창 재방문이 경로와 클리어 기록을 바꾸지 않는지, 다른 노드를 클리어하면 이전 노드의 재확인이 닫히는지도 검증한다. 실행: `cargo test -p chesslayer --test rewards`.
+
+`crates/chesslayer/tests/act_map.rs`의 기존 경로 테스트는 마지막 클리어 노드의 보상 재확인을 허용하면서 다음 경로 선택이 유지되는지 확인한다. 실행: `cargo test -p chesslayer --test act_map`. `web/tests/rewards.spec.ts`의 엘리트 시나리오는 카드 전용 선택지, 미수령 진행, 지도 알림, 재방문, 강화 확정, 저장 복구, 중복 수령 차단을 검증한다. `web/tests/game.spec.ts`는 전투 전 적 정체 비공개와 전투 중 지도 오버레이의 저장 상태 불변을 검증한다. 실행: `npm run wasm --prefix web && npm run test:e2e --prefix web`.
+
+보상 오버레이 표시 검증은 같은 엘리트 브라우저 시나리오에 포함된다. 최초 승리 시 보드가 남아 있는지, 재방문 시 맵이 남아 있는지, 모달이 열리면 배경 앱이 `inert` 상태인지, 재방문 버튼이 `맵으로 돌아가기`인지, 닫으면 배경 조작이 복구되는지 확인한다.

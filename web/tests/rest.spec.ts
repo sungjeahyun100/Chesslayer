@@ -95,11 +95,63 @@ test("휴식 트리: 상위 복합 기물의 잠금 조건과 미리보기를 �
   await god.click();
   await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", "movement_god");
   await expect(page.locator(".skill-owned.missing")).toHaveCount(2);
+  await expect(page.locator(".skill-node-popup")).toHaveCount(0);
   const bouncingTempest = page.locator('.skill-node[data-kind="24"]');
   await bouncingTempest.click();
   await expect(page.locator(".rest-portrait img")).toHaveAttribute("data-piece-key", "bouncing_tempest_queen");
   await expect(page.locator(".skill-owned.missing")).toHaveCount(2);
   await allImagesLoaded(page);
+});
+
+test("강화 노드 팝업: 선택 교체, 재클릭과 빈 공간 닫기, 확대와 스크롤 추적", async ({ page }) => {
+  await loadRest(page);
+  await page.locator('[data-square="a2"]').click();
+  const first = page.locator('.skill-node[data-kind="8"]');
+  const second = page.locator('.skill-node[data-kind="13"]');
+  await first.click();
+  const popup = page.locator(".skill-node-popup");
+  await expect(popup).toBeVisible();
+  await expect(popup).toHaveText("강화 확정");
+  await expect(popup.locator("button")).toHaveCount(1);
+  await expect(popup.getByRole("button", { name: "강화 확정" })).toBeVisible();
+  await expect(page.locator(".skill-popup-connector")).toHaveCount(0);
+  await first.click();
+  await expect(popup).toHaveCount(0);
+  await first.click();
+  await second.click();
+  await expect(popup).toHaveCount(1);
+  await expect(second).toHaveAttribute("aria-expanded", "true");
+  await expect(first).toHaveAttribute("aria-expanded", "false");
+  await expect(page.locator(".rest-piece-study h2")).toHaveText("바운싱 폰");
+  await page.locator(".skill-viewport").click({ position: { x: 8, y: 8 } });
+  await expect(popup).toHaveCount(0);
+  await first.click();
+  await page.getByRole("button", { name: "트리 확대" }).click();
+  await page.getByRole("button", { name: "트리 확대" }).click();
+  await page.locator(".skill-viewport").evaluate((el) => { el.scrollLeft += 80; el.scrollTop += 25; });
+  await expect.poll(async () => page.evaluate(() => {
+    const node = document.querySelector('.skill-node[data-kind="8"] .skill-node-orb')!.getBoundingClientRect();
+    const panel = document.querySelector('.skill-node-popup')!.getBoundingClientRect();
+    return panel.top >= 0 && panel.bottom <= innerHeight && panel.left >= 0 && panel.right <= innerWidth
+      && (Math.abs(panel.left - node.right) < 12 || Math.abs(node.left - panel.right) < 12);
+  })).toBe(true);
+});
+
+test("강화 노드 팝업: 모바일 화면 안에 배치되고 다른 노드를 선택할 수 있다", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loadRest(page);
+  await page.locator('[data-square="a2"]').click();
+  await page.locator('.skill-node[data-kind="8"]').click();
+  const popup = page.locator(".skill-node-popup");
+  await expect(popup).toBeVisible();
+  await expect(popup).toHaveAttribute("data-side", "left");
+  await expect.poll(async () => popup.evaluate((el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
+  })).toBe(true);
+  await page.locator('.skill-node[data-kind="13"]').click();
+  await expect(popup).toHaveCount(1);
+  await expect(page.locator(".rest-piece-study h2")).toHaveText("바운싱 폰");
 });
 
 test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음 전투", async ({
@@ -118,6 +170,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   await page.locator('[data-square="a3"]').click();
   await expect(page.locator(".rest-detail")).toHaveCount(0);
   await page.locator('[data-square="e1"]').click();
+  await page.locator(".skill-node").click();
   await expect(
     page.getByText("이 기물에 정의된 강화 경로가 없습니다."),
   ).toBeVisible();
@@ -149,7 +202,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
     "a2",
   );
   await expect(page.getByRole("alert")).toHaveCount(0);
-  await page.getByRole("button", { name: "취소", exact: true }).click();
+  await page.getByRole("button", { name: "기물 선택 닫기" }).click();
   await expect(page.locator(".rest-detail")).toHaveCount(0);
   expect(await saved(page)).toBe(before);
   await page.locator('[data-square="a2"]').click();

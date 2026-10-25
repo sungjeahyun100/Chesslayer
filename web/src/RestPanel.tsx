@@ -34,6 +34,20 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
     const studyDescription = choice?.target === undefined || choice.target === piece.kind
       ? piece.description : preview?.effect ?? "이 계열의 기본 기물입니다. 연결된 가지에서 강화 방향을 선택하세요.";
     const acquired = history.filter((c) => c.id === piece.id).map((c) => c.target);
+    const incoming = state.upgrade_paths.filter((path) => path.to === choice?.target);
+    const direct = incoming.find((path) => path.from === piece.kind);
+    const reachable = new Set([piece.kind]);
+    for (let i = 0; i < state.upgrade_paths.length; i++) {
+      for (const path of state.upgrade_paths) if (reachable.has(path.from)) reachable.add(path.to);
+    }
+    const reason = choice?.target === undefined ? null
+      : choice.target === piece.kind ? "현재 기물에 적용된 능력입니다."
+        : acquired.includes(choice.target) ? "이미 획득한 강화입니다."
+          : !incoming.length ? "이 계열의 시작점입니다. 이전 종류로 되돌리는 강화는 없습니다."
+            : !reachable.has(choice.target) ? `현재 ${piece.name}에서 이 가지로 변경하는 강화 경로는 없습니다.`
+              : direct && !direct.unlocked ? `영구 로스터 필요: ${direct.required_pieces.filter((required) => !required.owned).map((required) => required.name).join(", ")}`
+                : completed ? "이번 쉼터의 행동을 사용했습니다. 다음 쉼터에서 다시 살펴보세요."
+                  : !direct ? `선행 기물 ${incoming.map((path) => path.from_name).join(" 또는 ")} 상태가 필요합니다.` : null;
     return (
       <section className="rest-panel rest-workshop" ref={panel} aria-label="쉼터 기물 관리">
         <div className="section-label">A MOMENT OF REST <span className="rest-budget">{completed ? "강화 완료" : "행동 1회"}</span></div>
@@ -48,15 +62,25 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
             <div className="rest-portrait"><PieceImage pieceKey={studyKey} name={studyName} />{piece.ward && <span className="portrait-ward">가호 유지</span>}</div>
             <h2>{studyName}</h2>
             <p className="piece-description">{studyDescription}</p>
+            {!state.upgrade_paths.some((path) => path.from === piece.kind || path.to === piece.kind) && <p className="rest-note">이 기물에 정의된 강화 경로가 없습니다.</p>}
+            {choice?.target !== undefined && <div className="skill-inspector" aria-live="polite">
+              {!!incoming.length && <div className="skill-requirements">
+                <strong>비용 · 선행 조건{incoming.length > 1 ? " (진입 경로별)" : ""}</strong>
+                {incoming.map((path) => <div key={path.from} className="skill-requirement-path"><p><span>{path.from_name} → {path.to_name}</span>{path.requirement}</p>
+                  {path.required_pieces.map((required) => <span className={`skill-owned ${required.owned ? "owned" : "missing"}`} key={required.kind}>{required.name} · {required.owned ? "보유" : "미보유"}</span>)}
+                </div>)}
+              </div>}
+              {reason && <p className="skill-lock-reason">{reason}</p>}
+            </div>}
             <div className="rest-growth-history"><strong>현재 진형</strong><p>{piece.name} · {piece.square}</p>
               {!!acquired.length && <><strong>쉼터에서 획득한 강화</strong><ol>{acquired.map((kind, i) => <li key={i}>{state.upgrade_paths.find((p) => p.to === kind)?.to_name ?? "강화"}</li>)}</ol></>}
             </div>
             <p className="rest-note">연결된 가지를 따라<br />다음 성장 방향을 살펴보세요.<br />탐색 중에는 행동을 쓰지 않습니다.</p>
           </div>
           <UpgradeTree key={piece.id} piece={piece} paths={state.upgrade_paths} acquired={acquired}
-            selected={choice?.target} onSelect={(target) => onChoose({ ...choice!, target })}
+            onSelect={(target) => onChoose({ ...choice!, target })}
             onConfirm={(target) => send({ type: "rest_upgrade", id: piece.id, target })}
-            onCancel={onCancel} completed={completed} />
+            completed={completed} />
         </div>
         <button className="text-button rest-depart" onClick={() => completed ? onContinue() : send({ type: "rest_skip" })}>
           {completed ? "맵으로 돌아가기 →" : "휴식을 마치고 맵으로 →"}

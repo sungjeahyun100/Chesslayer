@@ -1,26 +1,95 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { PieceImage } from "./PieceImage";
 import { buildUpgradeTree } from "./upgradeTree";
 import type { RestOption, UpgradePath } from "./types";
 
-export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConfirm, onCancel, completed, selectionOnly = false }: {
+export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, completed, selectionOnly = false }: {
   piece: RestOption;
   paths: UpgradePath[];
   acquired: number[];
-  selected?: number;
-  onSelect: (kind: number) => void;
+  onSelect: (kind: number | undefined) => void;
   onConfirm: (target: number) => void;
-  onCancel: () => void;
   completed: boolean;
   selectionOnly?: boolean;
 }) {
   const tree = useMemo(() => buildUpgradeTree(paths, piece), [paths, piece]);
-  const active = tree.nodes.find((n) => n.kind === selected) ?? tree.nodes.find((n) => n.kind === piece.kind)!;
   const viewport = useRef<HTMLDivElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  const [openKind, setOpenKind] = useState<number | null>(null);
+  const confirming = useRef(false);
+  const dragged = useRef(false);
+  const active = tree.nodes.find((n) => n.kind === openKind) ?? tree.nodes.find((n) => n.kind === piece.kind)!;
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const [zoom, setZoom] = useState<number | null>(null);
   const [fit, setFit] = useState(1);
   const scale = zoom ?? fit;
+  useEffect(() => { if (completed) { setOpenKind(null); confirming.current = false; } }, [completed]);
+  useLayoutEffect(() => {
+    if (openKind === null || !popup.current || !viewport.current) return;
+    const panel = popup.current;
+    const anchor = [...viewport.current.querySelectorAll<HTMLButtonElement>(".skill-node")]
+      .find((node) => Number(node.dataset.kind) === openKind);
+    if (!anchor) return;
+    let frame = 0;
+    const position = () => {
+      frame = 0;
+      const node = anchor.querySelector<HTMLElement>(".skill-node-orb")!.getBoundingClientRect();
+      const area = viewport.current!.getBoundingClientRect();
+      const visible = node.right > area.left && node.left < area.right && node.bottom > area.top && node.top < area.bottom
+        && node.right > 0 && node.left < innerWidth && node.bottom > 0 && node.top < innerHeight;
+      panel.style.visibility = visible ? "visible" : "hidden";
+      if (!visible) return;
+      const width = panel.offsetWidth;
+      const height = panel.offsetHeight;
+      const margin = 4;
+      const overlapAtJoin = 7;
+      const obstacles = [...viewport.current!.querySelectorAll<HTMLElement>(".skill-node-orb")]
+        .filter((other) => other !== anchor.querySelector(".skill-node-orb")).map((other) => other.getBoundingClientRect())
+        .filter((other) => other.right > area.left && other.left < area.right && other.bottom > area.top && other.top < area.bottom);
+      const overlap = (a: DOMRect, x: number, y: number) =>
+        Math.max(0, Math.min(a.right, x + width) - Math.max(a.left, x))
+        * Math.max(0, Math.min(a.bottom, y + height) - Math.max(a.top, y));
+      const y = Math.max(margin, Math.min(innerHeight - height - margin, node.top + node.height / 2 - height / 2));
+      const candidates = (["right", "left"] as const).map((side) => {
+        const x = side === "right" ? node.right - overlapAtJoin : node.left - width + overlapAtJoin;
+        const offscreen = Math.max(0, margin - x) + Math.max(0, x + width + margin - innerWidth);
+        const outsideMap = Math.max(0, area.left - x) + Math.max(0, x + width - area.right);
+        const collision = obstacles.reduce((sum, other) => sum + overlap(other, x, y), 0);
+        return { side, x, score: offscreen * 1000 + outsideMap * 15 + collision * 3 + (side === "left" ? 1 : 0) };
+      });
+      const { x, side } = candidates.reduce((best, candidate) => candidate.score < best.score ? candidate : best);
+      panel.style.left = `${x}px`;
+      panel.style.top = `${y}px`;
+      panel.dataset.side = side;
+    };
+    const schedule = () => { if (!frame) frame = requestAnimationFrame(position); };
+    position();
+    const observer = new ResizeObserver(schedule);
+    observer.observe(panel);
+    observer.observe(viewport.current);
+    window.addEventListener("resize", schedule);
+    window.addEventListener("scroll", schedule, true);
+    return () => {
+      if (frame) cancelAnimationFrame(frame);
+      observer.disconnect();
+      window.removeEventListener("resize", schedule);
+      window.removeEventListener("scroll", schedule, true);
+    };
+  }, [openKind, scale, tree.width, tree.height]);
+  const closePopup = () => { setOpenKind(null); onSelect(undefined); };
+  const chooseNode = (kind: number) => {
+    if (openKind === kind) { closePopup(); return; }
+    setOpenKind(kind);
+    onSelect(kind);
+  };
+  const confirm = (kind: number) => {
+    if (confirming.current) return;
+    confirming.current = true;
+    setOpenKind(null);
+    onConfirm(kind);
+    window.setTimeout(() => { confirming.current = false; }, 500);
+  };
   useEffect(() => {
     const el = viewport.current!;
     const resize = () => setFit(Math.min(1, el.clientWidth / tree.width, el.clientHeight / tree.height));
@@ -47,19 +116,7 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
       : status(kind) === "available" ? "선택 가능"
         : tree.nodes.find((n) => n.kind === kind)?.incoming.length ? "잠김" : "기본 상태";
   const direct = active.incoming.find((p) => p.from === piece.kind);
-  const available = status(active.kind) === "available";
-  const achieved = status(active.kind) === "acquired";
-  const reachable = new Set([piece.kind]);
-  for (let i = 0; i < tree.nodes.length; i++) {
-    for (const edge of tree.edges) if (reachable.has(edge.from)) reachable.add(edge.to);
-  }
-  const reason = achieved
-    ? active.kind === piece.kind ? "현재 기물에 적용된 능력입니다." : "이미 획득한 강화입니다."
-    : !active.incoming.length ? "이 계열의 시작점입니다. 이전 종류로 되돌리는 강화는 없습니다."
-        : !reachable.has(active.kind) ? `현재 ${piece.name}에서 이 가지로 변경하는 강화 경로는 없습니다.`
-          : direct && !direct.unlocked ? `영구 로스터 필요: ${direct.required_pieces.filter((p) => !p.owned).map((p) => p.name).join(", ")}`
-          : completed ? "이번 쉼터의 행동을 사용했습니다. 다음 쉼터에서 다시 살펴보세요."
-          : `선행 기물 ${active.incoming.map((p) => p.from_name).join(" 또는 ")} 상태가 필요합니다.`;
+  const available = !completed && status(active.kind) === "available" && !!direct;
 
   return (
     <section className="skill-tree" aria-label={`${piece.name} 강화 트리`}>
@@ -72,15 +129,21 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
           <span className="acquired">◆ 획득</span><span className="available">◇ 선택 가능</span><span className="locked">◈ 잠김</span><span className="inspecting">◎ 살펴보는 중</span>
         </div>
         <div className="skill-viewport" ref={viewport} tabIndex={0} role="region" aria-label="강화 경로 지도. 확대 후 스크롤 또는 빈 공간을 드래그하여 이동"
+          onClick={(e) => {
+            if (dragged.current) { dragged.current = false; return; }
+            if (!(e.target as Element).closest(".skill-node, .skill-node-popup")) closePopup();
+          }}
           onPointerDown={(e) => {
             if (e.pointerType !== "mouse" || e.button !== 0 || (e.target as Element).closest("button")) return;
             const el = e.currentTarget;
+            dragged.current = false;
             drag.current = { x: e.clientX, y: e.clientY, left: el.scrollLeft, top: el.scrollTop };
             el.setPointerCapture(e.pointerId);
             el.classList.add("dragging");
           }}
           onPointerMove={(e) => {
             if (!drag.current) return;
+            if (Math.abs(e.clientX - drag.current.x) + Math.abs(e.clientY - drag.current.y) > 4) dragged.current = true;
             e.currentTarget.scrollLeft = drag.current.left - e.clientX + drag.current.x;
             e.currentTarget.scrollTop = drag.current.top - e.clientY + drag.current.y;
           }}
@@ -105,11 +168,12 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
                   <button key={node.kind} type="button" data-kind={node.kind}
                     className={`skill-node ${status(node.kind)} ${!node.incoming.length ? "root-node" : ""}`}
                     style={{ left: node.x, top: node.y }}
-                    aria-pressed={active.kind === node.kind}
+                    aria-pressed={openKind === node.kind}
                     aria-label={`${node.name} · ${statusText(node.kind)} · 상세 보기`}
                     title={`${node.name} · ${statusText(node.kind)}${node.incoming.flatMap((p) => p.required_pieces.map((r) => `\n${r.name}: ${r.owned ? "보유" : "미보유"}`)).join("")}`}
-                    aria-controls="skill-inspector"
-                    onClick={() => onSelect(node.kind)}
+                    aria-controls={openKind === node.kind && available ? "skill-node-popup" : undefined}
+                    aria-expanded={openKind === node.kind && available}
+                    onClick={() => chooseNode(node.kind)}
                     onFocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
                   >
                     <span className="skill-node-orb"><PieceImage pieceKey={node.key} /><span className="skill-node-mark">{status(node.kind) === "acquired" ? "◆" : !node.incoming.length ? "·" : status(node.kind) === "available" ? "+" : "◈"}</span></span>
@@ -131,24 +195,9 @@ export function UpgradeTree({ piece, paths, acquired, selected, onSelect, onConf
           </div>
         </div>
       </div>
-      <div id="skill-inspector" className="skill-inspector" aria-live="polite">
-        <div className="skill-inspector-title"><h3>{active.name}</h3><span className={`skill-state ${status(active.kind)}`}>{statusText(active.kind)}</span></div>
-        <p className="skill-effect">{active.description}</p>
-        {active.incoming.length > 0 && <div className="skill-requirements">
-          <strong>비용 · 선행 조건{active.incoming.length > 1 ? " (진입 경로별)" : ""}</strong>
-          {active.incoming.map((p) => <div key={p.from} className="skill-requirement-path"><p><span>{p.from_name} → {p.to_name}</span>{selectionOnly ? "전투 중 한 단계 · 카드 확정 시 마나 1" : p.requirement}</p>
-            {p.required_pieces.map((r) => <span className={`skill-owned ${r.owned ? "owned" : "missing"}`} key={r.kind}>{r.name} · {r.owned ? "보유" : "미보유"}</span>)}
-          </div>)}
-        </div>}
-        {!tree.edges.length && <p className="rest-note">이 기물에 정의된 강화 경로가 없습니다.</p>}
-        {available && direct ? <div className="skill-purchase">
-          <p>{piece.name} → {active.name}<br /><small>{selectionOnly ? "경로를 고른 뒤 카드 사용을 확정하세요." : "확정하면 쉼터 행동 1회를 사용합니다."}</small></p>
-          <div className="rest-confirm">
-            <button className="primary" onClick={() => onConfirm(active.kind)}>{selectionOnly ? "경로 선택" : "강화 확정"}</button>
-            <button onClick={onCancel}>취소</button>
-          </div>
-        </div> : <p className="skill-lock-reason">{reason}</p>}
-      </div>
+      {openKind !== null && available && createPortal(<div key={openKind} id="skill-node-popup" ref={popup} className="skill-node-popup" role="group" aria-label={`${active.name} 강화 동작`}>
+        <button type="button" className="primary" onClick={() => confirm(active.kind)}>{selectionOnly ? "경로 선택" : "강화 확정"}</button>
+      </div>, document.body)}
     </section>
   );
 }

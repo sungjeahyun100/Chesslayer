@@ -5,9 +5,12 @@ use std::collections::HashSet;
 fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
     let mut distinct = HashSet::new();
     let mut elites = HashSet::new();
+    let mut saw_treasure = false;
     for seed in 0..128 {
         let map = ActMap::generate(seed);
         assert_eq!(map, ActMap::generate(seed));
+        assert_eq!(map.rows, MAP_ROWS);
+        assert_eq!(map.rows, 14);
         distinct.insert(serde_json::to_string(&map).unwrap());
         let starts = map.starts();
         assert_eq!(starts.len(), 3);
@@ -25,6 +28,12 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                 .count(),
             1
         );
+        assert_eq!(map.nodes[boss].row, 13);
+        for row in [6, 12] {
+            let rests: Vec<_> = map.nodes.iter().filter(|n| n.row == row).collect();
+            assert!(!rests.is_empty());
+            assert!(rests.iter().all(|n| n.kind == NodeKind::Rest));
+        }
         let mut incoming = vec![0; map.nodes.len()];
         for n in &map.nodes {
             assert_eq!(n.id, map.nodes[n.id].id);
@@ -33,7 +42,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                     assert!(encounters::ELITES.contains(&n.encounter.unwrap()));
                     elites.insert(n.encounter.unwrap());
                     assert!(n.relic.is_some());
-                    assert!(n.description().contains("카드·유물 보상 3개"));
+                    assert!(n.description().contains("기물 강화 기회 1회"));
                 }
                 NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::HOOK_BOSS)),
                 NodeKind::Combat => assert!(n.encounter.unwrap() < 4),
@@ -69,10 +78,11 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
         }
         assert_eq!(reaches_boss.len(), map.nodes.len());
         assert!(map.nodes.iter().any(|n| n.kind == NodeKind::Rest));
-        assert!(map.nodes.iter().any(|n| n.kind == NodeKind::Treasure));
+        saw_treasure |= map.nodes.iter().any(|n| n.kind == NodeKind::Treasure);
         assert!(map.nodes.iter().any(|n| n.kind == NodeKind::Elite));
     }
     assert!(distinct.len() > 120);
+    assert!(saw_treasure);
     assert_eq!(elites, encounters::ELITES.into());
 }
 
@@ -83,6 +93,17 @@ fn second_floor_nodes_draw_only_registered_encounters() {
     let mut boss = HashSet::new();
     for seed in 0..128 {
         let map = ActMap::generate_for_floor(seed, 2);
+        assert_eq!(map.rows, MAP_ROWS);
+        assert!(map
+            .nodes
+            .iter()
+            .filter(|n| n.row == 6 || n.row == 12)
+            .all(|n| n.kind == NodeKind::Rest));
+        assert!(map
+            .nodes
+            .iter()
+            .filter(|n| n.row == 13)
+            .all(|n| n.kind == NodeKind::Boss));
         for node in &map.nodes {
             match node.kind {
                 NodeKind::Combat => {
@@ -157,10 +178,16 @@ fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
     assert_eq!(game.battle.outcome()[3].position, Some(Position::new(3, 7)));
     assert_eq!(game.deck.len() + game.relics.len(), 2);
     let snapshot = serde_json::to_string(&game.snapshot()).unwrap();
-    for id in [start, invalid, usize::MAX] {
+    for id in [invalid, usize::MAX] {
         assert!(game.dispatch(Command::SelectNode { id }).is_err());
     }
     assert_eq!(snapshot, serde_json::to_string(&game.snapshot()).unwrap());
+    // Only the latest cleared node can reopen its fixed reward offer.
+    let path = game.path.clone();
+    game.dispatch(Command::SelectNode { id: start }).unwrap();
+    assert_eq!(game.phase, RunPhase::Reward);
+    assert_eq!(game.path, path);
+    game.dispatch(Command::ContinueReward).unwrap();
     let alternative = game
         .available_nodes()
         .into_iter()

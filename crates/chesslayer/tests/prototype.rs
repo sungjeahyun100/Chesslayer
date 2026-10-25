@@ -543,7 +543,7 @@ fn seeded_route_reaches_rest_with_rewards_and_upgrade() {
     assert_eq!(game.floor, 1);
     assert_eq!(game.current_node, Some(10));
     assert!(!game.available_nodes().is_empty());
-    assert!(game.deck.len() >= 2);
+    assert!(!game.deck.is_empty());
     if !game.relics.contains(&Relic::HardDisk) {
         assert!(game
             .battle

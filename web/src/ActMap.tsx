@@ -1,5 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { ExpeditionStatus } from "./ExpeditionStatus";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
 import { PieceImage } from "./PieceImage";
 import type { Command, MapNode, NodeKind, Snapshot } from "./types";
 
@@ -11,7 +10,9 @@ export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
   boss: { icon: "♛", label: "보스" },
 };
 const status = (node: MapNode) =>
-  node.current
+  node.reward_revisit
+    ? node.unclaimed_reward ? "미획득 보상 확인 가능" : "보상 내역 확인 가능"
+    : node.current
     ? "현재 위치"
     : node.visited
       ? "방문 완료"
@@ -21,39 +22,93 @@ const status = (node: MapNode) =>
           ? "지나친 경로"
           : "아직 선택 불가";
 
+function layoutNodeX(rows: MapNode[][]) {
+  const gap = 56;
+  const parents = new Map<number, number[]>();
+  const positions = new Map<number, number>();
+  const anchors = new Map<number, number>();
+
+  for (const row of rows) {
+    row.forEach((node, index) => {
+      const x = 250 + (index - (row.length - 1) / 2) * gap;
+      positions.set(node.id, x);
+      anchors.set(node.id, x);
+      for (const child of node.next) {
+        const incoming = parents.get(child) ?? [];
+        incoming.push(node.id);
+        parents.set(child, incoming);
+      }
+    });
+  }
+
+  // Pull connected nodes together. Pool adjacent positions when they would
+  // overlap, preserving the graph's left-to-right order and route choices.
+  for (let pass = 0; pass < 24; pass++) {
+    const orderedRows = pass % 2 === 0 ? rows : [...rows].reverse();
+    for (const row of orderedRows) {
+      const targets = row.map((node) => {
+        const neighbors = [...(parents.get(node.id) ?? []), ...node.next];
+        const total = neighbors.reduce((sum, id) => sum + (positions.get(id) ?? 250), 0);
+        const weight = neighbors.length + 0.35;
+        return { x: (total + (anchors.get(node.id) ?? 250) * 0.35) / weight, weight };
+      });
+      const blocks: { start: number; end: number; mean: number; weight: number }[] = [];
+      targets.forEach((target, index) => {
+        blocks.push({ start: index, end: index, mean: target.x - index * gap, weight: target.weight });
+        while (blocks.length > 1 && blocks[blocks.length - 2].mean > blocks[blocks.length - 1].mean) {
+          const right = blocks.pop()!;
+          const left = blocks.pop()!;
+          blocks.push({
+            start: left.start,
+            end: right.end,
+            mean: (left.mean * left.weight + right.mean * right.weight) / (left.weight + right.weight),
+            weight: left.weight + right.weight,
+          });
+        }
+      });
+      for (const block of blocks) {
+        for (let index = block.start; index <= block.end; index++) {
+          positions.set(row[index].id, block.mean + index * gap);
+        }
+      }
+    }
+  }
+  return positions;
+}
+
 export function ActMap({
   state,
   send,
   onClose,
+  coveredByReward = false,
+  overlay = false,
 }: {
   state: Snapshot;
   send: (command: Command) => void;
   onClose: () => void;
+  coveredByReward?: boolean;
+  overlay?: boolean;
 }) {
-  const [inspected, inspect] = useState<number | null>(null);
-  const [statusOpen, setStatusOpen] = useState(false);
   const top = useRef<HTMLElement>(null);
   useEffect(() => {
     top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, []);
   const { map } = state;
   const ended = state.phase === "victory" || state.phase === "defeat";
-  const current = map.nodes.find((n) => n.current);
-  const available = map.nodes.filter((n) => n.available);
-  const detail =
-    map.nodes.find((n) => n.id === inspected) ?? available[0] ?? current;
-  const rows = Array.from({ length: map.rows }, (_, row) =>
+  const mapPhase = state.phase === "map" || coveredByReward;
+  const rows = useMemo(() => Array.from({ length: map.rows }, (_, row) =>
     map.nodes.filter((node) => node.row === row),
-  );
+  ), [map.nodes, map.rows]);
   const column = (node: MapNode) =>
     rows[node.row].findIndex((peer) => peer.id === node.id);
-  // Center each layer in reading order; irregular random lane gaps obscure the edges.
-  const x = (node: MapNode) =>
-    250 + (column(node) - (rows[node.row].length - 1) / 2) * 135;
-  const y = (node: MapNode) => 58 + (map.rows - 1 - node.row) * 95;
+  const positions = useMemo(() => layoutNodeX(rows), [rows]);
+  const x = (node: MapNode) => positions.get(node.id) ?? 250;
+  const rowGap = 104.5;
+  const y = (node: MapNode) => 58 + (map.rows - 1 - node.row) * rowGap;
+  const chartHeight = 58 + (map.rows - 1) * rowGap + 92;
   const choose = (id: number) => send({ type: "select_node", id });
   return (
-    <main className="act-map-screen" data-phase={state.phase} data-floor={state.floor} ref={top}>
+    <main className={`act-map-screen ${overlay ? "map-overlay" : ""}`} data-phase={mapPhase ? "map" : state.phase} data-floor={state.floor} ref={top}>
       <div className="map-heading">
         <div>
           <p className="eyebrow">{state.floor}층 / {state.character}</p>
@@ -61,30 +116,23 @@ export function ActMap({
           <p>하나의 원정, 당신이 고르는 길.</p>
         </div>
         <div className="map-progress">
-          {state.phase === "map" && <button className="primary expedition-open" onClick={() => setStatusOpen(true)}>원정 현황 ↗</button>}
           <strong>{map.nodes.filter((n) => n.visited).length}</strong>
           <span> / {map.rows}개 지점 완료</span>
-          {state.phase !== "map" && (
+          {state.phase === "map" && map.nodes.some((node) => node.current && node.visited && node.kind === "boss") &&
+            <button className="primary" onClick={() => send({ type: "advance_floor" })}>{state.floor === 1 ? "다음 층으로 진행 →" : "원정 마치기 →"}</button>}
+          {overlay && (
             <button className="primary" onClick={onClose}>
               {ended ? "원정 결과로 돌아가기" : "진행 중인 노드로 돌아가기"} →
             </button>
           )}
         </div>
       </div>
-      <div className="map-legend" aria-label="노드 유형">
-        {Object.entries(nodeTypes).map(([kind, entry]) => (
-          <span key={kind} className={`legend-${kind}`}>
-            <b>{entry.icon}</b>
-            {entry.label}
-          </span>
-        ))}
-      </div>
       <div className="map-content">
-        <section className="map-chart" aria-label={`${state.floor}층 전체 경로`}>
+        <section className="map-chart" aria-label={`${state.floor}층 전체 경로`} style={{ height: chartHeight }}>
           <div className="map-direction">보스를 향해 ↑</div>
           <svg
             className="map-connections"
-            viewBox="0 0 500 720"
+            viewBox={`0 0 500 ${chartHeight}`}
             preserveAspectRatio="none"
             aria-hidden="true"
           >
@@ -127,16 +175,15 @@ export function ActMap({
                         ? "next"
                         : "skipped"
                   }
-                  d={`M 250 687 L ${x(n)} ${y(n) + 22}`}
+                  d={`M 250 ${chartHeight - 33} L ${x(n)} ${y(n) + 22}`}
                 />
               ))}
           </svg>
           {map.nodes.map((node) => (
             <div
               key={node.id}
-              className={`map-node-slot kind-${node.kind} ${node.current ? "is-current" : ""} ${node.visited ? "is-visited" : ""} ${node.available ? "is-available" : ""} ${node.skipped ? "is-skipped" : ""}`}
-              style={{ left: `${x(node) / 5}%`, top: `${y(node) / 7.2}%` }}
-              onMouseEnter={() => inspect(node.id)}
+              className={`map-node-slot kind-${node.kind} ${node.current ? "is-current" : ""} ${node.visited ? "is-visited" : ""} ${node.available ? "is-available" : ""} ${node.reward_revisit ? "has-reward-history" : ""} ${node.skipped ? "is-skipped" : ""}`}
+              style={{ left: `${x(node) / 5}%`, top: `${(y(node) / chartHeight) * 100}%` }}
             >
               {node.current && <span className="current-marker">현재</span>}
               <button
@@ -146,22 +193,17 @@ export function ActMap({
                 data-row={node.row}
                 data-next={node.next.join(",")}
                 data-status={status(node)}
-                disabled={!node.available}
-                onFocus={() => inspect(node.id)}
+                disabled={!node.available && !node.reward_revisit}
                 onClick={() => choose(node.id)}
-                title={`${node.name} · ${node.description}`}
-                aria-label={`${node.row + 1}단계 경로 ${column(node) + 1} · ${nodeTypes[node.kind].label} · ${node.name} · ${status(node)}`}
+                title={`${nodeTypes[node.kind].label}${node.kind === "boss" ? ` · ${node.name}` : ""} · ${status(node)}`}
+                aria-label={`${node.row + 1}단계 경로 ${column(node) + 1} · ${nodeTypes[node.kind].label}${node.kind === "boss" ? ` · ${node.name}` : ""} · ${status(node)}`}
                 aria-current={node.current ? "location" : undefined}
               >
                 <span aria-hidden="true">
                   {node.visited ? "✓" : nodeTypes[node.kind].icon}
                 </span>
               </button>
-              <span className="node-caption">
-                {node.kind === "combat"
-                  ? node.name
-                  : nodeTypes[node.kind].label}
-              </span>
+              {node.unclaimed_reward && <span className="map-reward-badge" aria-label="미획득 보상">✦</span>}
             </div>
           ))}
           <span
@@ -170,100 +212,8 @@ export function ActMap({
             출발{map.current === null ? " · 현재 위치" : ""}
           </span>
         </section>
-        <aside className="map-aside">
-          <section className="map-location">
-            <p className="eyebrow">YOUR EXPEDITION</p>
-            <h2>{current ? current.name : "첫 갈림길"}</h2>
-            <p>
-              {ended
-                ? "원정이 끝났습니다. 지나온 경로를 확인하세요."
-                : state.phase === "map"
-                  ? current
-                    ? "이곳을 마쳤습니다. 이어진 길 중 하나를 선택하세요."
-                    : "세 출발점 중 하나를 선택하세요. 이 지도는 보스까지 유지됩니다."
-                  : "노드를 완료하면 연결된 다음 길을 선택할 수 있습니다."}
-            </p>
-            <div className="map-supplies">
-              <span>
-                생존 기물{" "}
-                <b>{state.pieces.filter((p) => p.owner === 0).length}</b>
-              </span>
-              <span>
-                덱 <b>{state.deck_count}</b>
-              </span>
-              <span>
-                유물 <b>{state.relics.length}</b>
-              </span>
-            </div>
-          </section>
-          <section className="next-choices">
-            <h3>{available.length ? "다음 행선지" : "경로 탐색"}</h3>
-            {available.map((node) => (
-              <button
-                key={node.id}
-                onClick={() => choose(node.id)}
-                onMouseEnter={() => inspect(node.id)}
-                onFocus={() => inspect(node.id)}
-              >
-                <span className={`choice-icon kind-${node.kind}`}>
-                  {nodeTypes[node.kind].icon}
-                </span>
-                <span>
-                  <small>
-                    경로 {column(node) + 1} · {nodeTypes[node.kind].label}
-                  </small>
-                  <strong>{node.name}</strong>
-                </span>
-                <span>↗</span>
-              </button>
-            ))}
-            {!available.length && (
-              <p>
-                {ended
-                  ? "새 원정은 결과 화면에서 시작할 수 있습니다."
-                  : "진행 중인 노드로 돌아가 완료하세요."}
-              </p>
-            )}
-          </section>
-          {detail && (
-            <section className={`map-detail detail-${detail.kind}`}>
-              <p className="eyebrow">{nodeTypes[detail.kind].label}</p>
-              <h3>{detail.name}</h3>
-              <p>{detail.description}</p>
-            </section>
-          )}
-          <div className="map-key">
-            <span>
-              <i className="key-current" />
-              현재 위치
-            </span>
-            <span>
-              <i className="key-available" />
-              선택 가능한 길
-            </span>
-            <span>
-              <i className="key-visited" />
-              지나온 길
-            </span>
-            <span>
-              <i />
-              아직 갈 수 없는 길
-            </span>
-          </div>
-          <p className="map-note">
-            기물의 위치와 손실은 다음 전투로 이어집니다. 적의 배치와 겹치면
-            역습을 받습니다.
-          </p>
-        </aside>
+
       </div>
-      {state.log.length > 0 && (
-        <div className="map-recent" role="log" aria-label="최근 원정 기록">
-          {state.log.slice(-3).map((line, i) => (
-            <p key={i}>{line}</p>
-          ))}
-        </div>
-      )}
-      {statusOpen && <ExpeditionStatus state={state} onClose={() => setStatusOpen(false)} />}
     </main>
   );
 }

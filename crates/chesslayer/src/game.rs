@@ -43,6 +43,15 @@ pub enum Command {
     ChooseReward {
         index: usize,
     },
+    ClaimReward {
+        index: usize,
+    },
+    ClaimUpgrade {
+        id: u32,
+        target: PieceType,
+    },
+    ContinueReward,
+    AdvanceFloor,
     SelectNode {
         id: usize,
     },
@@ -82,6 +91,10 @@ pub struct Game {
     rng: Rng,
     next_card_id: u32,
     rewards: Vec<Reward>,
+    reward_node: Option<usize>,
+    reward_choice: Option<usize>,
+    upgrade_claimed: bool,
+    last_cleared_node: Option<usize>,
     /// Positions only, captured before boundary cleanup even when Hard Disk is not owned yet.
     last_battle_positions: BTreeMap<PieceId, Position>,
     hard_disk_deployed: bool,
@@ -129,6 +142,10 @@ impl Game {
             rng: Rng::new(seed),
             next_card_id,
             rewards: vec![],
+            reward_node: None,
+            reward_choice: None,
+            upgrade_claimed: false,
+            last_cleared_node: None,
             last_battle_positions: BTreeMap::new(),
             hard_disk_deployed: false,
         };
@@ -295,7 +312,114 @@ impl Game {
     fn complete_node(&mut self) {
         let id = self.current_node.expect("content requires a selected node");
         self.completed.push(id);
+        self.last_cleared_node = Some(id);
         self.phase = RunPhase::Map;
+    }
+    fn claim_reward(&mut self, index: usize) -> Result<(), String> {
+        if self.phase != RunPhase::Reward || self.reward_choice.is_some() {
+            return Err("지금은 보상을 선택할 수 없습니다.".into());
+        }
+        let reward = *self
+            .rewards
+            .get(index)
+            .ok_or("보상 선택이 잘못되었습니다.")?;
+        match reward {
+            Reward::Card(kind) => {
+                self.add_card(kind);
+                self.log(format!(
+                    "보상: {}을 덱에 추가했습니다.",
+                    kind.definition().name
+                ));
+            }
+            Reward::Relic(relic) => self.grant_relic(relic),
+        }
+        self.reward_choice = Some(index);
+        Ok(())
+    }
+    fn claim_upgrade(&mut self, id: u32, target: PieceType) -> Result<(), String> {
+        if self.phase != RunPhase::Reward
+            || !self.current_node.is_some_and(|node| {
+                matches!(self.map.nodes[node].kind, NodeKind::Elite | NodeKind::Boss)
+            })
+            || self.upgrade_claimed
+        {
+            return Err("지금은 기물 강화 보상을 받을 수 없습니다.".into());
+        }
+        self.upgrade_piece(id, target, "보상")?;
+        self.upgrade_claimed = true;
+        Ok(())
+    }
+    fn upgrade_piece(&mut self, id: u32, target: PieceType, source: &str) -> Result<(), String> {
+        let mut roster = self.battle.outcome();
+        let index = roster
+            .iter()
+            .position(|p| p.id == id && p.position.is_some())
+            .ok_or("살아 있는 아군 기물을 선택하세요.")?;
+        let previous_kind = roster[index].kind;
+        let upgrade = content::pieces::definition(previous_kind)
+            .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
+            .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
+        let missing: Vec<_> = content::pieces::required_owned(target)
+            .iter()
+            .filter(|&&kind| !roster.iter().any(|p| p.kind == kind))
+            .map(|&kind| piece_name(kind))
+            .collect();
+        if !missing.is_empty() {
+            return Err(format!(
+                "영구 로스터에 필요한 기물이 없습니다: {}",
+                missing.join(", ")
+            ));
+        }
+        let p = &mut roster[index];
+        p.kind = upgrade.target;
+        p.upgrades.push(upgrade.key.into());
+        self.battle
+            .replace_roster_at_rest(roster)
+            .map_err(engine_error)?;
+        self.log(format!(
+            "{source}: {} → {} 강화",
+            piece_name(previous_kind),
+            piece_name(target)
+        ));
+        Ok(())
+    }
+    fn continue_reward(&mut self) -> Result<(), String> {
+        if self.phase != RunPhase::Reward {
+            return Err("지금은 다음으로 진행할 수 없습니다.".into());
+        }
+        let id = self.current_node.expect("reward requires a selected node");
+        if self.completed.contains(&id) {
+            self.phase = RunPhase::Map;
+            if self.map.nodes[id].kind == NodeKind::Boss && self.upgrade_claimed {
+                self.finish_boss()?;
+            }
+            return Ok(());
+        }
+        self.complete_node();
+        if self.map.nodes[id].kind == NodeKind::Boss && self.upgrade_claimed {
+            self.finish_boss()?;
+        }
+        Ok(())
+    }
+    fn finish_boss(&mut self) -> Result<(), String> {
+        if self.floor == 1 {
+            let revived = self.revive_for_next_floor()?;
+            self.floor = 2;
+            self.map = ActMap::generate_for_floor(self.seed, 2);
+            self.current_node = None;
+            self.path.clear();
+            self.completed.clear();
+            self.reward_node = None;
+            self.rewards.clear();
+            self.reward_choice = None;
+            self.last_cleared_node = None;
+            self.log(format!(
+                "2층에 도착했습니다. 아군 전원이 회복되었습니다. 부활한 기물 {revived}기."
+            ));
+        } else {
+            self.phase = RunPhase::Victory;
+        }
+        Ok(())
     }
     fn grant_node_relic(&mut self) {
         let relic = self.map.nodes[self.current_node.unwrap()]
@@ -328,6 +452,17 @@ impl Game {
     }
     fn generate_rewards(&mut self) {
         let mut cards = content::cards::REWARD_POOL.to_vec();
+        if self
+            .current_node
+            .is_some_and(|id| matches!(self.map.nodes[id].kind, NodeKind::Elite | NodeKind::Boss))
+        {
+            let mut rewards = Vec::with_capacity(3);
+            for _ in 0..3 {
+                rewards.push(Reward::Card(cards.swap_remove(self.rng.index(cards.len()))));
+            }
+            self.rewards = rewards;
+            return;
+        }
         let mut relics: Vec<_> = RELIC_REWARD_POOL
             .iter()
             .copied()
@@ -352,7 +487,17 @@ impl Game {
         self.rewards = rewards;
     }
     fn map_view(&self) -> MapView {
-        let available = self.available_nodes();
+        let reviewing_reward = self.phase == RunPhase::Reward
+            && self.current_node.is_some_and(|id| {
+                self.completed.contains(&id)
+                    && self.last_cleared_node == Some(id)
+                    && self.reward_node == Some(id)
+            });
+        let available = if reviewing_reward {
+            self.map.nodes[self.current_node.unwrap()].next.clone()
+        } else {
+            self.available_nodes()
+        };
         MapView {
             rows: self.map.rows,
             lanes: MAP_LANES,
@@ -373,6 +518,15 @@ impl Game {
                     available: available.contains(&n.id),
                     visited: self.completed.contains(&n.id),
                     current: self.current_node == Some(n.id),
+                    reward_revisit: (self.phase == RunPhase::Map || reviewing_reward)
+                        && self.last_cleared_node == Some(n.id)
+                        && self.reward_node == Some(n.id),
+                    unclaimed_reward: (self.phase == RunPhase::Map || reviewing_reward)
+                        && self.last_cleared_node == Some(n.id)
+                        && self.reward_node == Some(n.id)
+                        && (self.reward_choice.is_none()
+                            || (matches!(n.kind, NodeKind::Elite | NodeKind::Boss)
+                                && !self.upgrade_claimed)),
                     skipped: self
                         .current_node
                         .is_some_and(|id| n.row <= self.map.nodes[id].row)
@@ -444,46 +598,38 @@ impl Game {
             }
             Command::EnemyStep => self.enemy_step()?,
             Command::ChooseReward { index } => {
-                if self.phase != RunPhase::Reward {
-                    return Err("지금은 보상을 선택할 수 없습니다.".into());
-                }
-                let reward = *self
-                    .rewards
-                    .get(index)
-                    .ok_or("보상 선택이 잘못되었습니다.")?;
-                match reward {
-                    Reward::Card(kind) => {
-                        self.add_card(kind);
-                        self.log(format!(
-                            "보상: {}을 덱에 추가했습니다.",
-                            kind.definition().name
-                        ));
-                    }
-                    Reward::Relic(relic) => self.grant_relic(relic),
-                }
-                if self
-                    .current_node
-                    .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Elite)
+                // Retain the original one-step command for saved command streams and callers.
+                self.claim_reward(index)?;
+                self.continue_reward()?;
+                if self.phase == RunPhase::Map
+                    && self.current_node.is_some_and(|id| {
+                        self.map.nodes[id].kind == NodeKind::Boss && self.completed.contains(&id)
+                    })
                 {
-                    self.grant_node_relic();
-                }
-                self.rewards.clear();
-                self.complete_node();
-                if self.map.nodes[self.current_node.unwrap()].kind == NodeKind::Boss {
-                    if self.floor == 1 {
-                        let revived = self.revive_for_next_floor()?;
-                        self.floor = 2;
-                        self.map = ActMap::generate_for_floor(self.seed, 2);
-                        self.current_node = None;
-                        self.path.clear();
-                        self.completed.clear();
-                        self.log(format!("2층에 도착했습니다. 아군 전원이 회복되었습니다. 부활한 기물 {revived}기."));
-                    } else {
-                        self.phase = RunPhase::Victory;
-                    }
+                    self.finish_boss()?;
                 }
             }
+            Command::ClaimReward { index } => self.claim_reward(index)?,
+            Command::ClaimUpgrade { id, target } => self.claim_upgrade(id, target)?,
+            Command::ContinueReward => self.continue_reward()?,
+            Command::AdvanceFloor => {
+                let id = self.current_node.ok_or("완료한 보스 노드가 없습니다.")?;
+                if self.phase != RunPhase::Map
+                    || self.map.nodes[id].kind != NodeKind::Boss
+                    || !self.completed.contains(&id)
+                {
+                    return Err("지금은 다음 층으로 진행할 수 없습니다.".into());
+                }
+                self.finish_boss()?;
+            }
             Command::SelectNode { id } => {
+                if self.phase == RunPhase::Map
+                    && self.last_cleared_node == Some(id)
+                    && self.reward_node == Some(id)
+                {
+                    self.phase = RunPhase::Reward;
+                    return Ok(());
+                }
                 if !self.available_nodes().contains(&id) {
                     return Err("현재 위치에서 연결된 다음 노드만 선택할 수 있습니다.".into());
                 }
@@ -512,37 +658,7 @@ impl Game {
                 if self.phase != RunPhase::Rest {
                     return Err("쉼터에서만 강화할 수 있습니다.".into());
                 }
-                let mut roster = self.battle.outcome();
-                let index = roster
-                    .iter()
-                    .position(|p| p.id == id && p.position.is_some())
-                    .ok_or("살아 있는 아군 기물을 선택하세요.")?;
-                let previous_kind = roster[index].kind;
-                let upgrade = content::pieces::definition(previous_kind)
-                    .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
-                    .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
-                let missing: Vec<_> = content::pieces::required_owned(target)
-                    .iter()
-                    .filter(|&&kind| !roster.iter().any(|p| p.kind == kind))
-                    .map(|&kind| piece_name(kind))
-                    .collect();
-                if !missing.is_empty() {
-                    return Err(format!(
-                        "영구 로스터에 필요한 기물이 없습니다: {}",
-                        missing.join(", ")
-                    ));
-                }
-                let p = &mut roster[index];
-                p.kind = upgrade.target;
-                p.upgrades.push(upgrade.key.into());
-                self.battle
-                    .replace_roster_at_rest(roster)
-                    .map_err(engine_error)?;
-                self.log(format!(
-                    "휴식: {} → {} 강화",
-                    piece_name(previous_kind),
-                    piece_name(target)
-                ));
+                self.upgrade_piece(id, target, "휴식")?;
                 self.complete_node();
             }
             Command::RestRevive { id } => {
@@ -658,6 +774,9 @@ impl Game {
             if winner == PLAYER {
                 self.phase = RunPhase::Reward;
                 self.generate_rewards();
+                self.reward_node = self.current_node;
+                self.reward_choice = None;
+                self.upgrade_claimed = false;
                 self.log(match reason {
                     ResultReason::SelfDefense => "승리! 호신용품으로 적 로얄이 사망했습니다.",
                     ResultReason::HardDisk => {
@@ -991,7 +1110,12 @@ impl Game {
                     upgrades: p.upgrades.clone(),
                     ward: self.battle.has_ward(p.id),
                     square: p.position.or(origin).map(square).unwrap_or_default(),
-                    can_upgrade: self.phase == RunPhase::Rest
+                    can_upgrade: (self.phase == RunPhase::Rest
+                        || (self.phase == RunPhase::Reward
+                            && self.current_node.is_some_and(|id| {
+                                matches!(self.map.nodes[id].kind, NodeKind::Elite | NodeKind::Boss)
+                            })
+                            && !self.upgrade_claimed))
                         && p.position.is_some()
                         && content::pieces::definition(p.kind)
                             .unwrap()
@@ -1023,16 +1147,16 @@ impl Game {
             node_kind: self.current_node.map(|id| self.map.nodes[id].kind),
             node_reward: self
                 .current_node
+                .filter(|&id| self.map.nodes[id].kind == NodeKind::Treasure)
                 .and_then(|id| self.map.nodes[id].relic)
                 .map(|r| RelicView {
                     id: r,
-                    status: None,
+                    status: self
+                        .relics
+                        .contains(&r)
+                        .then(|| "이미 가진 유물입니다. 대신 가호 카드 1장을 얻습니다.".into()),
                     name: r.name(),
-                    description: if self.relics.contains(&r) {
-                        "이미 가진 유물입니다. 대신 가호 카드 1장을 얻습니다."
-                    } else {
-                        r.description()
-                    },
+                    description: r.description(),
                 }),
             character: self.character.clone(),
             turn: self.battle.turn,
@@ -1102,9 +1226,12 @@ impl Game {
                 })
                 .collect(),
             log: self.log.clone(),
+            reward_choice: self.reward_choice,
+            upgrade_claimed: self.upgrade_claimed,
             rewards: self
                 .rewards
                 .iter()
+                .filter(|_| self.phase == RunPhase::Reward)
                 .map(|r| match r {
                     Reward::Card(kind) => RewardView::Card(kind.definition()),
                     Reward::Relic(relic) => RewardView::Relic(RelicView {
@@ -1247,6 +1374,8 @@ pub struct Snapshot {
     pub next_battle_pieces: Vec<PieceView>,
     pub relics: Vec<RelicView>,
     pub log: Vec<String>,
+    pub reward_choice: Option<usize>,
+    pub upgrade_claimed: bool,
     pub rewards: Vec<RewardView>,
     pub rest_options: Vec<RestOption>,
     pub upgrade_paths: Vec<UpgradeView>,

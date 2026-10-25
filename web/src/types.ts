@@ -89,6 +89,8 @@ export interface Snapshot {
   next_battle_pieces: Piece[];
   relics: Relic[];
   log: string[];
+  reward_choice: number | null;
+  upgrade_claimed: boolean;
   rewards: Reward[];
   rest_options: RestOption[];
   upgrade_paths: UpgradePath[];
@@ -103,6 +105,9 @@ export type Command =
   | { type: "play_card_selection"; id: number; targets?: number[]; upgrades?: { id: number; target: number }[] }
   | { type: "end_turn" | "enemy_step" | "claim_treasure" | "rest_skip" }
   | { type: "choose_reward"; index: number }
+  | { type: "claim_reward"; index: number }
+  | { type: "continue_reward" | "advance_floor" }
+  | { type: "claim_upgrade"; id: number; target: number }
   | { type: "rest_upgrade"; id: number; target: number }
   | { type: "rest_revive"; id: number };
 
@@ -118,6 +123,8 @@ export interface MapNode {
   available: boolean;
   visited: boolean;
   current: boolean;
+  reward_revisit: boolean;
+  unclaimed_reward: boolean;
   skipped: boolean;
 }
 

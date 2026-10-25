@@ -25,6 +25,160 @@ fn snapshot(g: &Game) -> String {
 }
 
 #[test]
+fn elite_reward_can_be_skipped_reopened_and_claimed_once() {
+    let mut game = Game::new("vanguard", 2026).unwrap();
+    let elite = game
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.kind == NodeKind::Elite)
+        .unwrap()
+        .id;
+    game.current_node = Some(elite);
+    win(&mut game);
+    let offered = serde_json::to_string(&game.snapshot().rewards).unwrap();
+    let initial_relics = game.relics.len();
+    let initial_deck = game.deck.len();
+
+    game.dispatch(Command::ContinueReward).unwrap();
+    assert_eq!(game.phase, RunPhase::Map);
+    assert_eq!(game.relics.len(), initial_relics);
+    assert_eq!(game.deck.len(), initial_deck);
+    let node = &game.snapshot().map.nodes[elite];
+    assert!(node.reward_revisit && node.unclaimed_reward);
+    let path = game.path.clone();
+    let completed = game.completed.clone();
+
+    game.dispatch(Command::SelectNode { id: elite }).unwrap();
+    assert_eq!(
+        serde_json::to_string(&game.snapshot().rewards).unwrap(),
+        offered
+    );
+    assert_eq!(game.path, path);
+    assert_eq!(game.completed, completed);
+    let piece = game
+        .snapshot()
+        .rest_options
+        .into_iter()
+        .find(|p| p.can_upgrade)
+        .unwrap();
+    let target = game
+        .snapshot()
+        .upgrade_paths
+        .iter()
+        .find(|p| p.from == piece.kind && p.unlocked)
+        .unwrap()
+        .to;
+    game.dispatch(Command::ClaimUpgrade {
+        id: piece.id,
+        target,
+    })
+    .unwrap();
+    assert_eq!(game.relics.len(), initial_relics);
+    assert_eq!(
+        game.battle
+            .outcome()
+            .iter()
+            .find(|p| p.id == piece.id)
+            .unwrap()
+            .kind,
+        target
+    );
+    let after_claim = snapshot(&game);
+    assert!(game
+        .dispatch(Command::ClaimUpgrade {
+            id: piece.id,
+            target
+        })
+        .is_err());
+    assert_eq!(snapshot(&game), after_claim);
+    game.dispatch(Command::ContinueReward).unwrap();
+    game.dispatch(Command::SelectNode { id: elite }).unwrap();
+    assert!(game.snapshot().upgrade_claimed);
+    assert_eq!(
+        serde_json::to_string(&game.snapshot().rewards).unwrap(),
+        offered
+    );
+    game.dispatch(Command::ClaimReward { index: 0 }).unwrap();
+    assert_eq!(game.snapshot().reward_choice, Some(0));
+    let after_choice = snapshot(&game);
+    assert!(game.dispatch(Command::ClaimReward { index: 0 }).is_err());
+    assert!(game.dispatch(Command::ClaimReward { index: 1 }).is_err());
+    assert_eq!(snapshot(&game), after_choice);
+    game.dispatch(Command::ContinueReward).unwrap();
+    assert!(!game.snapshot().map.nodes[elite].unclaimed_reward);
+    assert!(game.snapshot().map.nodes[elite].reward_revisit);
+
+    // A later clear replaces the only node eligible for reward history.
+    let next = game.map.nodes[elite].next[0];
+    game.current_node = Some(next);
+    win(&mut game);
+    game.dispatch(Command::ContinueReward).unwrap();
+    assert!(!game.snapshot().map.nodes[elite].reward_revisit);
+    assert!(game.dispatch(Command::SelectNode { id: elite }).is_err());
+}
+
+#[test]
+fn boss_upgrade_can_be_revisited_before_advancing_floor() {
+    let mut game = Game::new("vanguard", 2026).unwrap();
+    let boss = game
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.kind == NodeKind::Boss)
+        .unwrap()
+        .id;
+    game.current_node = Some(boss);
+    win(&mut game);
+    assert!(game
+        .snapshot()
+        .rewards
+        .iter()
+        .all(|r| matches!(r, RewardView::Card(_))));
+    game.dispatch(Command::ContinueReward).unwrap();
+    assert_eq!(game.phase, RunPhase::Map);
+    assert_eq!(game.floor, 1);
+    assert!(game.snapshot().map.nodes[boss].unclaimed_reward);
+    game.dispatch(Command::SelectNode { id: boss }).unwrap();
+    let piece = game
+        .snapshot()
+        .rest_options
+        .into_iter()
+        .find(|p| p.can_upgrade)
+        .unwrap();
+    let target = game
+        .snapshot()
+        .upgrade_paths
+        .iter()
+        .find(|p| p.from == piece.kind && p.unlocked)
+        .unwrap()
+        .to;
+    game.dispatch(Command::ClaimUpgrade {
+        id: piece.id,
+        target,
+    })
+    .unwrap();
+    assert!(game
+        .dispatch(Command::ClaimUpgrade {
+            id: piece.id,
+            target
+        })
+        .is_err());
+    game.dispatch(Command::ContinueReward).unwrap();
+    assert_eq!(game.floor, 2);
+    assert_eq!(game.phase, RunPhase::Map);
+    assert_eq!(
+        game.battle
+            .outcome()
+            .iter()
+            .find(|p| p.id == piece.id)
+            .unwrap()
+            .kind,
+        target
+    );
+}
+
+#[test]
 fn ascending_after_boss_revives_every_piece_without_losing_growth_or_hard_disk_positions() {
     let mut game = Game::new("guardian", 2026).unwrap();
     game.relics.push(Relic::HardDisk);
@@ -180,11 +334,10 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
         g.dispatch(Command::ChooseReward { index: 2 }).unwrap();
         assert_eq!(
             g.deck.len(),
-            before + 2,
-            "chosen card plus duplicate elite relic"
+            before + 1,
+            "elite rewards now grant a card without a relic"
         );
         assert_eq!(g.deck[before].kind, kinds[2]);
-        assert_eq!(g.deck[before + 1].kind, CardKind::Ward);
         assert_eq!(g.relics, RELIC_REWARD_POOL);
     }
     // Treasure keeps the same duplicate replacement and shared ID allocator.
@@ -232,10 +385,10 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
     assert_eq!(g.phase, RunPhase::Victory);
     assert_eq!(
         g.deck.iter().map(|c| c.id).collect::<Vec<_>>(),
-        (1..=15).collect::<Vec<_>>()
+        (1..=9).collect::<Vec<_>>()
     );
 
-    // Selecting the elite's advertised relic first makes its extra relic a Ward.
+    // Elite offers contain no relic even when its old node relic is unowned.
     let mut g = Game::new("vanguard", 2026).unwrap();
     g.current_node = Some(elite);
     let extra = g.map.nodes[elite].relic.unwrap();
@@ -245,14 +398,13 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
         .filter(|r| *r != extra)
         .collect();
     win(&mut g);
-    let index = g
+    assert!(g
         .snapshot()
         .rewards
         .iter()
-        .position(|r| matches!(r, RewardView::Relic(r) if r.name == extra.name()))
-        .unwrap();
-    g.dispatch(Command::ChooseReward { index }).unwrap();
-    assert_eq!(g.relics.len(), RELIC_REWARD_POOL.len());
+        .all(|r| matches!(r, RewardView::Card(_))));
+    g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    assert_eq!(g.relics.len(), RELIC_REWARD_POOL.len() - 1);
     assert_eq!(g.deck.len(), 1);
-    assert_eq!(g.deck[0].kind, CardKind::Ward);
+    assert!(chesslayer::content::cards::REWARD_POOL.contains(&g.deck[0].kind));
 }
