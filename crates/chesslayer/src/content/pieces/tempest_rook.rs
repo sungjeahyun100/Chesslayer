@@ -17,7 +17,7 @@ pub(super) fn movement() -> String {
     movement::DIAGONAL
         .iter()
         .map(|&(x, y)| {
-            let [a, b] = movement::tempest_rook_branches((x, y));
+            let [a, b] = [(x, 0), (0, y)];
             format!(
         "take-move({x},{y}) {{ take-move({},{}) repeat(1) }} {{ take-move({},{}) repeat(1) }}", a.0, a.1, b.0, b.1
     )

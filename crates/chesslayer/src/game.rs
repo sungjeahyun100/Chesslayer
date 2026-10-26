@@ -1,6 +1,6 @@
-use crate::{cards::*, content::*, map::*, *};
+use crate::{battle::GeneratedAction, cards::*, content::*, map::*, *};
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeMap, HashSet};
+use std::collections::HashSet;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -95,9 +95,6 @@ pub struct Game {
     reward_choice: Option<usize>,
     upgrade_claimed: bool,
     last_cleared_node: Option<usize>,
-    /// Positions only, captured before boundary cleanup even when Hard Disk is not owned yet.
-    last_battle_positions: BTreeMap<PieceId, Position>,
-    hard_disk_deployed: bool,
 }
 pub(crate) fn engine_error(e: Error) -> String {
     format!("요청한 행동을 수행할 수 없습니다: {e:?}")
@@ -146,8 +143,6 @@ impl Game {
             reward_choice: None,
             upgrade_claimed: false,
             last_cleared_node: None,
-            last_battle_positions: BTreeMap::new(),
-            hard_disk_deployed: false,
         };
         Ok(game)
     }
@@ -169,41 +164,16 @@ impl Game {
             .copied()
             .find(|r| r.formation().is_some())
     }
-    fn starting_roster(&self) -> Result<(Vec<PlayerPiece>, bool), String> {
+    fn starting_roster(&self) -> Result<Vec<PlayerPiece>, String> {
         let mut roster = self.battle.outcome();
-        // During combat, the eventual Hard Disk snapshot is the surviving
-        // formation at battle end. Preview it from the current roster.
-        let saved_positions: BTreeMap<_, _> = if self.phase == RunPhase::Combat {
-            roster
-                .iter()
-                .filter_map(|p| p.position.map(|pos| (p.id, pos)))
-                .collect()
-        } else {
-            self.last_battle_positions.clone()
-        };
         let mut occupied = HashSet::new();
-        let saved: Vec<_> = roster
-            .iter()
-            .filter(|p| p.position.is_some())
-            .filter_map(|p| saved_positions.get(&p.id).map(|&pos| (p.id, pos)))
-            .collect();
-        let hard_disk = self.relics.contains(&Relic::HardDisk)
-            && !saved.is_empty()
-            && saved.iter().all(|(_, pos)| {
-                (0..8).contains(&pos.file) && (0..8).contains(&pos.rank) && occupied.insert(*pos)
-            });
-        occupied.clear();
         let formation = self.latest_formation();
         let mut unplaced = vec![];
         for (index, p) in roster.iter_mut().enumerate() {
             if p.position.is_none() {
-                continue; // A snapshot or a preset must never revive a dead ID.
+                continue; // A preset must never revive a dead ID.
             }
-            let desired = if hard_disk {
-                saved_positions.get(&p.id).copied()
-            } else {
-                formation.and_then(|r| r.position(p.id))
-            };
+            let desired = formation.and_then(|r| r.position(p.id));
             p.moved = false;
             if let Some(pos) = desired.filter(|pos| occupied.insert(*pos)) {
                 p.position = Some(pos);
@@ -211,8 +181,8 @@ impl Game {
                 unplaced.push(index);
             }
         }
-        // Rest-revived/new IDs missing from the snapshot use their permanent home.
-        // Saved survivors have priority; a blocked home uses the first free square
+        // IDs missing from a preset use their permanent home.
+        // Preset positions have priority; a blocked home uses the first free square
         // in a1..h1, a2..h2, ... order. No survivor is displaced or removed.
         for index in unplaced {
             let p = &mut roster[index];
@@ -228,7 +198,7 @@ impl Game {
             occupied.insert(pos);
             p.position = Some(pos);
         }
-        Ok((roster, hard_disk))
+        Ok(roster)
     }
     fn revive_for_next_floor(&mut self) -> Result<usize, String> {
         let mut roster = self.battle.outcome();
@@ -272,10 +242,8 @@ impl Game {
             }
             self.log("소용돌이: 적의 시작 위치를 섞었습니다.");
         }
-        let (players, hard_disk) = self.starting_roster()?;
-        if hard_disk {
-            self.log("하드디스크: 직전 전투의 생존 아군 위치를 복원했습니다.");
-        } else if let Some(relic) = self.latest_formation() {
+        let players = self.starting_roster()?;
+        if let Some(relic) = self.latest_formation() {
             self.log(format!("{}: 시작 진형을 적용했습니다.", relic.name()));
         }
         let haste = self.relics.contains(&Relic::Haste);
@@ -284,7 +252,6 @@ impl Game {
             self_defense: self.relics.contains(&Relic::SelfDefense),
             initiative: self.relics.contains(&Relic::Initiative),
             enemy_initiative: index == content::encounters::TWO_EMPEROR,
-            hard_disk,
         };
         self.battle =
             Battle::with_options(BattleStart { players, encounter }, options, &mut self.rng)
@@ -292,7 +259,6 @@ impl Game {
         if options.initiative && options.enemy_initiative {
             self.log("선공권: 양측 효과가 서로 상쇄되었습니다.");
         }
-        self.hard_disk_deployed = hard_disk;
         if haste {
             self.log(format!(
                 "가속: 양 진영이 턴마다 최대 {HASTE_ACTIONS}회 이동합니다."
@@ -564,18 +530,15 @@ impl Game {
                             .ok_or("등록되지 않은 승격 대상입니다.")
                     })
                     .transpose()?;
-                let action = self
-                    .battle
-                    .legal_actions(from)
-                    .map_err(engine_error)?
-                    .into_iter()
-                    .find(|a| {
-                        a.steps().last().is_some_and(|s| {
+                if !self.perform_action(|battle| {
+                    Ok(battle.generated_legal_actions(from)?.into_iter().find(|a| {
+                        a.action().steps().last().is_some_and(|s| {
                             s.move_to == to && s.transition.as_deref() == promotion_key
                         })
-                    })
-                    .ok_or("합법적인 이동이 아닙니다.")?;
-                self.perform_action(action)?;
+                    }))
+                })? {
+                    return Err("합법적인 이동이 아닙니다.".into());
+                }
             }
             Command::PlayCard { id, target } => {
                 self.play_card(id, content::cards::CardSelection::single(target))?
@@ -702,26 +665,17 @@ impl Game {
         }
         Ok(())
     }
-    fn perform_action(&mut self, action: DefaultAction) -> Result<(), String> {
+    fn perform_action<F>(&mut self, select: F) -> Result<bool, String>
+    where
+        F: for<'a> FnOnce(&'a Battle) -> Result<Option<GeneratedAction<'a>>, Error>,
+    {
         let side = self.battle.turn;
-        let piece = self
-            .battle
-            .board
-            .piece_at(action.first.from)
-            .map_err(|e| engine_error(e.into()))?
-            .ok_or("기물이 없습니다.")?;
+        let Some((action, piece, captured)) =
+            self.battle.select_and_apply(select).map_err(engine_error)?
+        else {
+            return Ok(false);
+        };
         let destination = action.steps().last().unwrap().move_to;
-        let captured = action.steps().find_map(|s| {
-            self.battle
-                .board
-                .piece_at(s.take)
-                .ok()
-                .flatten()
-                .filter(|p| p.owner != side)
-        });
-        self.battle
-            .apply_piece_action(&action)
-            .map_err(engine_error)?;
         let still_at = self
             .battle
             .board
@@ -759,23 +713,14 @@ impl Game {
                 self.begin_player_turn();
             }
         }
-        Ok(())
+        Ok(true)
     }
     fn check_finish(&mut self) -> Result<(), String> {
         if self.phase != RunPhase::Combat {
             return Ok(());
         }
         if let GameResult::Win { winner, reason } = self.battle.result {
-            self.last_battle_positions = self
-                .battle
-                .player_pieces()
-                .iter()
-                .filter_map(|p| p.position.map(|pos| (p.id, pos)))
-                .collect();
-            let keep_positions = self.relics.contains(&Relic::HardDisk);
-            self.battle
-                .reset_after_battle(keep_positions)
-                .map_err(engine_error)?;
+            self.battle.reset_after_battle().map_err(engine_error)?;
             self.cards = CardCombat::default();
             if winner == PLAYER {
                 self.phase = RunPhase::Reward;
@@ -785,23 +730,13 @@ impl Game {
                 self.upgrade_claimed = false;
                 self.log(match reason {
                     ResultReason::SelfDefense => "승리! 호신용품으로 적 로얄이 사망했습니다.",
-                    ResultReason::HardDisk => {
-                        "승리! 하드디스크의 시작 배치와 겹친 적 로얄이 사망했습니다."
-                    }
                     _ => "승리! 적 로얄을 직접 포획했습니다.",
                 });
-                self.log(if keep_positions {
-                    "하드디스크: 생존 기물의 종료 배치를 유지합니다."
-                } else {
-                    "생존 기물이 시작 칸으로 복귀합니다."
-                });
+                self.log("생존 기물이 시작 칸으로 복귀합니다.");
             } else {
                 self.phase = RunPhase::Defeat;
                 self.log(match reason {
                     ResultReason::Counterattack => "역습으로 킹을 잃었습니다. 원정이 끝났습니다.",
-                    ResultReason::HardDisk => {
-                        "하드디스크 배치에서 적과 겹친 킹이 사망했습니다. 원정이 끝났습니다."
-                    }
                     _ => "킹이 포획되었습니다. 원정이 끝났습니다.",
                 });
             }
@@ -897,61 +832,75 @@ impl Game {
         if self.phase != RunPhase::Combat || self.battle.turn != ENEMY {
             return Err("적의 턴이 아닙니다.".into());
         }
-        let mut best = vec![];
-        let mut best_score = i32::MIN;
-        for (i, piece) in self.battle.board.cells().iter().enumerate() {
-            if !piece.is_some_and(|p| p.owner == ENEMY) {
-                continue;
-            }
-            for action in self.battle.legal_actions(pos(i)?).map_err(engine_error)? {
-                let mut score = action
-                    .steps()
-                    .filter_map(|s| {
-                        self.battle
-                            .board
-                            .piece_at(s.take)
-                            .ok()
-                            .flatten()
-                            .filter(|p| p.owner == PLAYER)
-                    })
-                    .map(|p| {
-                        if self.battle.has_ward(p.id) {
-                            1
-                        } else if p.id == self.battle.king_id {
-                            100_000
-                        } else {
-                            content::pieces::definition(p.kind).map_or(10, |d| d.value)
-                        }
-                    })
-                    .sum();
-                if let Some(key) = action
-                    .steps()
-                    .last()
-                    .and_then(|step| step.transition.as_deref())
+        let mut rng = self.rng.clone();
+        let acted = self.perform_action(|battle| {
+            let mut best = vec![];
+            let mut best_score = i32::MIN;
+            for (i, piece) in battle.board.cells().iter().enumerate() {
+                if !piece.is_some_and(|p| p.owner == ENEMY) {
+                    continue;
+                }
+                for action in
+                    battle.generated_legal_actions(pos(i).map_err(|_| Error::IllegalAction)?)?
                 {
-                    if let Some(promoted) = content::pieces::ALL.iter().find(|d| d.key == key) {
-                        score += promoted.value
-                            - content::pieces::definition(piece.unwrap().kind)
-                                .map_or(10, |d| d.value);
+                    let mut score = action
+                        .action()
+                        .steps()
+                        .filter_map(|s| {
+                            battle
+                                .board
+                                .piece_at(s.take)
+                                .ok()
+                                .flatten()
+                                .filter(|p| p.owner == PLAYER)
+                        })
+                        .map(|p| {
+                            if battle.has_ward(p.id) {
+                                1
+                            } else if p.id == battle.king_id {
+                                100_000
+                            } else {
+                                content::pieces::definition(p.kind).map_or(10, |d| d.value)
+                            }
+                        })
+                        .sum();
+                    if let Some(key) = action
+                        .action()
+                        .steps()
+                        .last()
+                        .and_then(|step| step.transition.as_deref())
+                    {
+                        if let Some(promoted) = content::pieces::ALL.iter().find(|d| d.key == key) {
+                            score += promoted.value
+                                - content::pieces::definition(piece.unwrap().kind)
+                                    .map_or(10, |d| d.value);
+                        }
+                    }
+                    if battle
+                        .limiter_status(piece.unwrap().id)
+                        .is_some_and(|(active, left)| active && left > 0)
+                    {
+                        score += 10_000;
+                    }
+                    if score > best_score {
+                        best.clear();
+                        best_score = score;
+                    }
+                    if score == best_score {
+                        best.push(action);
                     }
                 }
-                if self
-                    .battle
-                    .limiter_status(piece.unwrap().id)
-                    .is_some_and(|(active, left)| active && left > 0)
-                {
-                    score += 10_000;
-                }
-                if score > best_score {
-                    best.clear();
-                    best_score = score;
-                }
-                if score == best_score {
-                    best.push(action);
-                }
             }
-        }
-        if best.is_empty() {
+            if best.is_empty() {
+                Ok(None)
+            } else {
+                let i = rng.index(best.len());
+                Ok(Some(best.swap_remove(i)))
+            }
+        });
+        self.rng = rng;
+        let acted = acted?;
+        if !acted {
             self.battle.end_turn().map_err(engine_error)?;
             self.events();
             self.check_finish()?;
@@ -959,9 +908,6 @@ impl Game {
                 self.begin_player_turn();
                 self.log("적에게 합법적인 수가 없어 턴을 넘겼습니다. 전투는 계속됩니다.");
             }
-        } else {
-            let i = self.rng.index(best.len());
-            self.perform_action(best.swap_remove(i))?;
         }
         Ok(())
     }
@@ -1073,7 +1019,7 @@ impl Game {
         let roster = self.battle.outcome();
         let next_battle_pieces = if !matches!(self.phase, RunPhase::Victory | RunPhase::Defeat) {
             self.starting_roster()
-                .map(|(players, _)| {
+                .map(|players| {
                     players
                         .into_iter()
                         .filter_map(|p| {
@@ -1178,7 +1124,6 @@ impl Game {
             },
             initiative_turns_left: self.battle.initiative_turns_left(),
             enemy_initiative_turns_left: self.battle.enemy_initiative_turns_left(),
-            hard_disk_deployed: self.phase == RunPhase::Combat && self.hard_disk_deployed,
             pieces,
             moves,
             hand,
@@ -1210,20 +1155,10 @@ impl Game {
                         })
                     } else if r.formation().is_some() {
                         Some(if Some(*r) == self.latest_formation() {
-                            "선택된 시작 진형 · 하드디스크 기록이 있으면 기록 우선".into()
+                            "선택된 시작 진형".into()
                         } else {
                             "비활성 · 더 최근에 획득한 시작 진형이 있습니다.".into()
                         })
-                    } else if *r == Relic::HardDisk {
-                        Some(
-                            if self.phase == RunPhase::Combat && self.hard_disk_deployed {
-                                "직전 전투 종료 배치를 이번 전투 시작에 복원했습니다.".into()
-                            } else if self.last_battle_positions.is_empty() {
-                                "아직 복원할 이전 전투 배치가 없습니다.".into()
-                            } else {
-                                "직전 전투 종료 배치를 다음 전투에 복원합니다.".into()
-                            },
-                        )
                     } else if *r == Relic::IceCream && self.phase == RunPhase::Combat {
                         Some(format!("이번 전투 누적 코스트 잔액 {}", self.cards.mana))
                     } else {
@@ -1371,7 +1306,6 @@ pub struct Snapshot {
     pub mana_rule: &'static str,
     pub initiative_turns_left: u8,
     pub enemy_initiative_turns_left: u8,
-    pub hard_disk_deployed: bool,
     pub pieces: Vec<PieceView>,
     pub moves: Vec<MoveView>,
     pub hand: Vec<CardView>,

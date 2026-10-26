@@ -5,6 +5,7 @@ use crate::{
 };
 use chessembly::{Error as DslError, Program};
 use std::collections::{BTreeMap, HashMap, HashSet};
+use std::hash::{Hash, Hasher};
 pub const PLAYER: PlayerId = 0;
 pub const ENEMY: PlayerId = 1;
 // Keep the existing crate-root API through battle's re-exports.
@@ -21,8 +22,6 @@ pub struct BattleOptions {
     pub self_defense: bool,
     pub initiative: bool,
     pub enemy_initiative: bool,
-    /// Only a restored Hard Disk deployment makes setup collisions kill both pieces.
-    pub hard_disk: bool,
 }
 impl Default for BattleOptions {
     fn default() -> Self {
@@ -31,7 +30,6 @@ impl Default for BattleOptions {
             self_defense: false,
             initiative: false,
             enemy_initiative: false,
-            hard_disk: false,
         }
     }
 }
@@ -80,6 +78,16 @@ pub struct ActionPreview {
     pub destination: Position,
     pub captures: Vec<Position>,
     pub route: Option<Vec<Position>>,
+}
+/// Can only be obtained from this battle while it is immutably borrowed.
+pub(crate) struct GeneratedAction<'a> {
+    battle: &'a Battle,
+    action: DefaultAction,
+}
+impl GeneratedAction<'_> {
+    pub(crate) fn action(&self) -> &DefaultAction {
+        &self.action
+    }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
@@ -226,19 +234,6 @@ impl Battle {
                 if old.owner == ENEMY {
                     return Err(Error::InvalidSetup);
                 }
-                if options.hard_disk {
-                    if let Some(p) = players.iter_mut().find(|p| p.id == old.id) {
-                        p.position = None;
-                    }
-                    board.set_piece(e.position, None)?;
-                    events.push(format!(
-                        "하드디스크: {}에 겹친 적 {}과 아군 {}이 함께 사망했습니다.",
-                        square(e.position),
-                        piece_name(e.kind),
-                        piece_name(old.kind)
-                    ));
-                    continue;
-                }
                 if let Some(p) = players.iter_mut().find(|p| p.id == old.id) {
                     p.position = None;
                     events.push(format!(
@@ -299,11 +294,7 @@ impl Battle {
             initial_double_step,
             moved_ids,
         };
-        battle.update_result(if options.hard_disk {
-            ResultReason::HardDisk
-        } else {
-            ResultReason::Counterattack
-        });
+        battle.update_result(ResultReason::Counterattack);
         if options.self_defense && battle.phase == Phase::Active {
             let living: Vec<_> = battle
                 .board
@@ -322,12 +313,10 @@ impl Battle {
         Ok(battle)
     }
     /// Run boundary: keep identities, deaths and permanent growth; discard combat state.
-    pub(crate) fn reset_after_battle(&mut self, keep_positions: bool) -> Result<(), Error> {
+    pub(crate) fn reset_after_battle(&mut self) -> Result<(), Error> {
         let mut roster = self.outcome();
         for p in &mut roster {
-            if !keep_positions {
-                p.position = p.position.map(|_| p.origin);
-            }
+            p.position = p.position.map(|_| p.origin);
             p.moved = false;
         }
         self.replace_roster_at_rest(roster)
@@ -392,6 +381,49 @@ impl Battle {
     pub fn legal_actions(&self, from: Position) -> Result<Vec<DefaultAction>, Error> {
         self.actions_from(from, true)
     }
+    pub(crate) fn generated_legal_actions(
+        &self,
+        from: Position,
+    ) -> Result<Vec<GeneratedAction<'_>>, Error> {
+        Ok(self
+            .legal_actions(from)?
+            .into_iter()
+            .map(|action| GeneratedAction {
+                battle: self,
+                action,
+            })
+            .collect())
+    }
+    /// Selection and application share one exclusive borrow, so the board and turn cannot
+    /// change between generation and application. Only this crate can use the unchecked path.
+    pub(crate) fn select_and_apply<F>(
+        &mut self,
+        select: F,
+    ) -> Result<Option<(DefaultAction, Piece, Option<Piece>)>, Error>
+    where
+        F: for<'a> FnOnce(&'a Battle) -> Result<Option<GeneratedAction<'a>>, Error>,
+    {
+        let Some(selected) = select(self)? else {
+            return Ok(None);
+        };
+        if !std::ptr::eq(selected.battle, self) {
+            return Err(Error::IllegalAction);
+        }
+        let action = selected.action;
+        let piece = self
+            .board
+            .piece_at(action.first.from)?
+            .ok_or(Error::IllegalAction)?;
+        let captured = action.steps().find_map(|s| {
+            self.board
+                .piece_at(s.take)
+                .ok()
+                .flatten()
+                .filter(|p| p.owner != piece.owner)
+        });
+        self.apply_piece_action_unchecked(&action)?;
+        Ok(Some((action, piece, captured)))
+    }
     /// Inspect another side's current movement without granting it a turn or an action.
     pub fn preview_actions(&self, from: Position) -> Result<Vec<ActionPreview>, Error> {
         let actions = self.actions_from(from, false)?;
@@ -404,15 +436,27 @@ impl Battle {
             .into_iter()
             .map(|action| {
                 let destination = action.steps().last().unwrap().move_to;
-                let mut board = self.board.clone();
                 let mut captures = Vec::new();
-                for step in action.steps() {
+                if action.continuation.is_empty() {
+                    let step = &action.first;
                     if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
-                        && board.piece_at(step.take)?.is_some_and(|p| p.owner != owner)
+                        && self
+                            .board
+                            .piece_at(step.take)?
+                            .is_some_and(|p| p.owner != owner)
                     {
                         captures.push(step.take);
                     }
-                    apply_default_action(&mut board, &DefaultAction::one(step.clone()))?;
+                } else {
+                    let mut board = self.board.clone();
+                    for step in action.steps() {
+                        if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                            && board.piece_at(step.take)?.is_some_and(|p| p.owner != owner)
+                        {
+                            captures.push(step.take);
+                        }
+                        apply_default_action(&mut board, &DefaultAction::one(step.clone()))?;
+                    }
                 }
                 Ok(ActionPreview {
                     destination,
@@ -448,22 +492,13 @@ impl Battle {
         {
             return Ok(vec![]);
         }
-        let mut actions = self
-            .programs
-            .get(&piece.kind)
-            .ok_or(Error::InvalidSetup)?
-            .execute(&self.board, from)?;
+        let mut actions = self.piece_actions(piece.kind, from)?;
         if piece.kind == pieces::EMPEROR {
             if let Some(absorbed) = self.absorbed.get(&piece.id) {
                 let mut kinds: Vec<_> = absorbed.iter().copied().collect();
                 kinds.sort_unstable();
                 for kind in kinds {
-                    actions.extend(
-                        self.programs
-                            .get(&kind)
-                            .ok_or(Error::InvalidSetup)?
-                            .execute(&self.board, from)?,
-                    );
+                    actions.extend(self.piece_actions(kind, from)?);
                 }
             }
         }
@@ -481,6 +516,7 @@ impl Battle {
         // A promotion is part of the validated move, including captures of the royal.
         // No unpromoted action is offered on the final rank for these families.
         let mut result = Vec::new();
+        let mut seen: Option<HashMap<u64, Vec<usize>>> = None;
         for action in actions {
             if piece.owner == ENEMY
                 && self.initiative_turns_left > 0
@@ -503,15 +539,25 @@ impl Battle {
                         .last_mut()
                         .unwrap_or(&mut promoted.first);
                     step.transition = Some(pieces::definition(kind).unwrap().key.into());
-                    if !result.contains(&promoted) {
-                        result.push(promoted);
-                    }
+                    push_unique_action(&mut result, &mut seen, promoted);
                 }
-            } else if !result.contains(&action) {
-                result.push(action);
+            } else {
+                push_unique_action(&mut result, &mut seen, action);
             }
         }
         Ok(result)
+    }
+    fn piece_actions(&self, kind: PieceType, from: Position) -> Result<Vec<DefaultAction>, Error> {
+        let definition = pieces::definition(kind).ok_or(Error::InvalidSetup)?;
+        if let Some(calculate) = definition.native_movement {
+            Ok(calculate(&self.board, from)?)
+        } else {
+            Ok(self
+                .programs
+                .get(&kind)
+                .ok_or(Error::InvalidSetup)?
+                .execute(&self.board, from)?)
+        }
     }
     // Inspect each step on its actual intermediate board, including remote/jump captures.
     fn captures_player(&self, action: &DefaultAction) -> Result<bool, Error> {
@@ -521,6 +567,16 @@ impl Battle {
         self.captures_owner(action, ENEMY)
     }
     fn captures_owner(&self, action: &DefaultAction, owner: PlayerId) -> Result<bool, Error> {
+        if action.continuation.is_empty() {
+            let step = &action.first;
+            return Ok(
+                !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                    && self
+                        .board
+                        .piece_at(step.take)?
+                        .is_some_and(|p| p.owner == owner),
+            );
+        }
         let mut next = self.board.clone();
         for step in action.steps() {
             if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
@@ -546,17 +602,21 @@ impl Battle {
         if !self.legal_actions(action.first.from)?.contains(action) {
             return Err(Error::IllegalAction);
         }
+        self.apply_piece_action_unchecked(action)
+    }
+    fn apply_piece_action_unchecked(&mut self, action: &DefaultAction) -> Result<(), Error> {
+        if self.phase != Phase::Active {
+            return Err(Error::Finished);
+        }
+        let piece = self
+            .board
+            .piece_at(action.first.from)?
+            .ok_or(Error::IllegalAction)?;
+        if piece.owner != self.turn {
+            return Err(Error::WrongTurn);
+        }
         // A ward cancels the whole capture action; the attack still spends one action.
-        let victim = action.steps().find_map(|step| {
-            if matches!(step.effect, crate::Effect::Shift | crate::Effect::Move) {
-                return None;
-            }
-            self.board
-                .piece_at(step.take)
-                .ok()
-                .flatten()
-                .filter(|p| p.owner != piece.owner && self.wards.contains(&p.id))
-        });
+        let victim = self.warded_victim(action, piece.owner)?;
         if let Some(victim) = victim {
             self.wards.remove(&victim.id);
             self.events.push(format!(
@@ -582,6 +642,37 @@ impl Battle {
             self.end_turn()?;
         }
         Ok(())
+    }
+    fn warded_victim(
+        &self,
+        action: &DefaultAction,
+        owner: PlayerId,
+    ) -> Result<Option<Piece>, Error> {
+        if action.continuation.is_empty() {
+            let step = &action.first;
+            return Ok(
+                if matches!(step.effect, crate::Effect::Shift | crate::Effect::Move) {
+                    None
+                } else {
+                    self.board
+                        .piece_at(step.take)?
+                        .filter(|p| p.owner != owner && self.wards.contains(&p.id))
+                },
+            );
+        }
+        let mut board = self.board.clone();
+        for step in action.steps() {
+            if !matches!(step.effect, crate::Effect::Shift | crate::Effect::Move) {
+                if let Some(victim) = board
+                    .piece_at(step.take)?
+                    .filter(|p| p.owner != owner && self.wards.contains(&p.id))
+                {
+                    return Ok(Some(victim));
+                }
+            }
+            apply_default_action(&mut board, &DefaultAction::one(step.clone()))?;
+        }
+        Ok(None)
     }
     pub fn end_turn(&mut self) -> Result<(), Error> {
         if self.phase != Phase::Active {
@@ -832,12 +923,20 @@ impl Battle {
         Ok(removed)
     }
     fn apply_effect(&mut self, action: &DefaultAction, source: ActionSource) -> Result<(), Error> {
-        let mut next = self.board.clone();
+        // Card effects need royal-protection rollback; compound moves need a staging board
+        // while rule effects inspect each intermediate position. A single piece step can
+        // use chessembly's changed-square rollback directly on the live board.
+        let mut staged = (source == ActionSource::ResolvedCardEffect
+            || !action.continuation.is_empty())
+        .then(|| self.board.clone());
+        let next = staged.as_mut().unwrap_or(&mut self.board);
         let mut retaliation = None;
         let mut player_captured = false;
         let mut enemy_captured = false;
+        let mut absorbed = vec![];
+        let self_defense_target = self.self_defense_target;
         if source == ActionSource::ResolvedCardEffect {
-            apply_default_action(&mut next, action)?;
+            apply_default_action(next, action)?;
             for id in std::iter::once(self.king_id)
                 .chain(std::iter::once(self.royal_id))
                 .chain(self.additional_royal_ids.iter().copied())
@@ -847,7 +946,6 @@ impl Battle {
                 }
             }
         } else {
-            let mut absorbed = vec![];
             for step in action.steps() {
                 // Resolve the actual captor and victim at this step, including multi-step moves.
                 let captor = next.piece_at(step.from)?;
@@ -860,8 +958,9 @@ impl Battle {
                 }
                 let retaliates = !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                     && captor.is_some_and(|p| p.owner == ENEMY)
-                    && victim.is_some_and(|p| p.owner == PLAYER && self.has_self_defense(p.id));
-                apply_default_action(&mut next, &DefaultAction::one(step.clone()))?;
+                    && victim
+                        .is_some_and(|p| p.owner == PLAYER && self_defense_target == Some(p.id));
+                apply_default_action(next, &DefaultAction::one(step.clone()))?;
                 player_captured |=
                     !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                         && captor.is_some_and(|p| p.owner == PLAYER)
@@ -877,20 +976,27 @@ impl Battle {
                         .iter()
                         .position(|p| p.is_some_and(|p| p.id == captor.id))
                     {
-                        next.set_piece(Position::new(index as i32 % 8, index as i32 / 8), None)?;
+                        let width = next.width();
+                        next.set_piece(
+                            Position::new((index % width) as i32, (index / width) as i32),
+                            None,
+                        )
+                        .expect("existing board square is always valid");
                     }
                     retaliation = Some(captor);
                     // A dead captor cannot perform any remaining steps of its move.
                     break;
                 }
             }
-            for (id, kind) in absorbed {
-                if next.cells().iter().flatten().any(|p| p.id == id) {
-                    self.absorbed.entry(id).or_default().insert(kind);
-                }
+        }
+        if let Some(next) = staged {
+            self.board = next;
+        }
+        for (id, kind) in absorbed {
+            if self.board.cells().iter().flatten().any(|p| p.id == id) {
+                self.absorbed.entry(id).or_default().insert(kind);
             }
         }
-        self.board = next;
         if player_captured && self.initiative_turns_left > 0 {
             self.initiative_turns_left = 0;
             self.events
@@ -979,9 +1085,76 @@ impl Battle {
         }
     }
 }
+fn push_unique_action(
+    result: &mut Vec<DefaultAction>,
+    seen: &mut Option<HashMap<u64, Vec<usize>>>,
+    action: DefaultAction,
+) {
+    // Small move lists are cheaper to scan. Build the index only for crowded positions.
+    if result.len() < 16 {
+        if !result.contains(&action) {
+            result.push(action);
+        }
+        return;
+    }
+    let seen = seen.get_or_insert_with(|| {
+        let mut index: HashMap<u64, Vec<usize>> = HashMap::new();
+        for (i, existing) in result.iter().enumerate() {
+            index.entry(action_hash(existing)).or_default().push(i);
+        }
+        index
+    });
+    let hash = action_hash(&action);
+    let indices = seen.entry(hash).or_default();
+    if indices.iter().any(|&i| result[i] == action) {
+        return;
+    }
+    indices.push(result.len());
+    result.push(action);
+}
+fn action_hash(action: &DefaultAction) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    for step in action.steps() {
+        step.from.hash(&mut hasher);
+        step.take.hash(&mut hasher);
+        step.move_to.hash(&mut hasher);
+        std::mem::discriminant(&step.effect).hash(&mut hasher);
+        step.transition.hash(&mut hasher);
+    }
+    hasher.finish()
+}
 fn valid_kind(k: PieceType) -> bool {
     pieces::definition(k).is_some()
 }
 pub fn square(p: Position) -> String {
     format!("{}{}", (b'a' + p.file as u8) as char, 8 - p.rank)
+}
+
+#[cfg(test)]
+mod dedupe_tests {
+    use super::*;
+
+    #[test]
+    fn keeps_first_route_and_distinct_transition_after_indexing() {
+        let mut result = Vec::new();
+        let mut seen = None;
+        for file in 0..16 {
+            let mut action = DefaultAction::one(crate::ActionStep::new(
+                Position::new(file, 0),
+                Position::new(file, 1),
+                Position::new(file, 1),
+                crate::Effect::Move,
+            ));
+            action.route = Some(vec![Position::new(file, 1)]);
+            push_unique_action(&mut result, &mut seen, action);
+        }
+        let mut duplicate = result[0].clone();
+        duplicate.route = Some(vec![Position::new(7, 7)]);
+        push_unique_action(&mut result, &mut seen, duplicate.clone());
+        assert_eq!(result.len(), 16);
+        assert_eq!(result[0].route, Some(vec![Position::new(0, 1)]));
+        duplicate.first.transition = Some("queen".into());
+        push_unique_action(&mut result, &mut seen, duplicate);
+        assert_eq!(result.len(), 17);
+    }
 }

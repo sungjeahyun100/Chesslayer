@@ -240,10 +240,12 @@ fn bouncing_walls_blockers_captures_and_finite_paths() {
             ] {
                 let mut b = scene(kind, side);
                 put(&mut b, side, wall.0, wall.1, BOUNCING_PAWN, wall_owner);
-                assert!(
-                    !has(&b, side, wall.0, wall.1),
-                    "wall cannot be entered/captured"
-                );
+                if wall_owner != side {
+                    assert!(has(&b, side, wall.0, wall.1));
+                    capture(&mut b, side, wall.0, wall.1);
+                    continue;
+                }
+                assert!(!has(&b, side, wall.0, wall.1));
                 assert!(has(&b, side, reflected.0, reflected.1));
                 put(&mut b, side, reflected.0, reflected.1, PAWN, side);
                 // Block other initial routes too, so this observes just the reflected ray.
@@ -270,8 +272,9 @@ fn bouncing_walls_blockers_captures_and_finite_paths() {
                     BOUNCING_PAWN,
                     1 - side,
                 );
-                assert!(!has(&b, side, reflected.0, reflected.1));
-                // A second wall terminates the straight branch, with no recursive bounce.
+                assert!(has(&b, side, reflected.0, reflected.1));
+                capture(&mut b.clone(), side, reflected.0, reflected.1);
+                // An enemy bouncing pawn is captured and ends the branch.
                 put(&mut b, side, wall.0, wall.1, PAWN, 1 - side);
                 assert!(
                     has(&b, side, wall.0, wall.1),
@@ -292,14 +295,15 @@ fn bouncing_walls_blockers_captures_and_finite_paths() {
         assert_eq!(destinations(&queen, side), union);
         let mut queen = queen;
         put(&mut queen, side, 0, 2, BOUNCING_PAWN, 1 - side);
-        assert!(!has(&queen, side, 0, 2));
+        assert!(has(&queen, side, 0, 2));
         let mut scoped = scene(BOUNCING_ROOK, side);
-        put(&mut scoped, side, 0, 1, BOUNCING_PAWN, 1 - side);
+        put(&mut scoped, side, 0, 1, BOUNCING_PAWN, side);
         let origin = q(side, 0, 0);
         // The setting resets at the semicolon and does not reinterpret edge().
-        let program =
-            chessembly::Program::parse("wall-piece(bouncing_pawn) take-move(0,1); take-move(0,1)")
-                .unwrap();
+        let program = chessembly::Program::parse(
+            "wall-piece(bouncing_pawn) take-move(0,1); barrier(0,1) not take-move(1,0)",
+        )
+        .unwrap();
         assert_eq!(program.execute(&scoped.board, origin).unwrap().len(), 1);
         let edge = chessembly::Program::parse("wall-piece(bouncing_pawn) edge(0,1) take-move(1,0)")
             .unwrap();
@@ -670,7 +674,7 @@ fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
                 })
                 .is_err());
             g.dispatch(Command::SelectNode { id: 13 }).unwrap();
-            expected.position = chesslayer::content::Relic::Hedgehog.position(id);
+            expected.position = Some(expected.origin);
             assert_eq!(
                 g.battle.outcome().into_iter().find(|p| p.id == id).unwrap(),
                 expected

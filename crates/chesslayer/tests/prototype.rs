@@ -521,7 +521,7 @@ fn seeded_route_reaches_rest_with_rewards_and_upgrade() {
     let commands: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("fixtures/winning-run.json")).unwrap();
     let mut wins = 0;
-    for (index, value) in commands.into_iter().take(14).enumerate() {
+    for (index, value) in commands.into_iter().enumerate() {
         let command: Command = serde_json::from_value(value).unwrap();
         game.dispatch(command).unwrap_or_else(|e| {
             panic!(
@@ -531,11 +531,11 @@ fn seeded_route_reaches_rest_with_rewards_and_upgrade() {
                 game.log.last()
             )
         });
-        if game.phase == RunPhase::Reward {
-            wins += 1;
-        }
         while game.phase == RunPhase::Combat && game.battle.turn == ENEMY {
             game.dispatch(Command::EnemyStep).unwrap();
+        }
+        if game.phase == RunPhase::Reward {
+            wins += 1;
         }
     }
     assert!(wins >= 2);
@@ -544,13 +544,11 @@ fn seeded_route_reaches_rest_with_rewards_and_upgrade() {
     assert_eq!(game.current_node, Some(10));
     assert!(!game.available_nodes().is_empty());
     assert!(!game.deck.is_empty());
-    if !game.relics.contains(&Relic::HardDisk) {
-        assert!(game
-            .battle
-            .outcome()
-            .iter()
-            .all(|p| p.position.is_none_or(|pos| pos == p.origin)));
-    }
+    assert!(game
+        .battle
+        .outcome()
+        .iter()
+        .all(|p| p.position.is_none_or(|pos| pos == p.origin)));
     assert_eq!(game.battle.outcome()[8].kind, TEMPEST_PAWN);
 }
 

@@ -74,7 +74,7 @@ test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 �
 
 test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 연출을 반복하지 않는다", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".home-version")).toHaveText("v0.2.3");
+  await expect(page.locator(".home-version")).toHaveText("v0.2.4");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.getByRole("status", { name: "제1층 진입" })).toContainText("ACT I");
@@ -260,6 +260,17 @@ test("실제 WASM: 빈 초기 덱, 합법 수, 적 행동", async ({ page }) => 
     "e8 흑 킹 로얄",
   );
   await expect(page.getByRole("heading", { name: "손패 0/10" })).toBeVisible();
+  const handLayout = await page.locator(".hand-area").evaluate((hand) => {
+    const boardArea = hand.previousElementSibling!.getBoundingClientRect();
+    const gap = hand.getBoundingClientRect().top - boardArea.bottom;
+    return { grouped: hand.parentElement?.classList.contains("battle-column"), gap };
+  });
+  expect(handLayout.grouped).toBe(true);
+  expect(handLayout.gap).toBeGreaterThanOrEqual(12);
+  expect(handLayout.gap).toBeLessThanOrEqual(20);
+  await page.locator(".sidebar").evaluate((sidebar) => { sidebar.style.minHeight = "1200px"; });
+  expect(await page.locator(".hand-area").evaluate((hand) => hand.getBoundingClientRect().top - hand.previousElementSibling!.getBoundingClientRect().bottom)).toBe(handLayout.gap);
+  await page.locator(".sidebar").evaluate((sidebar) => { sidebar.style.minHeight = ""; });
   await expect(page.getByTestId("deck-count")).toHaveText("0");
   await expect(page.getByTestId("draw-count")).toHaveText("0");
   await expect(page.locator(".mana-orb")).toHaveText("3");
@@ -316,7 +327,7 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
       "../crates/chesslayer/tests/fixtures/winning-run.json",
       "utf8",
     ),
-  ) as Command[]).slice(0, 14);
+  ) as Command[]);
   const square = (cell: number) =>
     `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
   await startMap(page);
@@ -386,7 +397,7 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
           await page.screenshot({ path: "test-results/hook-boss.png", fullPage: true });
         } else {
           await expect(page.locator("main")).toHaveAttribute("data-phase", "reward");
-          await expect(page.getByRole("log")).toContainText("하드디스크");
+          await expect(page.getByRole("log")).toContainText("승리!");
         }
       }
     } else if (cmd.type === "move") {
@@ -525,6 +536,6 @@ test("호신용품: 보호 대상 표시·설명과 저장 복원", async ({ pag
   await expect(cell).toHaveAccessibleName(/호신용품 보호 대상/);
   await expect(cell).toHaveAttribute("title", /포획한 적도 사망/);
   await cell.click();
-  await expect(page.locator(".self-defense-info")).toContainText("포획한 적도 사망");
+  await expect(page.locator(".selected-piece-info")).toContainText("포획한 적도 사망");
   await page.screenshot({ path: "test-results/self-defense.png", fullPage: true });
 });

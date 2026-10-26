@@ -10,9 +10,13 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
 };
 
 pub(super) fn movement() -> String {
-    format!(
-        "{}; {}",
-        super::tempest_rook::movement(),
-        super::movement::slides(super::movement::ORTHOGONAL)
-    )
+    let mut chains: Vec<_> = super::movement::DIAGONAL.iter().map(|&(x, y)| {
+        format!("take-move({x},{y}) {{ take-move({x},0) repeat(1) }} {{ take-move(0,{y}) repeat(1) }}")
+    }).collect();
+    chains.extend(
+        super::movement::ORTHOGONAL
+            .iter()
+            .map(|&(x, y)| format!("take-move({x},{y}) repeat(1)")),
+    );
+    chains.join("; ")
 }

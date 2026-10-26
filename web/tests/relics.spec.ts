@@ -6,7 +6,7 @@ const runs: { relic: RelicId; seed: number; commands: Command[] }[] = JSON.parse
   readFileSync("../crates/chesslayer/tests/fixtures/relic-runs.json", "utf8"),
 );
 
-test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·명령별 저장 복원", async ({ page }) => {
+test("신규 유물 5종: 실제 획득·배치·선공권·누적 코스트·명령별 저장 복원", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
@@ -43,7 +43,7 @@ test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·�
         return { start, saved, next: JSON.parse(game.snapshot()) as Snapshot, nextSave: game.save() };
       } finally { game.free(); }
     }, run);
-    expect(JSON.parse(result.saved).version).toBe(12);
+    expect(JSON.parse(result.saved).version).toBe(13);
     expect(result.start.relics.some((r) => r.id === run.relic)).toBe(true);
     if (run.relic === "initiative") {
       expect(result.start.initiative_turns_left).toBe(10);
@@ -53,11 +53,7 @@ test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·�
       expect(result.start.mana).toBe(3);
       expect(result.next.mana).toBe(6);
     }
-    if (run.relic === "hard_disk") {
-      expect(result.start.phase).toBe("combat");
-      expect(result.start.log.some((line) => line.includes("생존 아군 위치를 복원"))).toBe(true);
-      expect(result.start.pieces.find((p) => p.id === 4)?.square).toBe("e6");
-    }
+
     if (["kings_indian", "queens_indian", "hedgehog"].includes(run.relic)) {
       expect(result.start.pieces.find((p) => p.id === 5)?.square).toBe("g1");
       expect(result.start.pieces.find((p) => p.id === (run.relic === "kings_indian" ? 6 : 3))?.square)
@@ -76,12 +72,7 @@ test("신규 유물 6종: 실제 획득·배치·선공권·누적 코스트·�
     await page.getByRole("button", { name: "원정 현황" }).click();
     await expect(page.locator(".status-relic").filter({ hasText: relic.name })).toHaveCount(1);
     await expect(page.locator(".status-board .piece-image")).toHaveCount(result.next.next_battle_pieces.length);
-    if (run.relic === "hard_disk") {
-      for (const piece of result.next.next_battle_pieces) {
-        expect(piece.cell).toBe(result.next.rest_options.find((owned) => owned.id === piece.id)?.cell);
-        await expect(page.locator(`.status-square[data-cell="${piece.cell}"] img`)).toHaveAttribute("data-piece-key", piece.key);
-      }
-    }
+
     await page.locator(".status-relic").filter({ hasText: relic.name }).click();
     await expect(page.locator(".status-relic-detail")).toContainText(relic.description);
     await page.getByRole("button", { name: "원정 현황 닫기" }).click();

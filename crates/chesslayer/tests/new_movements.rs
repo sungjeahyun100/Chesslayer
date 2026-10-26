@@ -1,4 +1,8 @@
-use chesslayer::{content::pieces, game::Game, *};
+use chesslayer::{
+    content::pieces,
+    game::{Command, Game, RunPhase},
+    *,
+};
 use std::collections::HashSet;
 
 fn square(side: PlayerId, x: i32, y: i32) -> Position {
@@ -142,9 +146,11 @@ fn bouncing_knightrider_reflects_once_on_edges_and_pawn_walls() {
                 put(&mut wall, side, x, y, PAWN, side);
             }
         }
-        put(&mut wall, side, 4, 2, pieces::BOUNCING_PAWN, 1 - side);
+        put(&mut wall, side, 4, 2, pieces::BOUNCING_PAWN, side);
         assert!(!moves(&wall, from).contains(&square(side, 4, 2)));
         assert!(moves(&wall, from).contains(&square(side, 1, 3)));
+        put(&mut wall, side, 4, 2, pieces::BOUNCING_PAWN, 1 - side);
+        assert!(moves(&wall, from).contains(&square(side, 4, 2)));
     }
     // The source's separate right/top branches both apply when the next jump
     // crosses two edges. `edge-*` alone would miss this corner case.
@@ -186,8 +192,11 @@ fn cardinal_reaches_second_reflection_without_cycles_or_wall_capture() {
         assert!(!moves(&bishop, from).contains(&second));
         assert!(moves(&battle, from).contains(&second));
         execute(&mut battle.clone(), from, second);
-        put(&mut battle, side, 1, -1, pieces::BOUNCING_PAWN, 1 - side);
+        put(&mut battle, side, 1, -1, pieces::BOUNCING_PAWN, side);
         assert!(!moves(&battle, from).contains(&square(side, 1, -1)));
+        put(&mut battle, side, 1, -1, pieces::BOUNCING_PAWN, 1 - side);
+        assert!(moves(&battle, from).contains(&square(side, 1, -1)));
+        execute(&mut battle.clone(), from, square(side, 1, -1));
         let actions = battle.legal_actions(from).unwrap();
         assert!(actions.len() <= 63);
         assert!(actions
@@ -206,9 +215,10 @@ fn cardinal_all_start_squares_terminate_with_applicable_actions() {
     for definition in pieces::ALL {
         catalog[usize::from(definition.kind)] = definition.key.into();
     }
-    let program =
-        chessembly::Program::parse(&(pieces::definition(pieces::CARDINAL).unwrap().movement)())
-            .unwrap();
+    let calculate = pieces::definition(pieces::CARDINAL)
+        .unwrap()
+        .native_movement
+        .unwrap();
     for side in [PLAYER, ENEMY] {
         for rank in 0..8 {
             for file in 0..8 {
@@ -250,7 +260,7 @@ fn cardinal_all_start_squares_terminate_with_applicable_actions() {
                     }
                 }
                 let before = board.clone();
-                for action in program.execute(&board, origin).unwrap() {
+                for action in calculate(&board, origin).unwrap() {
                     let mut next = board.clone();
                     apply_default_action(&mut next, &action).unwrap();
                 }
@@ -258,6 +268,48 @@ fn cardinal_all_start_squares_terminate_with_applicable_actions() {
             }
         }
     }
+}
+
+#[test]
+fn cardinal_native_actions_reach_preview_and_enemy_ai() {
+    let from = square(ENEMY, 0, 0);
+    let victim = square(ENEMY, 1, 1);
+    let mut battle = scene(pieces::CARDINAL, ENEMY);
+    put(&mut battle, ENEMY, 1, 1, PAWN, PLAYER);
+    battle.turn = PLAYER;
+    let preview = battle.preview_actions(from).unwrap();
+    assert!(preview.iter().any(|a| a.destination == victim
+        && a.captures == vec![victim]
+        && a.route
+            .as_ref()
+            .is_some_and(|route| route.first() == Some(&from) && route.last() == Some(&victim))));
+
+    let mut game = Game::new("vanguard", 42).unwrap();
+    game.battle = battle;
+    game.battle.turn = ENEMY;
+    game.phase = RunPhase::Combat;
+    let legal: HashSet<_> = game
+        .battle
+        .legal_actions(from)
+        .unwrap()
+        .iter()
+        .map(|a| a.first.move_to)
+        .collect();
+    game.dispatch(Command::EnemyStep).unwrap();
+    let destination = game
+        .battle
+        .board
+        .cells()
+        .iter()
+        .enumerate()
+        .find_map(|(i, piece)| {
+            piece
+                .filter(|p| p.id == 101)
+                .map(|_| Position::new((i % 8) as i32, (i / 8) as i32))
+        })
+        .unwrap();
+    assert!(legal.contains(&destination));
+    assert_ne!(destination, from);
 }
 
 #[test]

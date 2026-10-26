@@ -8,7 +8,7 @@ type ReflectedPath = (Vector, Vector, Vector);
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     family: super::PieceFamily::Knight,
     value: 70,
-    description: "나이트 점프를 같은 벡터로 반복하고, 보드 경계나 바운싱 폰 직전에서 한 번 직각으로 꺾어 계속 점프합니다. 포획하면 멈춥니다.",
+    description: "나이트 점프를 같은 벡터로 반복하고, 보드 경계나 아군 바운싱 폰 직전에서 한 번 직각으로 꺾어 계속 점프합니다. 포획하면 멈춥니다.",
     ..PieceDefinition::new(BOUNCING_KNIGHTRIDER, "bouncing_knightrider", "바운싱 나이트라이더", movement)
 };
 

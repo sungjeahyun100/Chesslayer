@@ -35,7 +35,8 @@ mod typhoon_queen;
 mod typhoon_rook;
 mod unicorn;
 
-use crate::PieceType;
+use crate::{Board, DefaultAction, PieceType, Position};
+use chessembly::Error as MovementError;
 
 pub use amazon::AMAZON;
 pub use bishop::BISHOP;
@@ -91,6 +92,7 @@ pub struct PieceDefinition {
     pub key: &'static str,
     pub name: &'static str,
     pub movement: fn() -> String,
+    pub native_movement: Option<fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>>,
     pub value: i32,
     pub description: &'static str,
     pub upgrades: &'static [UpgradeDefinition],
@@ -110,6 +112,7 @@ impl PieceDefinition {
             key,
             name,
             movement,
+            native_movement: None,
             value: 10,
             description: "",
             upgrades: &[],

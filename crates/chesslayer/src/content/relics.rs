@@ -13,7 +13,6 @@ pub enum Relic {
     Hedgehog,
     Initiative,
     IceCream,
-    HardDisk,
 }
 
 pub const RELIC_REWARD_POOL: &[Relic] = &[
@@ -25,7 +24,6 @@ pub const RELIC_REWARD_POOL: &[Relic] = &[
     Relic::Hedgehog,
     Relic::Initiative,
     Relic::IceCream,
-    Relic::HardDisk,
 ];
 pub const INITIATIVE_TURNS: u8 = 10;
 
@@ -97,7 +95,6 @@ impl Relic {
             Self::Hedgehog => "고슴도치의 지혜",
             Self::Initiative => "선공권",
             Self::IceCream => "아이스크림",
-            Self::HardDisk => "하드디스크",
         }
     }
     pub fn description(self) -> &'static str {
@@ -110,7 +107,6 @@ impl Relic {
             Self::Hedgehog => "다음 전투부터 아군을 백 진영의 헤지호그 프리셋으로 배치합니다. 가장 최근에 얻은 시작 진형만 적용됩니다.",
             Self::Initiative => "전투마다 적 턴 10회 동안 적의 일반 포획을 막습니다. 아군의 일반 포획이 성공하면 즉시 해제됩니다. 가호로 취소된 포획과 카드 제거는 해제하지 않습니다.",
             Self::IceCream => "플레이어 턴 시작마다 남은 코스트에 3을 더합니다. 전투 종료 시 누적 코스트가 초기화됩니다.",
-            Self::HardDisk => "직전 전투 종료 시 생존 아군의 위치를 다음 전투에 유지합니다. 겹친 적과 아군은 로얄을 포함해 함께 사망합니다. 유효한 기록이 있으면 시작 진형 유물보다 우선합니다.",
         }
     }
     pub fn formation(self) -> Option<&'static [(i32, i32); 16]> {

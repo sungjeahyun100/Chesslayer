@@ -10,9 +10,25 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
 };
 
 pub(super) fn movement() -> String {
-    format!(
-        "{}; {}",
-        super::tempest_knight::movement(),
-        super::movement::steps(super::movement::KNIGHT)
-    )
+    let mut chains: Vec<_> = super::movement::DIAGONAL
+        .iter()
+        .map(|&(x, y)| {
+            format!(
+                "take-move({x},{y}) {{ take-move({},{y}) }} {{ take-move({x},{}) }}",
+                2 * x,
+                2 * y
+            )
+        })
+        .collect();
+    chains.extend(
+        super::movement::ORTHOGONAL
+            .iter()
+            .map(|&(x, y)| format!("take-move({},{})", 3 * x, 3 * y)),
+    );
+    chains.extend(
+        super::movement::KNIGHT
+            .iter()
+            .map(|&(x, y)| format!("take-move({x},{y})")),
+    );
+    chains.join("; ")
 }

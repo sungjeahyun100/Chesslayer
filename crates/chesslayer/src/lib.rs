@@ -15,7 +15,6 @@ pub enum ResultReason {
     RoyalCaptured,
     Counterattack,
     SelfDefense,
-    HardDisk,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameResult {

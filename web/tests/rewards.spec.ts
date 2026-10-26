@@ -35,7 +35,7 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
       return { saved: game.save(), snapshot: JSON.parse(game.snapshot()) as Snapshot };
     } finally { game.free(); }
   }, beforeChoice);
-  expect(JSON.parse(prepared.saved).version).toBe(12);
+  expect(JSON.parse(prepared.saved).version).toBe(13);
   expect(prepared.snapshot.phase).toBe("reward");
   expect(prepared.snapshot.rewards).toHaveLength(3);
   for (const type of ["card", "relic"] as const) {
@@ -132,7 +132,7 @@ test("엘리트 강화 보상을 건너뛴 뒤 노드에서 한 번만 받는다
       }
       return game.save();
     } finally { game.free(); }
-  }, commands.slice(0, 11));
+  }, commands.slice(0, 10));
   await page.evaluate((value) => localStorage.setItem("chesslayer.run.v1", value), saved);
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();

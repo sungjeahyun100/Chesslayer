@@ -3,7 +3,7 @@ mod action;
 mod board;
 pub use action::{apply_default_action, ActionError, ActionStep, DefaultAction, Effect};
 pub use board::{Board, BoardError, Piece, PieceId, PieceType, PlayerId, Position};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Error {
     Parse(String),
@@ -63,7 +63,6 @@ fn arity(n: &str) -> Option<i8> {
         | "enemy"
         | "friendly"
         | "barrier" => 2,
-        "reflect-ray" => 2,
         "piece-on" | "color-on" => 3,
         "wall-piece" | "absolute-x" | "absolute-y" | "piece" | "color" | "repeat" | "label"
         | "jmp" | "jne" | "write" | "read" | "read-and" | "read-or" | "read-xor"
@@ -156,12 +155,6 @@ impl Program {
                     && !(i == 0 && matches!(name, "piece-on" | "color-on"))
                 {
                     int(v)?;
-                }
-            }
-            if name == "reflect-ray" {
-                let (dx, dy) = (int(&args[0])?, int(&args[1])?);
-                if (dx, dy) == (0, 0) || dx == i32::MIN || dy == i32::MIN {
-                    return Err(Error::Parse("invalid reflect-ray direction".into()));
                 }
             }
             if slot_op(name) && !(0..SLOT_COUNT as i32).contains(&int(&args[0])?) {
@@ -376,21 +369,6 @@ impl Program {
                             frames[top].state = false
                         }
                     }
-                    "reflect-ray" => {
-                        let wall_key = wall_piece.as_deref();
-                        reflect_ray(
-                            b,
-                            origin,
-                            frames[top].pos,
-                            (a(n, 0), a(n, 1)),
-                            d,
-                            actor.owner,
-                            wall_key,
-                            trans,
-                            out,
-                            frames[top].route.as_deref(),
-                        )?;
-                    }
                     _ => {
                         let offset = usize::from(matches!(op, "piece-on" | "color-on"));
                         let q = target(frames[top].pos, a(n, offset), a(n, offset + 1), d);
@@ -398,9 +376,10 @@ impl Program {
                         let piece_wall = wall_piece.is_some()
                             && b.contains(q)
                             && b.piece_at(q)?.is_some_and(|piece| {
-                                wall_piece.as_ref().is_some_and(|key| {
-                                    b.piece_name(piece).is_ok_and(|name| name == key)
-                                })
+                                piece.owner == actor.owner
+                                    && wall_piece.as_ref().is_some_and(|key| {
+                                        b.piece_name(piece).is_ok_and(|name| name == key)
+                                    })
                             });
                         if op == "barrier" {
                             frames[top].state = w != Wall::None || piece_wall;
@@ -554,60 +533,6 @@ impl Program {
         }
         Ok(result)
     }
-}
-/// Explore a reflected ray through the shared DSL evaluator. A state is a
-/// landing square plus its next direction; revisiting it cannot reveal a new
-/// destination, so the search terminates after all reachable states.
-#[allow(clippy::too_many_arguments)] // Mirrors the evaluator's board, actor and output context.
-fn reflect_ray(
-    b: &Board,
-    origin: Position,
-    start: Position,
-    direction: (i32, i32),
-    facing: i32,
-    owner: PlayerId,
-    wall_key: Option<&str>,
-    trans: &Option<String>,
-    out: &mut Vec<DefaultAction>,
-    route: Option<&[Position]>,
-) -> Result<(), Error> {
-    let mut pending = vec![(start, direction, route.map(|r| r.to_vec()))];
-    let mut visited = HashSet::new();
-    while let Some((at, (dx, dy), route)) = pending.pop() {
-        if !visited.insert((at, dx, dy)) {
-            continue;
-        }
-        let next = target(at, dx, dy, facing);
-        let occupant = if b.contains(next) {
-            b.piece_at(next)?
-        } else {
-            None
-        };
-        let is_wall = !b.contains(next)
-            || occupant.is_some_and(|piece| {
-                wall_key.is_some_and(|key| b.piece_name(piece).is_ok_and(|name| name == key))
-            });
-        if is_wall {
-            pending.push((at, (-dx, dy), route.clone()));
-            pending.push((at, (dx, -dy), route));
-        } else if !occupant.is_some_and(|piece| piece.owner == owner) {
-            let mut next_route = route;
-            extend_route(&mut next_route, next);
-            emit(
-                out,
-                origin,
-                next,
-                next,
-                Effect::TakeMove,
-                trans,
-                next_route.as_deref(),
-            );
-            if occupant.is_none() {
-                pending.push((next, (dx, dy), next_route));
-            }
-        }
-    }
-    Ok(())
 }
 #[derive(Clone)]
 struct Frame {

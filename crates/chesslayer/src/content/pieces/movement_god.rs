@@ -10,5 +10,16 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
 };
 
 pub(super) fn movement() -> String {
-    format!("{}; {}", super::hook::movement(), super::tengu::movement())
+    let mut chains: Vec<_> = super::movement::ORTHOGONAL.iter().map(|&(x, y)| {
+        format!("do take-move({x},{y}) {{ take-move({},{}) repeat(1) }} {{ take-move({},{}) repeat(1) }} while", -y, x, y, -x)
+    }).collect();
+    chains.extend(super::movement::DIAGONAL.iter().map(|&(x, y)| {
+        let branches = super::movement::DIAGONAL
+            .iter()
+            .map(|&(bx, by)| format!("{{ take-move({bx},{by}) repeat(1) }}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        format!("do take-move({x},{y}) {branches} while")
+    }));
+    chains.join("; ")
 }

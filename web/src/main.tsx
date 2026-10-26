@@ -16,7 +16,7 @@ import { ActMap, nodeTypes } from "./ActMap";
 import { PieceImage } from "./PieceImage";
 import { RestPanel, type RestChoice } from "./RestPanel";
 import { PromotionPicker } from "./PromotionPicker";
-import { UpgradeTree } from "./UpgradeTree";
+import { CardUpgradePanel } from "./CardUpgradePanel";
 import { RelicIcon } from "./ContentArt";
 import { CardFace } from "./CardFace";
 import { BattleRewards } from "./BattleRewards";
@@ -430,6 +430,20 @@ function App() {
       send({ type: "play_card", id: targetCard.id, target: cardTargets[0] });
     }
   }
+  function returnToBoardOnNarrowScreen() {
+    if (window.matchMedia("(max-width: 1000px)").matches)
+      boardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+  function confirmCardUpgrade(target: number) {
+    if (!focusedUpgrade) return;
+    setCardUpgrades((old) => [...old.filter((choice) => choice.id !== focusedUpgrade.id), { id: focusedUpgrade.id, target }]);
+    setUpgradeFocus(null);
+    returnToBoardOnNarrowScreen();
+  }
+  function closeCardUpgrade() {
+    setUpgradeFocus(null);
+    returnToBoardOnNarrowScreen();
+  }
   return (
     <>
       {floorTransition && <div className={`floor-transition stage-${floorTransition.stage} act-${floorTransition.next.floor}`} role="status" aria-label={`제${floorTransition.next.floor}층 진입`}>
@@ -587,7 +601,7 @@ function App() {
         <ActMap state={state} send={send} coveredByReward={rewardRevisit} />
       )}
       {screen === "game" && state && !showMap && (
-        <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined}>
+        <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined} data-card-upgrade-open={!!focusedUpgrade || undefined}>
           <nav className="node-navigation" aria-label="원정 위치">
             <span>
               {state.floor}층 / {state.map.nodes.find((n) => n.current)!.row + 1}번째 지점
@@ -596,6 +610,7 @@ function App() {
           </nav>
           {state.phase !== "treasure" && (
             <>
+              <div className="battle-column">
               <section className="battle-area">
                 <div className="battle-heading">
                   <div>
@@ -725,30 +740,21 @@ function App() {
                     ))}
                   </div>
                 </div>
-                <div className="board-caption">
-                  <span>백 · 나의 진형</span>
-                  <span>
-                    {restView
-                      ? rewardUpgradeOpen ? "강화는 확정 후 적용" : "강화 · 부활은 확정 후 적용"
-                      : state.phase === "combat" && state.hard_disk_deployed
-                        ? "하드디스크 · 직전 전투 종료 배치 적용"
-                        : state.phase === "combat" && state.enemy_initiative_turns_left > 0
-                          ? `★ 적 로얄: ${state.royal_name} · 적 선공권 ${state.enemy_initiative_turns_left}턴`
-                        : `★ 적 로얄: ${state.royal_name}`}
-                  </span>
-                </div>
-                {state.phase === "combat" && (
+                {state.phase === "combat" && <div className="board-caption">
+                  <span>★ 적 로얄: {state.royal_name}{state.enemy_initiative_turns_left > 0 && ` · 선공권 ${state.enemy_initiative_turns_left}턴`}</span>
+                </div>}
+                {state.phase === "combat" && (targetCard || inspectedEnemy || !turn) && (
                   <div
                     className={`action-hint ${targetCard ? "target-hint" : ""}`}
                     aria-live="polite"
                   >
                     {targetCard ? (
                       <>
-                        <strong>{targetCard.definition.name}</strong> · 표시된 기물을 선택하세요.
+                        <strong>{targetCard.definition.name}</strong>
                         {targetCard.definition.kind === "limiter_release" && <span>효과 종료 후 대상 사망</span>}
                         <span>선택 {stagedCount}기 · 현재 코스트 {stagedCost} / 마나 {state.mana}</span>
                         {targetCard.definition.selection_mode === "upgrade" && cardUpgrades.length > 0 && <span className="staged-upgrades">{cardUpgrades.map((choice) => <button key={choice.id} onClick={() => setCardUpgrades((old) => old.filter((u) => u.id !== choice.id))}>{state.pieces.find((p) => p.id === choice.id)?.name} ×</button>)}</span>}
-                        {["multiple", "upgrade"].includes(targetCard.definition.selection_mode) || ["limiter_release", "sacred_domain"].includes(targetCard.definition.kind) ? <button className="primary" onClick={confirmCard} disabled={stagedCount < 1 || stagedCost > state.mana}>확인</button> : null}
+                        {stagedCount > 0 && (["multiple", "upgrade"].includes(targetCard.definition.selection_mode) || ["limiter_release", "sacred_domain"].includes(targetCard.definition.kind)) ? <button className="primary" onClick={confirmCard} disabled={stagedCost > state.mana}>확인</button> : null}
                         <button
                           className="text-button"
                           onClick={cancelCard}
@@ -756,18 +762,56 @@ function App() {
                           취소 Esc
                         </button>
                       </>
-                    ) : selected !== null ? (
-                      <span>표시된 칸을 클릭해 이동하세요.{state.pieces.find((p) => p.cell === selected)?.self_defense && <strong className="self-defense-info"> ◆ 호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다.</strong>}</span>
                     ) : inspectedEnemy ? (
-                      <span>적 행마 조회 · 파란 원은 빈 도착 칸, 빨간 테두리는 포획 대상입니다. 점선은 확인된 경유 경로이며, 적의 다음 행동을 예측하지 않습니다.</span>
-                    ) : turn ? (
-                      "카드를 사용하거나 기물을 선택하세요. 적 기물을 누르면 행마를 확인할 수 있습니다."
+                      <span>적 행마 조회</span>
                     ) : (
                       "상대가 다음 수를 고르고 있습니다…"
                     )}
                   </div>
                 )}
               </section>
+          {state.phase === "combat" && (
+            <section className="hand-area">
+              <div className="hand-heading">
+                <h2>손패 <span>{state.hand.length}/10</span></h2>
+                <div className="piles">
+                  <span>
+                    드로우 <b data-testid="draw-count">{state.draw_count}</b>
+                  </span>
+                  <span>
+                    버림 <b>{state.discard_count}</b>
+                  </span>
+                  <span>
+                    소멸 <b>{state.exhausted_count}</b>
+                  </span>
+                  <span>
+                    전체 덱 <b data-testid="deck-count">{state.deck_count}</b>
+                  </span>
+                </div>
+              </div>
+              <div className="hand">
+                {state.hand.length === 0 && <p className="empty-hand">손패 없음</p>}
+                {state.hand.map((card) => (
+                  <button
+                    data-card-id={card.id}
+                    className={`playing-card ${targetCard?.id === card.id ? "active-card" : ""}`}
+                    key={card.id}
+                    onClick={() => chooseCard(card)}
+                    disabled={!!card.disabled_reason || !!promotion}
+                    title={card.disabled_reason || card.definition.description}
+                  >
+                    <CardFace card={card.definition} selectedCount={targetCard?.id === card.id ? stagedCount : 0} />
+                    {card.disabled_reason && (
+                      <span className="card-unavailable">
+                        {card.disabled_reason}
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
+              </div>
               <aside className="sidebar">
                 {restView ? (
                   <RestPanel
@@ -783,13 +827,14 @@ function App() {
                   />
                 ) : (
                   <>
-                    {targetCard?.definition.selection_mode === "upgrade" && focusedUpgrade && <section className="card-upgrade-picker">
-                      <p>일시 강화 경로 선택 · {focusedUpgrade.name}</p>
-                      <UpgradeTree key={focusedUpgrade.id} piece={{ ...focusedUpgrade, origin: focusedUpgrade.cell, upgrades: [], can_upgrade: true, can_revive: false, dead: false }} paths={state.upgrade_paths} acquired={[]}
-                        onSelect={() => {}}
-                        onConfirm={(target) => { setCardUpgrades((old) => [...old.filter((u) => u.id !== focusedUpgrade.id), { id: focusedUpgrade.id, target }]); setUpgradeFocus(null); }}
-                        completed={false} selectionOnly />
-                    </section>}
+                    {targetCard?.definition.selection_mode === "upgrade" && focusedUpgrade && <CardUpgradePanel
+                      key={focusedUpgrade.id}
+                      card={targetCard}
+                      piece={focusedUpgrade}
+                      paths={state.upgrade_paths}
+                      onConfirm={confirmCardUpgrade}
+                      onCancel={closeCardUpgrade}
+                    />}
                     {selectedPiece && (
                       <section className={`selected-piece-info ${inspectedEnemy ? "enemy-piece-info" : ""}`} aria-label={`${inspectedEnemy ? "적" : "아군"} 기물 정보`}>
                         <PieceImage
@@ -890,52 +935,6 @@ function App() {
                 )}
               </aside>
             </>
-          )}
-          {state.phase === "combat" && (
-            <section className="hand-area">
-              <div className="hand-heading">
-                <div>
-                  <h2>
-                    손패 <span>{state.hand.length}/10</span>
-                  </h2>
-                  <small>턴마다 1장 드로우 · 종료 시 손패 5장 이상이면 일반 카드를 버립니다.</small>
-                </div>
-                <div className="piles">
-                  <span>
-                    드로우 <b data-testid="draw-count">{state.draw_count}</b>
-                  </span>
-                  <span>
-                    버림 <b>{state.discard_count}</b>
-                  </span>
-                  <span>
-                    소멸 <b>{state.exhausted_count}</b>
-                  </span>
-                  <span>
-                    전체 덱 <b data-testid="deck-count">{state.deck_count}</b>
-                  </span>
-                </div>
-              </div>
-              <div className="hand">
-                {state.hand.length === 0 && <p className="empty-hand">손패가 비어 있습니다. 다음 턴에 덱에서 1장을 뽑습니다.</p>}
-                {state.hand.map((card) => (
-                  <button
-                    data-card-id={card.id}
-                    className={`playing-card ${targetCard?.id === card.id ? "active-card" : ""}`}
-                    key={card.id}
-                    onClick={() => chooseCard(card)}
-                    disabled={!!card.disabled_reason || !!promotion}
-                    title={card.disabled_reason || card.definition.description}
-                  >
-                    <CardFace card={card.definition} selectedCount={targetCard?.id === card.id ? stagedCount : 0} />
-                    {card.disabled_reason && (
-                      <span className="card-unavailable">
-                        {card.disabled_reason}
-                      </span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            </section>
           )}
           {state.phase !== "combat" && state.phase !== "rest" && state.phase !== "reward" && !restCompleted && (
             <section className="outcome" ref={outcomeRef} aria-live="polite">

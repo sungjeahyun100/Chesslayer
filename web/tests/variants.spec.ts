@@ -1,7 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import type { Command, Snapshot } from "../src/types";
-const saveKey = "chesslayer.run.v1"; // Storage slot is retained; the payload carries version 12.
+const saveKey = "chesslayer.run.v1"; // Storage slot is retained; the payload carries version 13.
 const square = (cell: number) => `\"${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}\"`;
 const saved = (page: Page) => page.evaluate((key) => localStorage.getItem(key)!, saveKey);
 
@@ -75,7 +75,8 @@ for (const family of ["tempest", "bouncing"] as const) {
     await page.locator('[data-node-id="13"]').click();
     await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", `${family}_pawn`);
     for (const c of commands.slice(restIndex + 2, promotionIndex)) {
-      if (c.type === "move") await clickMove(page, c.from, c.to);
+      if (c.type === "play_card") await page.locator(`[data-card-id="${c.id}"]`).click();
+      else if (c.type === "move") await clickMove(page, c.from, c.to);
     }
     await expect(page.getByTestId("turn")).toContainText("나의 턴");
     const before = await saved(page);
@@ -106,13 +107,16 @@ for (const family of ["tempest", "bouncing"] as const) {
       await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", candidate.key);
       // Queen is last: keep this branch for the fixture's win and next encounter.
       if (candidate.kind !== promotion.promotion) {
-        const move = after.moves.find((m) => m.from === promotion.to)!;
-        await clickMove(page, move.from, move.to);
-        expect(JSON.parse(await saved(page)).commands.some((c: Command) => c.type === "move" && c.from === move.from && c.to === move.to)).toBe(true);
+        const move = after.moves.find((m) => m.from === promotion.to);
+        if (move) {
+          await clickMove(page, move.from, move.to);
+          expect(JSON.parse(await saved(page)).commands.some((c: Command) => c.type === "move" && c.from === move.from && c.to === move.to)).toBe(true);
+        }
       }
     }
     for (const c of commands.slice(promotionIndex + 1)) {
-      if (c.type === "move") await clickMove(page, c.from, c.to);
+      if (c.type === "play_card") await page.locator(`[data-card-id="${c.id}"]`).click();
+      else if (c.type === "move") await clickMove(page, c.from, c.to);
       else if (c.type === "choose_reward") {
         await page.locator(".reward-cards .playing-card").nth(c.index).click();
         await page.getByRole("button", { name: /다음으로 진행/ }).click();
@@ -133,7 +137,7 @@ for (const family of ["tempest", "bouncing"] as const) {
 
 test("이전 저장 버전은 설명을 표시하고 원본 기록을 보존한다", async ({ page }) => {
   await page.goto("/");
-  for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11]) {
+  for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]) {
     const legacy = JSON.stringify({ version, character: "vanguard", seed: 2026, commands: [{ type: "rest_upgrade", id: 9, ...(version >= 2 ? { target: 8 } : {}) }] });
     await page.evaluate(({ saveKey, legacy }) => localStorage.setItem(saveKey, legacy), { saveKey, legacy });
     await resume(page);

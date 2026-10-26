@@ -89,8 +89,6 @@ fn formations_use_original_ids_keep_all_relics_and_apply_only_at_start() {
         encounter: encounter(0),
     })
     .unwrap();
-    // No snapshot: Hard Disk must fall back to the newest formation.
-    grant(&mut g, Relic::HardDisk);
     for (relic, squares) in [
         (
             Relic::KingsIndian,
@@ -120,7 +118,7 @@ fn formations_use_original_ids_keep_all_relics_and_apply_only_at_start() {
         }
     }
     assert_eq!(
-        &g.relics[2..],
+        &g.relics[1..],
         &[Relic::KingsIndian, Relic::QueensIndian, Relic::Hedgehog]
     );
     grant(&mut g, Relic::KingsIndian); // Duplicate becomes Ward; does not change order/active effect.
@@ -344,159 +342,33 @@ fn ice_cream_accumulates_only_on_player_turns_and_saturates_safely() {
 }
 
 #[test]
-fn hard_disk_kills_both_sides_after_first_acquisition_and_overrides_formations() {
+fn battle_end_restores_survivors_home_and_next_battle_does_not_restore_last_square() {
     let mut g = Game::new("guardian", 33).unwrap();
     start(&mut g, 0);
     end_scene(&mut g, "c8", "e8");
-    // Actual ending cells were c8/e8; standard cleanup already returned these pieces home.
-    assert_eq!(g.battle.outcome()[8].position, Some(at("a2")));
-    grant(&mut g, Relic::HardDisk);
-    grant(&mut g, Relic::Hedgehog);
-    start(&mut g, 2); // c8 bishop and e8 royal collide with allies; all four die.
-    assert_eq!(g.phase, RunPhase::Reward);
-    assert_eq!(
-        g.battle.result,
-        GameResult::Win {
-            winner: PLAYER,
-            reason: ResultReason::HardDisk
-        }
-    );
     let roster = g.battle.outcome();
-    assert_eq!(roster[1].position, None);
-    assert_eq!(roster[8].position, None);
-    assert_eq!(roster[8].kind, TEMPEST_PAWN); // Combat promotion was not snapshotted.
+    assert_eq!(roster[1].position, Some(at("b1")));
+    assert_eq!(roster[8].position, Some(at("a2")));
+    assert_eq!(roster[8].kind, TEMPEST_PAWN);
     assert_eq!(roster[1].persistent.get("growth"), Some(&7));
-    assert_eq!(roster[1].upgrades, ["tempest"]);
     assert!(roster[0].position.is_none());
-    assert_eq!(roster[1].origin, at("b1"));
-    assert!(g.dispatch(Command::EnemyStep).is_err());
-    assert!(g
-        .snapshot()
-        .pieces
-        .iter()
-        .all(|p| !p.ward && !p.self_defense));
-    assert_eq!(g.snapshot().initiative_turns_left, 0);
-}
-
-#[test]
-fn hard_disk_rest_revival_missing_ids_and_shuffled_collisions_stay_consistent() {
-    let mut g = Game::new("guardian", 19).unwrap();
-    g.relics
-        .extend([Relic::HardDisk, Relic::Whirlwind, Relic::Initiative]);
-    start(&mut g, 0);
-    end_scene(&mut g, "a1", "b8");
-    let rest = g
-        .map
-        .nodes
-        .iter()
-        .find(|n| n.kind == NodeKind::Rest)
-        .unwrap()
-        .id;
-    g.current_node = Some(rest);
-    g.phase = RunPhase::Rest;
-    assert!(g.dispatch(Command::RestRevive { id: 1 }).is_err()); // a1 occupied, home stays a1.
-    g.dispatch(Command::RestRevive { id: 3 }).unwrap();
-    g.current_node = Some(rest);
-    g.phase = RunPhase::Rest;
-    g.dispatch(Command::RestUpgrade {
-        id: 3,
-        target: TEMPEST_BISHOP,
-    })
-    .unwrap();
-    let preview = g.snapshot().next_battle_pieces;
-    assert_eq!(
-        preview.iter().find(|p| p.id == 3).unwrap().kind,
-        TEMPEST_BISHOP
-    );
-    assert!(preview.iter().all(|p| p.id != 1));
-    let mut replay = g.clone();
+    let mut boss = g.clone();
+    start(&mut boss, content::encounters::HOOK_BOSS);
+    assert_eq!(boss.phase, RunPhase::Combat);
+    assert_eq!(boss.battle.result, GameResult::Ongoing);
+    assert!(boss.battle.board.piece_at(at("e8")).unwrap().is_some());
     start(&mut g, 2);
-    start(&mut replay, 2);
-    for piece in preview {
-        let deployed = g
-            .battle
-            .outcome()
-            .into_iter()
-            .find(|p| p.id == piece.id)
-            .unwrap();
-        assert_eq!(
-            deployed.position.map(|p| (p.rank * 8 + p.file) as usize),
-            Some(piece.cell)
-        );
-    }
-    assert_eq!(
-        serde_json::to_string(&g.snapshot()).unwrap(),
-        serde_json::to_string(&replay.snapshot()).unwrap()
-    );
-    assert_eq!(g.battle.outcome()[1].position, Some(at("a1")));
-    assert_eq!(g.battle.outcome()[2].position, Some(at("c1"))); // revived ID absent from saved positions
-    assert_eq!(g.battle.outcome()[2].kind, TEMPEST_BISHOP);
+    assert_eq!(g.phase, RunPhase::Combat);
+    assert_eq!(g.battle.result, GameResult::Ongoing);
+    assert_eq!(g.battle.outcome()[1].position, Some(at("b1")));
+    assert_eq!(g.battle.outcome()[8].position, Some(at("a2")));
     assert!(g.battle.outcome()[0].position.is_none());
-    assert_eq!(g.battle.initiative_turns_left(), 10);
-    assert_eq!(
-        g.snapshot()
-            .pieces
-            .iter()
-            .filter(|p| p.self_defense)
-            .count(),
-        1
-    );
-    g.dispatch(Command::EndTurn).unwrap();
-    g.dispatch(Command::EnemyStep).unwrap();
-    assert_eq!(g.battle.initiative_turns_left(), 9);
-
-    // Acquiring Hard Disk after cleanup may allow revival at a home that the
-    // saved deployment will occupy. The revived ID gets a free cell, never death.
-    let mut late = Game::new("guardian", 19).unwrap();
-    start(&mut late, 0);
-    end_scene(&mut late, "a1", "b8");
-    grant(&mut late, Relic::HardDisk);
-    late.current_node = Some(rest);
-    late.phase = RunPhase::Rest;
-    late.dispatch(Command::RestRevive { id: 1 }).unwrap();
-    start(&mut late, 2);
-    assert_eq!(late.battle.outcome()[1].position, Some(at("a1")));
-    assert_eq!(late.battle.outcome()[0].position, Some(at("b1")));
-    assert_eq!(late.battle.outcome()[0].origin, at("a1"));
-
-    // Ordinary collisions after Whirlwind remove both pieces and synchronize AI.
-    for seed in 0..12 {
-        let mut g = Game::new("guardian", seed).unwrap();
-        g.relics
-            .extend([Relic::HardDisk, Relic::Whirlwind, Relic::Initiative]);
-        start(&mut g, 0);
-        end_scene(&mut g, "c8", "b8");
-        start(&mut g, 2);
-        assert_eq!(g.battle.outcome()[1].position, None);
-        if g.phase == RunPhase::Combat {
-            assert_eq!(
-                g.snapshot()
-                    .pieces
-                    .iter()
-                    .filter(|p| p.owner == ENEMY)
-                    .count(),
-                2
-            );
-            assert_eq!(
-                g.snapshot()
-                    .pieces
-                    .iter()
-                    .filter(|p| p.self_defense)
-                    .count(),
-                1
-            );
-            g.dispatch(Command::EndTurn).unwrap();
-            g.dispatch(Command::EnemyStep).unwrap();
-        } else {
-            assert_eq!(g.phase, RunPhase::Reward); // Shuffled royal collided.
-        }
-    }
 }
 
 #[test]
 fn map_preview_matches_next_battle_and_does_not_advance_rng() {
     let mut game = Game::new("guardian", 91).unwrap();
-    game.relics.extend([Relic::QueensIndian, Relic::HardDisk]);
+    game.relics.push(Relic::QueensIndian);
     let mut roster = game.battle.outcome();
     roster[0].position = None;
     roster[8].kind = TEMPEST_PAWN;

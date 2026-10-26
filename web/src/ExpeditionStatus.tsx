@@ -113,7 +113,6 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
                 </button>;
               })}
             </div>
-            {state.phase === "combat" && state.relics.some((relic) => relic.id === "hard_disk") && <p className="status-formation-note">하드디스크 · 현재 생존 기물의 위치를 기준으로 표시합니다. 전투 종료 위치에 따라 다음 진입 배치가 바뀝니다.</p>}
             {(state.phase === "victory" || state.phase === "defeat") && <p className="status-formation-note">다음 전투가 없습니다.</p>}
           </section>
           <section className="status-section status-relics" aria-labelledby="status-relics-title">

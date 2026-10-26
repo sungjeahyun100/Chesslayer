@@ -11,7 +11,7 @@ struct SavedRun {
     commands: Vec<Command>,
 }
 
-const SAVE_VERSION: u32 = 12;
+const SAVE_VERSION: u32 = 13;
 
 /// The only browser state owner. JavaScript sends intentions and renders snapshots.
 #[wasm_bindgen]

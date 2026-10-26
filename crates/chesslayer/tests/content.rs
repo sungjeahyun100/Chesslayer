@@ -63,3 +63,26 @@ fn catalog_entries_are_unique_and_connected() {
         assert_eq!(game.relics, vec![character.relic]);
     }
 }
+
+#[test]
+fn each_piece_keeps_its_own_movement_source() {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src/content/pieces");
+    for entry in std::fs::read_dir(dir).unwrap() {
+        let path = entry.unwrap().path();
+        if path.extension().is_some_and(|ext| ext == "rs") {
+            let source = std::fs::read_to_string(&path).unwrap();
+            assert!(
+                !source.contains("::movement()"),
+                "{} delegates movement",
+                path.display()
+            );
+        }
+    }
+    for definition in content::pieces::ALL {
+        let source = (definition.movement)();
+        if definition.native_movement.is_none() {
+            assert!(!source.is_empty(), "{} has no DSL", definition.key);
+            chessembly::Program::parse(&source).unwrap();
+        }
+    }
+}

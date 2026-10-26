@@ -179,9 +179,8 @@ fn boss_upgrade_can_be_revisited_before_advancing_floor() {
 }
 
 #[test]
-fn ascending_after_boss_revives_every_piece_without_losing_growth_or_hard_disk_positions() {
+fn ascending_after_boss_revives_every_piece_without_losing_growth() {
     let mut game = Game::new("guardian", 2026).unwrap();
-    game.relics.push(Relic::HardDisk);
     game.current_node = Some(
         game.map
             .nodes
@@ -227,9 +226,9 @@ fn ascending_after_boss_revives_every_piece_without_losing_growth_or_hard_disk_p
     assert_eq!(game.phase, RunPhase::Map);
     let roster = game.battle.outcome();
     assert!(roster.iter().all(|piece| piece.position.is_some()));
-    assert_eq!(roster[0].position, Some(Position::new(1, 7)));
-    assert_eq!(roster[1].position, Some(Position::new(2, 7)));
-    assert_eq!(roster[2].position, Some(Position::new(0, 7)));
+    assert_eq!(roster[0].position, Some(Position::new(0, 7)));
+    assert_eq!(roster[1].position, Some(Position::new(1, 7)));
+    assert_eq!(roster[2].position, Some(Position::new(2, 7)));
     assert_eq!(roster[1].kind, TEMPEST_KNIGHT);
     assert_eq!(roster[1].upgrades, ["tempest"]);
     assert_eq!(roster[1].persistent.get("growth"), Some(&3));

@@ -16,7 +16,7 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
 
 pub(super) fn movement() -> String {
     movement::ORTHOGONAL.iter().map(|&(x,y)| {
-        let [a,b] = movement::tempest_bishop_branches((x,y));
+        let [a,b] = if x == 0 { [(-1, y), (1, y)] } else { [(x, -1), (x, 1)] };
         format!("take-move({x},{y}) {{ take-move({},{}) repeat(1) }} {{ take-move({},{}) repeat(1) }}", a.0,a.1,b.0,b.1)
     }).collect::<Vec<_>>().join("; ")
 }

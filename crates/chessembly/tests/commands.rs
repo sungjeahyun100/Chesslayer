@@ -46,6 +46,53 @@ fn destinations(board: &Board, origin: Position, source: &str) -> Vec<Position> 
 }
 
 #[test]
+fn wall_piece_uses_actor_owner_and_reflected_ray_is_not_syntax() {
+    let mut board = Board::new(4, 4).unwrap();
+    board
+        .set_catalog(
+            vec!["".into(), "runner".into(), "pawn".into()],
+            vec!["white".into(), "black".into()],
+            vec![1, -1],
+        )
+        .unwrap();
+    for (at, kind, owner) in [(p(1, 1), 1, 0), (p(1, 0), 2, 0), (p(2, 1), 2, 1)] {
+        board
+            .set_piece(
+                at,
+                Some(Piece {
+                    kind,
+                    owner,
+                    id: kind as u32 + owner as u32,
+                }),
+            )
+            .unwrap();
+    }
+    assert!(destinations(&board, p(1, 1), "wall-piece(pawn) take-move(0,1)").is_empty());
+    assert_eq!(
+        destinations(&board, p(1, 1), "wall-piece(pawn) take-move(1,0)"),
+        vec![p(2, 1)]
+    );
+    assert_eq!(
+        destinations(
+            &board,
+            p(1, 1),
+            "wall-piece(pawn) barrier(0,1) take-move(1,0)"
+        ),
+        vec![p(2, 1)]
+    );
+    assert!(destinations(
+        &board,
+        p(1, 1),
+        "wall-piece(pawn) barrier(1,0) take-move(-1,0)"
+    )
+    .is_empty());
+    assert_eq!(
+        Program::parse("reflect-ray(1,1)").unwrap_err(),
+        Error::Parse("unknown expression: reflect-ray".into())
+    );
+}
+
+#[test]
 fn condition_commands_recover_false_in_chains_blocks_and_loops() {
     let board = board();
     for source in [

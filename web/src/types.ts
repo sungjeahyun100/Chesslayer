@@ -47,7 +47,7 @@ export interface Card {
   targets: number[];
   disabled_reason: string | null;
 }
-export type RelicId = Character["relic"] | "kings_indian" | "queens_indian" | "hedgehog" | "initiative" | "ice_cream" | "hard_disk";
+export type RelicId = Character["relic"] | "kings_indian" | "queens_indian" | "hedgehog" | "initiative" | "ice_cream";
 export interface Relic {
   id: RelicId;
   name: string;
@@ -77,7 +77,6 @@ export interface Snapshot {
   mana_rule: string;
   initiative_turns_left: number;
   enemy_initiative_turns_left: number;
-  hard_disk_deployed: boolean;
   pieces: Piece[];
   moves: { from: number; to: number; promotion: Promotion | null }[];
   hand: Card[];

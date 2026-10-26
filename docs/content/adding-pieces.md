@@ -73,7 +73,7 @@ dancer::DEFINITION,
 
 `Battle::with_options()`가 `ALL`의 `key`들로 보드 카탈로그를 만들고 `(definition.movement)()`를 `Program::parse()`로 파싱한다. 턴 중 `Battle::legal_actions(from)`가 해당 종류의 프로그램을 실행한다. 반환된 후보 중 하나를 `Battle::apply_piece_action()`으로 적용하면 행동 수, 이동 이력, 가호, 지속 상태, 로얄 판정까지 기존 경로를 따른다.
 
-행마 정의에서 직접 보드를 변경하거나 별도 합법 수 계산기를 만들지 않는다.
+일반 기물의 행마 정의는 보드를 변경하지 않는 Chesssembly 식이다. 추기경의 무제한 분기 반사는 `cardinal.rs` 전용 계산기가 같은 액션 자료형으로 후보를 만든다.
 
 ### 공통 조합 함수
 
@@ -84,7 +84,7 @@ dancer::DEFINITION,
 - `DIAGONAL`, `ORTHOGONAL`, `KNIGHT`: 기존 방향 순서.
 - `all_directions()`: 대각선 다음 직선 순서. 퀸·킹·아마존이 공유한다.
 
-퀸은 `movement::slides(&movement::all_directions())`, 아마존은 이 소스와 `movement::steps(movement::KNIGHT)`를 `;`로 합친다. 바운싱 폰은 `pawn::PAWN_MOVEMENT`를 재사용한다. 템페스트 폰은 독립 DSL을 사용한다. 템페스트/바운싱 퀸은 각 계열 룩+비숍의 `movement()`를 합친다. 공통 동작을 복사하지 않고 이 조합을 사용한다. **후보 순서는 동점 AI의 시드 선택에 영향을 준다.** 기존 기물에서 의미 없이 방향/체인 순서를 바꾸지 않는다.
+퀸은 `movement::slides(&movement::all_directions())`, 아마존은 이 소스와 `movement::steps(movement::KNIGHT)`를 `;`로 합친다. 바운싱 폰은 일반 폰과 같은 식을 자신의 파일에 보유한다. 템페스트/바운싱 퀸과 태풍 계열도 각자의 파일에 완결된 행마 식을 둔다. 다른 기물의 `movement()`를 호출하지 않는다. **후보 순서는 동점 AI의 시드 선택에 영향을 준다.** 기존 기물에서 의미 없이 방향/체인 순서를 바꾸지 않는다.
 
 ### 직접 DSL 반환
 
@@ -148,6 +148,6 @@ npm run build --prefix web
 npm run dev --prefix web
 ```
 
-등록 테스트는 모든 기물의 ID/key 중복, 보드 카탈로그 연결, DSL 파싱·후보 실행을 확인한다. 정의에 문법 오류가 있으면 그 종류가 아직 보드에 없어도 전투 초기화가 실패한다.
+등록 테스트는 모든 기물의 ID/key 중복과 보드 카탈로그 연결, 추기경 외 기물의 DSL 파싱·후보 실행, 추기경 전용 계산기의 후보 실행을 확인한다. DSL 정의에 문법 오류가 있으면 그 종류가 아직 보드에 없어도 전투 초기화가 실패한다.
 
 예시 무희를 실제 편성/초기 진형에 놓고 이미지·이름과 대각선 두 칸 후보를 확인한다. 양측 방향, 보드 경계, 도착 칸의 아군 차단/적 포획, 중간 기물 점프를 확인한다. 첫 두 칸을 켰다면 시작 랭크·이동 이력·중간 점유도 확인한다. 이동/포획은 `Battle::legal_actions()`에서 받은 후보로 수행하고 다음 전투의 위치·종류 계승도 확인한다. 기존 회귀 검증 전체 명령은 [TESTING.md](../TESTING.md)에 있다.

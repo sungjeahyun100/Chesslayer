@@ -103,55 +103,49 @@ test("휴식 트리: 상위 복합 기물의 잠금 조건과 미리보기를 �
   await allImagesLoaded(page);
 });
 
-test("강화 노드 팝업: 선택 교체, 재클릭과 빈 공간 닫기, 확대와 스크롤 추적", async ({ page }) => {
+test("강화 트리: 선택 교체, 재클릭과 빈 공간 닫기, 확대와 고정된 확정 버튼", async ({ page }) => {
   await loadRest(page);
   await page.locator('[data-square="a2"]').click();
   const first = page.locator('.skill-node[data-kind="8"]');
   const second = page.locator('.skill-node[data-kind="13"]');
   await first.click();
-  const popup = page.locator(".skill-node-popup");
-  await expect(popup).toBeVisible();
-  await expect(popup).toHaveText("강화 확정");
-  await expect(popup.locator("button")).toHaveCount(1);
-  await expect(popup.getByRole("button", { name: "강화 확정" })).toBeVisible();
-  await expect(page.locator(".skill-popup-connector")).toHaveCount(0);
+  const confirm = page.locator(".rest-workshop-actions .primary");
+  await expect(confirm).toBeVisible();
+  await expect(page.locator(".skill-node-popup")).toHaveCount(0);
   await first.click();
-  await expect(popup).toHaveCount(0);
+  await expect(confirm).toHaveCount(0);
   await first.click();
   await second.click();
-  await expect(popup).toHaveCount(1);
-  await expect(second).toHaveAttribute("aria-expanded", "true");
-  await expect(first).toHaveAttribute("aria-expanded", "false");
-  await expect(page.locator(".rest-piece-study h2")).toHaveText("바운싱 폰");
+  await expect(confirm).toBeVisible();
+  await expect(second).toHaveAttribute("aria-pressed", "true");
+  await expect(first).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator(".rest-piece-study h2")).toContainText("바운싱 폰");
   await page.locator(".skill-viewport").click({ position: { x: 8, y: 8 } });
-  await expect(popup).toHaveCount(0);
+  await expect(confirm).toHaveCount(0);
   await first.click();
   await page.getByRole("button", { name: "트리 확대" }).click();
   await page.getByRole("button", { name: "트리 확대" }).click();
   await page.locator(".skill-viewport").evaluate((el) => { el.scrollLeft += 80; el.scrollTop += 25; });
-  await expect.poll(async () => page.evaluate(() => {
-    const node = document.querySelector('.skill-node[data-kind="8"] .skill-node-orb')!.getBoundingClientRect();
-    const panel = document.querySelector('.skill-node-popup')!.getBoundingClientRect();
-    return panel.top >= 0 && panel.bottom <= innerHeight && panel.left >= 0 && panel.right <= innerWidth
-      && (Math.abs(panel.left - node.right) < 12 || Math.abs(node.left - panel.right) < 12);
-  })).toBe(true);
+  await expect(confirm).toBeVisible();
+  expect(await confirm.evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
 });
 
-test("강화 노드 팝업: 모바일 화면 안에 배치되고 다른 노드를 선택할 수 있다", async ({ page }) => {
+test("강화 트리: 모바일에서 확정·취소가 화면 안에 남고 다른 노드를 선택할 수 있다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loadRest(page);
   await page.locator('[data-square="a2"]').click();
   await page.locator('.skill-node[data-kind="8"]').click();
-  const popup = page.locator(".skill-node-popup");
-  await expect(popup).toBeVisible();
-  await expect(popup).toHaveAttribute("data-side", "left");
-  await expect.poll(async () => popup.evaluate((el) => {
+  const actions = page.locator(".rest-workshop-actions");
+  await expect(actions.getByRole("button", { name: "강화 확정" })).toBeVisible();
+  await expect.poll(async () => actions.evaluate((el) => {
     const rect = el.getBoundingClientRect();
     return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
   })).toBe(true);
+  await page.setViewportSize({ width: 390, height: 600 });
+  await expect.poll(() => actions.evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
   await page.locator('.skill-node[data-kind="13"]').click();
-  await expect(popup).toHaveCount(1);
-  await expect(page.locator(".rest-piece-study h2")).toHaveText("바운싱 폰");
+  await expect(actions.getByRole("button", { name: "강화 확정" })).toBeVisible();
+  await expect(page.locator(".rest-piece-study h2")).toContainText("바운싱 폰");
 });
 
 test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음 전투", async ({
@@ -172,7 +166,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   await page.locator('[data-square="e1"]').click();
   await page.locator(".skill-node").click();
   await expect(
-    page.getByText("이 기물에 정의된 강화 경로가 없습니다."),
+    page.getByText("강화 경로 없음"),
   ).toBeVisible();
   await page.locator('[data-square="a2"]').click();
   await expect(page.locator('[data-square="a2"]')).toHaveAttribute(
@@ -247,8 +241,8 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
     "data-piece-key",
     "tempest_pawn",
   );
-  await page.locator('[data-square="a3"]').click();
-  await expect(page.locator('[data-square="a4"]')).toHaveAttribute(
+  await page.locator('[data-square="a2"]').click();
+  await expect(page.locator('[data-square="a3"]')).toHaveAttribute(
     "data-legal",
     "true",
   );
@@ -260,18 +254,18 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   await page.setViewportSize({ width: 390, height: 844 });
   await loadRest(page, true);
   const before = await saved(page);
-  await page.locator('[data-square="f1"]').click();
+  await page.locator('[data-square="h1"]').click();
   await expect(page.getByText("이 기물을 되살리시겠습니까?")).toBeVisible();
   await expect(page.locator(".rest-portrait img")).toHaveAttribute(
     "data-piece-key",
-    "bishop",
+    "rook",
   );
   await expect(page.locator(".rest-ghost")).toHaveCount(1);
   await expect(page.locator(".rest-ghost img")).toBeVisible();
   expect(await saved(page)).toBe(before);
   await page.keyboard.press("Escape");
   await expect(page.locator(".rest-ghost")).toHaveCount(0);
-  await page.locator('[data-square="f1"]').click();
+  await page.locator('[data-square="h1"]').click();
   await allImagesLoaded(page);
   expect(
     await page.evaluate(
@@ -290,19 +284,19 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   await page.getByRole("button", { name: "부활 확정" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
   let snapshot = await restoreSnapshot(page);
-  expect(snapshot.pieces.find((p: any) => p.id === 6)).toMatchObject({
-    key: "bishop",
-    cell: 61,
+  expect(snapshot.pieces.find((p: any) => p.id === 8)).toMatchObject({
+    key: "rook",
+    cell: 63,
   });
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await page.locator('[data-node-id="14"]').click();
   snapshot = await restoreSnapshot(page);
   expect(snapshot.phase).toBe("combat");
-  expect(snapshot.pieces.find((p: any) => p.id === 6)?.key).toBe("bishop");
+  expect(snapshot.pieces.find((p: any) => p.id === 8)?.key).toBe("rook");
 });
 
-test("휴식: 룩·비숍·나이트·퀸의 분기 강화와 저장·진형 계승", async ({ page }) => {
+test("휴식: 룩·비숍·나이트·퀸의 분기 강화와 저장·원점 배치", async ({ page }) => {
   await loadRest(page);
   const original = (await saved(page))!;
   const before = await restoreSnapshot(page);
@@ -353,7 +347,7 @@ test("휴식: 룩·비숍·나이트·퀸의 분기 강화와 저장·진형 계
       await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
       const next = await restoreSnapshot(page);
       expect(next.rest_options.find((p: any) => p.id === piece.id)).toMatchObject({
-        key, cell: ({ 1: 58, 2: 51, 3: 49, 4: 50 } as Record<number, number>)[piece.id], origin: prior.origin, ward: prior.ward, upgrades: [...prior.upgrades, family],
+        key, cell: prior.origin, origin: prior.origin, ward: prior.ward, upgrades: [...prior.upgrades, family],
       });
       const deployedCell = next.pieces.find((p: any) => p.id === piece.id).cell;
       const deployedSquare = `${"abcdefgh"[deployedCell % 8]}${8 - Math.floor(deployedCell / 8)}`;

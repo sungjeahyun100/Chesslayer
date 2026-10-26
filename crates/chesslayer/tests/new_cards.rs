@@ -1,6 +1,6 @@
 use chesslayer::{
     cards::{Card, CardKind},
-    content::{cards::REWARD_POOL, Relic},
+    content::cards::REWARD_POOL,
     game::{CardUpgradeChoice, Command, Game, RunPhase},
     Battle, BattleStart, Encounter, EnemyPiece, GameResult, PieceType, PlayerPiece, Position,
     BISHOP, BOUNCING_BISHOP, ENEMY, KING, KNIGHT, PAWN, PLAYER, ROOK, TEMPEST_BISHOP,
@@ -297,13 +297,12 @@ fn limiter_royal_expiry_reaches_run_result_on_manual_and_ai_turn_end() {
 }
 
 #[test]
-fn hard_disk_keeps_only_position_after_temporary_upgrade() {
+fn temporary_upgrade_does_not_change_permanent_kind_or_home() {
     let scene = battle(
         vec![ally(5, KING, p(4, 7)), ally(9, PAWN, p(0, 6))],
         vec![foe(100, KING, p(4, 0))],
     );
     let mut g = game(CardKind::TemporaryUpgrade, scene, 1);
-    g.relics.push(Relic::HardDisk);
     g.dispatch(Command::PlayCardSelection {
         id: 999,
         targets: vec![],
@@ -340,7 +339,7 @@ fn hard_disk_keeps_only_position_after_temporary_upgrade() {
     }
     assert_eq!(g.phase, RunPhase::Reward);
     let pawn = g.battle.outcome().into_iter().find(|p| p.id == 9).unwrap();
-    assert_eq!(pawn.position, Some(p(0, 5)));
+    assert_eq!(pawn.position, Some(p(0, 6)));
     assert_eq!(pawn.kind, PAWN);
     assert!(pawn.upgrades.is_empty());
 }

@@ -269,8 +269,18 @@ fn tempest_ray_reflects_once_then_ends_at_the_next_wall() {
                 }),
             )
             .unwrap();
-        let source =
-            pieces::movement::bouncing_tempest(&[(1, 1)], pieces::movement::tempest_rook_branches);
+        let all = (pieces::definition(pieces::BOUNCING_TEMPEST_ROOK)
+            .unwrap()
+            .movement)();
+        let source = all
+            .split(';')
+            .filter(|chain| {
+                let chain = chain.trim();
+                chain.starts_with("wall-piece(bouncing_pawn) take-move(1,1)")
+                    || chain.starts_with("wall-piece(bouncing_pawn) barrier(1,1)")
+            })
+            .collect::<Vec<_>>()
+            .join(";");
         let program = chessembly::Program::parse(&source).unwrap();
         let destinations: HashSet<_> = program
             .execute(&battle.board, from)

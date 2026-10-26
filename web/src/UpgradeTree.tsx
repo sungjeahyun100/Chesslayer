@@ -4,7 +4,7 @@ import { PieceImage } from "./PieceImage";
 import { buildUpgradeTree } from "./upgradeTree";
 import type { RestOption, UpgradePath } from "./types";
 
-export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, completed, selectionOnly = false }: {
+export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, completed, selectionOnly = false, inlineConfirm = false }: {
   piece: RestOption;
   paths: UpgradePath[];
   acquired: number[];
@@ -12,6 +12,7 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
   onConfirm: (target: number) => void;
   completed: boolean;
   selectionOnly?: boolean;
+  inlineConfirm?: boolean;
 }) {
   const tree = useMemo(() => buildUpgradeTree(paths, piece), [paths, piece]);
   const viewport = useRef<HTMLDivElement>(null);
@@ -121,8 +122,7 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
   return (
     <section className="skill-tree" aria-label={`${piece.name} 강화 트리`}>
       <div className="skill-tree-heading">
-        <div><span className="eyebrow">PATHS OF ASCENSION</span><h3>기물의 성장 경로</h3></div>
-        <span className="skill-count">{tree.nodes.filter((n) => n.incoming.length).length}개의 강화</span>
+        <h3>강화 경로</h3>
       </div>
       <div className="skill-map">
         <div className="skill-legend" aria-label="노드 상태 안내">
@@ -186,7 +186,6 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
           </div>
         </div>
         <div className="skill-map-toolbar">
-          <span>노드를 눌러 탐색 · 드래그로 이동</span>
           <div role="group" aria-label="트리 확대 및 축소">
             <button aria-label="트리 축소" disabled={scale <= 0.35} onClick={() => setZoom(Math.max(0.35, scale - 0.2))}>−</button>
             <output aria-live="polite">{Math.round(scale * 100)}%</output>
@@ -195,7 +194,7 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
           </div>
         </div>
       </div>
-      {openKind !== null && available && createPortal(<div key={openKind} id="skill-node-popup" ref={popup} className="skill-node-popup" role="group" aria-label={`${active.name} 강화 동작`}>
+      {!inlineConfirm && openKind !== null && available && createPortal(<div key={openKind} id="skill-node-popup" ref={popup} className="skill-node-popup" role="group" aria-label={`${active.name} 강화 동작`}>
         <button type="button" className="primary" onClick={() => confirm(active.kind)}>{selectionOnly ? "경로 선택" : "강화 확정"}</button>
       </div>, document.body)}
     </section>

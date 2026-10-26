@@ -40,6 +40,23 @@ fn action(b: &Battle, from: Position, to: Position) -> DefaultAction {
         .unwrap()
 }
 #[test]
+fn stale_public_action_is_rejected_without_changing_battle() {
+    let mut b = battle(
+        vec![player(1, KING, p(4, 7)), player(2, ROOK, p(0, 6))],
+        vec![enemy(100, BISHOP, p(0, 3))],
+        100,
+    );
+    let stale = action(&b, p(0, 6), p(0, 3));
+    let blocker = b.board.piece_at(p(0, 3)).unwrap();
+    b.board.set_piece(p(0, 3), None).unwrap();
+    b.board.set_piece(p(0, 5), blocker).unwrap();
+    let before = b.board.clone();
+    assert_eq!(b.apply_piece_action(&stale), Err(Error::IllegalAction));
+    assert_eq!(b.board, before);
+    assert_eq!(b.turn, PLAYER);
+    assert!(b.events.is_empty());
+}
+#[test]
 fn roster_collision_and_persistence() {
     let roster = Battle::standard_roster();
     assert_eq!(roster.len(), 16);
@@ -124,7 +141,7 @@ fn start_collision_with_king_loses() {
     )
 }
 #[test]
-fn hard_disk_collision_removes_both_pieces_and_vacates_the_square() {
+fn overlapping_enemy_deployment_removes_only_the_ally() {
     let b = Battle::with_options(
         BattleStart {
             players: vec![
@@ -138,29 +155,20 @@ fn hard_disk_collision_removes_both_pieces_and_vacates_the_square() {
                 additional_royal_ids: vec![],
             },
         },
-        BattleOptions {
-            hard_disk: true,
-            ..BattleOptions::default()
-        },
+        BattleOptions::default(),
         &mut Rng::new(0),
     )
     .unwrap();
     assert_eq!(b.player_pieces()[1].position, None);
     assert_eq!(b.player_pieces()[2].position, None);
-    assert_eq!(b.board.piece_at(p(0, 6)).unwrap(), None);
-    assert_eq!(b.board.piece_at(p(1, 6)).unwrap(), None);
-    assert_eq!(
-        b.result,
-        GameResult::Win {
-            winner: PLAYER,
-            reason: ResultReason::HardDisk
-        }
-    );
+    assert_eq!(b.board.piece_at(p(0, 6)).unwrap().unwrap().id, 101);
+    assert_eq!(b.board.piece_at(p(1, 6)).unwrap().unwrap().id, 100);
+    assert_eq!(b.result, GameResult::Ongoing);
     assert_eq!(b.events.len(), 2);
-    assert!(b.events.iter().all(|event| event.contains("함께 사망")));
+    assert!(b.events.iter().all(|event| event.contains("역습")));
 }
 #[test]
-fn hard_disk_collision_with_both_royals_loses_when_king_dies() {
+fn overlapping_royals_use_counterattack_rule() {
     let b = Battle::with_options(
         BattleStart {
             players: vec![player(1, KING, p(4, 7))],
@@ -170,20 +178,17 @@ fn hard_disk_collision_with_both_royals_loses_when_king_dies() {
                 additional_royal_ids: vec![],
             },
         },
-        BattleOptions {
-            hard_disk: true,
-            ..BattleOptions::default()
-        },
+        BattleOptions::default(),
         &mut Rng::new(0),
     )
     .unwrap();
     assert_eq!(b.player_pieces()[0].position, None);
-    assert_eq!(b.board.piece_at(p(4, 7)).unwrap(), None);
+    assert_eq!(b.board.piece_at(p(4, 7)).unwrap().unwrap().id, 100);
     assert_eq!(
         b.result,
         GameResult::Win {
             winner: ENEMY,
-            reason: ResultReason::HardDisk
+            reason: ResultReason::Counterattack
         }
     );
 }
