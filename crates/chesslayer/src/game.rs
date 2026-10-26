@@ -797,10 +797,12 @@ impl Game {
                 });
             } else {
                 self.phase = RunPhase::Defeat;
-                self.log(if reason == ResultReason::Counterattack {
-                    "역습으로 킹을 잃었습니다. 원정이 끝났습니다."
-                } else {
-                    "킹이 포획되었습니다. 원정이 끝났습니다."
+                self.log(match reason {
+                    ResultReason::Counterattack => "역습으로 킹을 잃었습니다. 원정이 끝났습니다.",
+                    ResultReason::HardDisk => {
+                        "하드디스크 배치에서 적과 겹친 킹이 사망했습니다. 원정이 끝났습니다."
+                    }
+                    _ => "킹이 포획되었습니다. 원정이 끝났습니다.",
                 });
             }
         }

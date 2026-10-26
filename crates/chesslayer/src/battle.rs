@@ -21,7 +21,7 @@ pub struct BattleOptions {
     pub self_defense: bool,
     pub initiative: bool,
     pub enemy_initiative: bool,
-    /// Only a restored Hard Disk deployment reverses setup collisions.
+    /// Only a restored Hard Disk deployment makes setup collisions kill both pieces.
     pub hard_disk: bool,
 }
 impl Default for BattleOptions {
@@ -227,10 +227,15 @@ impl Battle {
                     return Err(Error::InvalidSetup);
                 }
                 if options.hard_disk {
+                    if let Some(p) = players.iter_mut().find(|p| p.id == old.id) {
+                        p.position = None;
+                    }
+                    board.set_piece(e.position, None)?;
                     events.push(format!(
-                        "하드디스크: {}에 겹친 적 {}이 사망했습니다.",
+                        "하드디스크: {}에 겹친 적 {}과 아군 {}이 함께 사망했습니다.",
                         square(e.position),
-                        piece_name(e.kind)
+                        piece_name(e.kind),
+                        piece_name(old.kind)
                     ));
                     continue;
                 }

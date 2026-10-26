@@ -344,7 +344,7 @@ fn ice_cream_accumulates_only_on_player_turns_and_saturates_safely() {
 }
 
 #[test]
-fn hard_disk_captures_before_first_acquisition_and_overrides_formations_and_enemy_royal() {
+fn hard_disk_kills_both_sides_after_first_acquisition_and_overrides_formations() {
     let mut g = Game::new("guardian", 33).unwrap();
     start(&mut g, 0);
     end_scene(&mut g, "c8", "e8");
@@ -352,7 +352,7 @@ fn hard_disk_captures_before_first_acquisition_and_overrides_formations_and_enem
     assert_eq!(g.battle.outcome()[8].position, Some(at("a2")));
     grant(&mut g, Relic::HardDisk);
     grant(&mut g, Relic::Hedgehog);
-    start(&mut g, 2); // c8 bishop and e8 royal collide; both die, survivors remain.
+    start(&mut g, 2); // c8 bishop and e8 royal collide with allies; all four die.
     assert_eq!(g.phase, RunPhase::Reward);
     assert_eq!(
         g.battle.result,
@@ -362,8 +362,8 @@ fn hard_disk_captures_before_first_acquisition_and_overrides_formations_and_enem
         }
     );
     let roster = g.battle.outcome();
-    assert_eq!(roster[1].position, Some(at("c8")));
-    assert_eq!(roster[8].position, Some(at("e8")));
+    assert_eq!(roster[1].position, None);
+    assert_eq!(roster[8].position, None);
     assert_eq!(roster[8].kind, TEMPEST_PAWN); // Combat promotion was not snapshotted.
     assert_eq!(roster[1].persistent.get("growth"), Some(&7));
     assert_eq!(roster[1].upgrades, ["tempest"]);
@@ -459,7 +459,7 @@ fn hard_disk_rest_revival_missing_ids_and_shuffled_collisions_stay_consistent() 
     assert_eq!(late.battle.outcome()[0].position, Some(at("b1")));
     assert_eq!(late.battle.outcome()[0].origin, at("a1"));
 
-    // Ordinary collisions, including after Whirlwind, preserve the ally and synchronize AI.
+    // Ordinary collisions after Whirlwind remove both pieces and synchronize AI.
     for seed in 0..12 {
         let mut g = Game::new("guardian", seed).unwrap();
         g.relics
@@ -467,7 +467,7 @@ fn hard_disk_rest_revival_missing_ids_and_shuffled_collisions_stay_consistent() 
         start(&mut g, 0);
         end_scene(&mut g, "c8", "b8");
         start(&mut g, 2);
-        assert_eq!(g.battle.outcome()[1].position, Some(at("c8")));
+        assert_eq!(g.battle.outcome()[1].position, None);
         if g.phase == RunPhase::Combat {
             assert_eq!(
                 g.snapshot()

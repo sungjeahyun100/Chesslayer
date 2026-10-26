@@ -1,3 +1,4 @@
+use chesslayer::content::Rng;
 use chesslayer::*;
 fn p(x: i32, y: i32) -> Position {
     Position::new(x, y)
@@ -121,6 +122,70 @@ fn start_collision_with_king_loses() {
             reason: ResultReason::Counterattack
         }
     )
+}
+#[test]
+fn hard_disk_collision_removes_both_pieces_and_vacates_the_square() {
+    let b = Battle::with_options(
+        BattleStart {
+            players: vec![
+                player(1, KING, p(4, 7)),
+                player(2, ROOK, p(0, 6)),
+                player(3, KNIGHT, p(1, 6)),
+            ],
+            encounter: Encounter {
+                enemies: vec![enemy(100, QUEEN, p(1, 6)), enemy(101, BISHOP, p(0, 6))],
+                royal_id: 100,
+                additional_royal_ids: vec![],
+            },
+        },
+        BattleOptions {
+            hard_disk: true,
+            ..BattleOptions::default()
+        },
+        &mut Rng::new(0),
+    )
+    .unwrap();
+    assert_eq!(b.player_pieces()[1].position, None);
+    assert_eq!(b.player_pieces()[2].position, None);
+    assert_eq!(b.board.piece_at(p(0, 6)).unwrap(), None);
+    assert_eq!(b.board.piece_at(p(1, 6)).unwrap(), None);
+    assert_eq!(
+        b.result,
+        GameResult::Win {
+            winner: PLAYER,
+            reason: ResultReason::HardDisk
+        }
+    );
+    assert_eq!(b.events.len(), 2);
+    assert!(b.events.iter().all(|event| event.contains("함께 사망")));
+}
+#[test]
+fn hard_disk_collision_with_both_royals_loses_when_king_dies() {
+    let b = Battle::with_options(
+        BattleStart {
+            players: vec![player(1, KING, p(4, 7))],
+            encounter: Encounter {
+                enemies: vec![enemy(100, QUEEN, p(4, 7))],
+                royal_id: 100,
+                additional_royal_ids: vec![],
+            },
+        },
+        BattleOptions {
+            hard_disk: true,
+            ..BattleOptions::default()
+        },
+        &mut Rng::new(0),
+    )
+    .unwrap();
+    assert_eq!(b.player_pieces()[0].position, None);
+    assert_eq!(b.board.piece_at(p(4, 7)).unwrap(), None);
+    assert_eq!(
+        b.result,
+        GameResult::Win {
+            winner: ENEMY,
+            reason: ResultReason::HardDisk
+        }
+    );
 }
 #[test]
 fn orthodox_mate_position_does_not_end_battle() {
