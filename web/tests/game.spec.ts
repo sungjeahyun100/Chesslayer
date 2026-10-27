@@ -121,7 +121,7 @@ test("원정 현황 버튼은 우측 상단에 고정되고 실제 덱·진입 �
     const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
     await init();
     const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
-    try { return JSON.parse(game.snapshot()) as { rest_options: { kind: number }[]; next_battle_pieces: unknown[]; relics: unknown[] }; }
+    try { return JSON.parse(game.snapshot()) as { deck: { kind: string; name: string }[]; next_battle_pieces: unknown[]; relics: unknown[] }; }
     finally { game.free(); }
   });
   await expect(page.locator(".map-aside, .map-legend")).toHaveCount(0);
@@ -134,11 +134,14 @@ test("원정 현황 버튼은 우측 상단에 고정되고 실제 덱·진입 �
   await page.getByRole("button", { name: "원정 현황" }).click();
   await expect(page.getByRole("dialog", { name: "원정 현황" })).toBeVisible();
   await expect(page.locator(".map-overlay")).toHaveCount(0);
-  await expect(page.locator(".status-piece-group")).toHaveCount(new Set(snapshot.rest_options.map((piece) => piece.kind)).size);
+  await expect(page.locator(".status-deck > h3")).toContainText(String(snapshot.deck.length));
+  await expect(page.locator(".status-deck-card")).toHaveCount(snapshot.deck.length);
+  expect(await page.locator(".status-deck-card").evaluateAll((cards) => cards.map((card) => card.getAttribute("data-card-kind")))).toEqual(snapshot.deck.map((card) => card.kind));
+  expect(await page.locator(".status-deck-card h3").allTextContents()).toEqual(snapshot.deck.map((card) => card.name));
   await expect(page.locator(".status-board .piece-image")).toHaveCount(snapshot.next_battle_pieces.length);
   await expectUniformBoard();
   await expect(page.locator(".status-relic")).toHaveCount(snapshot.relics.length);
-  await page.locator(".status-piece-group").first().click();
+  await page.locator(".status-square:enabled").first().click();
   await expect(page.locator(".status-piece-detail")).toBeVisible();
   await page.locator(".status-relic").first().click();
   await expect(page.locator(".status-relic-detail")).toBeVisible();

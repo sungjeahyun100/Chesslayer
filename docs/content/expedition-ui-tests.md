@@ -4,6 +4,6 @@
 
 `rewards`의 층 전환 회복 테스트는 1층 보스 보상 직후 사망 기물 전원 부활, 생존 기물의 원위치 복귀와 부활 기물의 빈 칸 배치, 영구 강화·ID 보존, 중복 보상 명령 거부를 확인한다.
 
-브라우저 검증은 `npm run wasm --prefix web`으로 엔진을 갱신한 뒤 `npm run build --prefix web` 및 `npm run test:e2e --prefix web`로 실행한다. 로컬 캐시에 준비된 같은 버전의 `wasm-bindgen`을 PATH에 지정해 WASM을 갱신할 수 있다. `web/tests/game.spec.ts`는 우측 상단 원정 현황 버튼이 실제 보유 기물·진입 배치·유물을 표시하는지, 적 이름 비공개와 전투 상태·저장 기록 불변을 확인한다. ACT II 테스트는 실제 보스 보상 명령에서만 연출이 뜨는지, 건너뛰기와 저장 재개가 층 진행을 중복시키지 않는지 확인한다.
+브라우저 검증은 `npm run wasm --prefix web`으로 엔진을 갱신한 뒤 `npm run build --prefix web` 및 `npm run test:e2e --prefix web`로 실행한다. 로컬 캐시에 준비된 같은 버전의 `wasm-bindgen`을 PATH에 지정해 WASM을 갱신할 수 있다. `web/tests/game.spec.ts`는 우측 상단 원정 현황 버튼이 실제 보유 카드·진입 배치·유물을 표시하는지, 적 이름 비공개와 전투 상태·저장 기록 불변을 확인한다. ACT II 테스트는 실제 보스 보상 명령에서만 연출이 뜨는지, 건너뛰기와 저장 재개가 층 진행을 중복시키지 않는지 확인한다.
 
 ACT I 테스트는 새 원정 시작 시 연출의 자연 종료와 건너뛰기, 모션 감소 설정, 저장 재개 시 중복 재생 방지, 화면 버전 v0.2.4를 확인한다.

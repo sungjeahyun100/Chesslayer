@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PieceImage } from "./PieceImage";
+import { CardFace } from "./CardFace";
 import { RelicIcon } from "./ContentArt";
 import type { RestOption, Snapshot } from "./types";
 
@@ -68,21 +69,29 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
           <button className="expedition-status-close" ref={closeRef} onClick={onClose} aria-label="원정 현황 닫기">닫기 ×</button>
         </header>
         <div className="expedition-status-content">
-          <section className="status-section status-roster" aria-labelledby="status-roster-title">
-            <h3 id="status-roster-title">현재 덱 구성 <span>{state.rest_options.length}</span></h3>
-            <div className="status-piece-list">
-              {groups.map((group) => {
-                const example = group[0];
-                const alive = group.filter((piece) => !piece.dead).length;
-                const upgraded = group.filter((piece) => piece.upgrades.length > 0).length;
-                return <button key={example.kind} className={`status-piece-group ${selectedGroup?.[0].kind === example.kind ? "is-selected" : ""}`}
-                  onClick={() => setSelectedId(group[0].id)} aria-pressed={selectedGroup?.[0].kind === example.kind}>
-                  <PieceImage pieceKey={example.key} owner={0} name={example.name} />
-                  <span><strong>{example.name}</strong><small>{alive !== group.length ? `전투 가능 ${alive} / 전체 ${group.length}` : `보유 ${group.length}`}{upgraded > 0 ? ` · 강화 ${upgraded}` : ""}</small></span>
-                  <b>×{group.length}</b>
+          <section className="status-section status-deck" aria-labelledby="status-deck-title">
+            <h3 id="status-deck-title">보유 카드 <span>{state.deck.length}</span></h3>
+            <div className="status-deck-list" aria-label="보유 카드 목록">
+              {state.deck.map((card, index) => <article key={index} className="playing-card status-deck-card" data-card-kind={card.kind}>
+                <CardFace card={card} />
+              </article>)}
+              {state.deck.length === 0 && <p className="status-deck-empty">보유 카드가 없습니다.</p>}
+            </div>
+          </section>
+          <section className="status-section status-formation" aria-labelledby="status-formation-title">
+            <h3 id="status-formation-title">전투 진입 포지션 <span>{state.next_battle_pieces.length}</span></h3>
+            <div className="status-board" role="group" aria-label="다음 전투 시작 아군 배치">
+              {Array.from({ length: 64 }, (_, cell) => {
+                const piece = positions.get(cell);
+                const square = `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
+                return <button key={cell} className={`status-square ${(cell + Math.floor(cell / 8)) % 2 ? "dark" : "light"} ${piece?.id === selectedId ? "is-selected" : ""}`}
+                  data-cell={cell} aria-label={`${square}${piece ? ` 아군 ${piece.name}` : " 빈 칸"}`} disabled={!piece}
+                  onClick={() => piece && setSelectedId(piece.id)}>
+                  {piece && <PieceImage pieceKey={piece.key} owner={0} name={piece.name} />}
                 </button>;
               })}
             </div>
+            {(state.phase === "victory" || state.phase === "defeat") && <p className="status-formation-note">다음 전투가 없습니다.</p>}
             {selectedPiece && selectedGroup && <div className="status-piece-detail">
               <div className="status-instance-list" aria-label={`${selectedPiece.name} 개별 기물`}>
                 {selectedGroup.map((piece, index) => <button key={piece.id} className={piece.id === selectedPiece.id ? "is-selected" : ""}
@@ -99,21 +108,6 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
                 })}
               </ol>}
             </div>}
-          </section>
-          <section className="status-section status-formation" aria-labelledby="status-formation-title">
-            <h3 id="status-formation-title">전투 진입 포지션 <span>{state.next_battle_pieces.length}</span></h3>
-            <div className="status-board" role="group" aria-label="다음 전투 시작 아군 배치">
-              {Array.from({ length: 64 }, (_, cell) => {
-                const piece = positions.get(cell);
-                const square = `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
-                return <button key={cell} className={`status-square ${(cell + Math.floor(cell / 8)) % 2 ? "dark" : "light"} ${piece?.id === selectedId ? "is-selected" : ""}`}
-                  data-cell={cell} aria-label={`${square}${piece ? ` 아군 ${piece.name}` : " 빈 칸"}`} disabled={!piece}
-                  onClick={() => piece && setSelectedId(piece.id)}>
-                  {piece && <PieceImage pieceKey={piece.key} owner={0} name={piece.name} />}
-                </button>;
-              })}
-            </div>
-            {(state.phase === "victory" || state.phase === "defeat") && <p className="status-formation-note">다음 전투가 없습니다.</p>}
           </section>
           <section className="status-section status-relics" aria-labelledby="status-relics-title">
             <h3 id="status-relics-title">보유 유물 <span>{state.relics.length}</span></h3>
