@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { PieceImage } from "./PieceImage";
 import type { Command, MapNode, NodeKind, Snapshot } from "./types";
 
@@ -89,11 +89,14 @@ export function ActMap({
   coveredByReward?: boolean;
   overlay?: boolean;
 }) {
-  const top = useRef<HTMLElement>(null);
-  useEffect(() => {
-    top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
   const { map } = state;
+  const top = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const position = top.current?.querySelector<HTMLElement>(
+      map.current === null ? ".map-start" : ".map-node-slot.is-current",
+    );
+    position?.scrollIntoView({ behavior: "instant", block: "center" });
+  }, [state.floor, state.map.current]);
   const ended = state.phase === "victory" || state.phase === "defeat";
   const mapPhase = state.phase === "map" || coveredByReward;
   const rows = useMemo(() => Array.from({ length: map.rows }, (_, row) =>

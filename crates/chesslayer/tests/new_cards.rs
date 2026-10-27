@@ -1,9 +1,9 @@
 use chesslayer::{
     cards::{Card, CardKind},
-    content::cards::REWARD_POOL,
+    content::{cards::REWARD_POOL, Rng},
     game::{CardUpgradeChoice, Command, Game, RunPhase},
-    Battle, BattleStart, Encounter, EnemyPiece, GameResult, PieceType, PlayerPiece, Position,
-    BISHOP, BOUNCING_BISHOP, ENEMY, KING, KNIGHT, PAWN, PLAYER, ROOK, TEMPEST_BISHOP,
+    Battle, BattleOptions, BattleStart, Encounter, EnemyPiece, GameResult, PieceType, PlayerPiece,
+    Position, BISHOP, BOUNCING_BISHOP, ENEMY, KING, KNIGHT, PAWN, PLAYER, ROOK, TEMPEST_BISHOP,
     TEMPEST_KNIGHT, TEMPEST_PAWN,
 };
 use std::collections::BTreeMap;
@@ -53,6 +53,9 @@ fn game(kind: CardKind, battle: Battle, mana: u32) -> Game {
 }
 fn occupant(b: &Battle, at: Position) -> Option<u32> {
     b.board.piece_at(at).unwrap().map(|p| p.id)
+}
+fn cell(at: Position) -> usize {
+    (at.rank * 8 + at.file) as usize
 }
 
 #[test]
@@ -211,16 +214,15 @@ fn temporary_upgrade_cost_branch_and_permanent_roster() {
 }
 
 #[test]
-fn limiter_gives_three_actions_then_kills_target_including_royal() {
+fn limiter_applies_immediately_and_ends_turn_on_third_move() {
     let mut b = battle(
         vec![ally(5, KING, p(4, 7)), ally(1, ROOK, p(0, 7))],
         vec![foe(100, ROOK, p(4, 0))],
     );
     b.grant_limiter(1).unwrap();
-    b.end_turn().unwrap();
-    b.end_turn().unwrap();
+    assert_eq!(b.limiter_status(1), Some((true, 3)));
     assert_eq!(b.turn, PLAYER);
-    assert_eq!(b.actions_left, 3);
+    assert_eq!(b.actions_left, 4);
     for rank in [6, 5, 4] {
         let from = p(0, rank + 1);
         let action = b
@@ -230,16 +232,82 @@ fn limiter_gives_three_actions_then_kills_target_including_royal() {
             .find(|a| a.steps().last().unwrap().move_to == p(0, rank))
             .unwrap();
         b.apply_piece_action(&action).unwrap();
+        if rank != 4 {
+            assert_eq!(b.turn, PLAYER);
+            assert_eq!(occupant(&b, p(0, rank)), Some(1));
+            assert_eq!(b.limiter_status(1), Some((true, (rank - 4) as u8)));
+        }
     }
     assert_eq!(b.turn, ENEMY);
     assert!(occupant(&b, p(0, 4)).is_none());
     assert_eq!(b.limiter_status(1), None);
     b.grant_limiter(100).unwrap();
-    b.end_turn().unwrap();
-    b.end_turn().unwrap();
-    b.end_turn().unwrap();
+    assert_eq!(b.limiter_status(100), Some((true, 3)));
+    for file in [5, 6, 7] {
+        let action = b
+            .legal_actions(p(file - 1, 0))
+            .unwrap()
+            .into_iter()
+            .find(|a| a.steps().last().unwrap().move_to == p(file, 0))
+            .unwrap();
+        b.apply_piece_action(&action).unwrap();
+    }
     assert!(matches!(b.result, GameResult::Win { winner: PLAYER, .. }));
     assert_eq!(b.limiter_status(100), None);
+}
+
+#[test]
+fn limiter_keeps_all_three_moves_after_two_normal_haste_actions() {
+    let mut b = Battle::with_options(
+        BattleStart {
+            players: vec![
+                ally(5, KING, p(4, 7)),
+                ally(1, ROOK, p(0, 7)),
+                ally(2, KNIGHT, p(1, 7)),
+            ],
+            encounter: Encounter {
+                enemies: vec![foe(100, KING, p(7, 0))],
+                royal_id: 100,
+                additional_royal_ids: vec![],
+            },
+        },
+        BattleOptions {
+            actions_per_turn: 2,
+            ..BattleOptions::default()
+        },
+        &mut Rng::new(1),
+    )
+    .unwrap();
+    b.grant_limiter(1).unwrap();
+    assert_eq!(b.actions_left, 5);
+    for (from, to) in [(p(4, 7), p(3, 7)), (p(1, 7), p(2, 5))] {
+        let action = b
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.steps().last().unwrap().move_to == to)
+            .unwrap();
+        b.apply_piece_action(&action).unwrap();
+    }
+    assert_eq!(b.actions_left, 3);
+    for (rank, left) in [(6, 2), (5, 1), (4, 0)] {
+        let from = p(0, rank + 1);
+        let action = b
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.steps().last().unwrap().move_to == p(0, rank))
+            .unwrap();
+        b.apply_piece_action(&action).unwrap();
+        if left > 0 {
+            assert_eq!(b.turn, PLAYER);
+            assert_eq!(occupant(&b, p(0, rank)), Some(1));
+            assert_eq!(b.limiter_status(1), Some((true, left)));
+        }
+    }
+    assert_eq!(b.turn, ENEMY);
+    assert_eq!(b.limiter_status(1), None);
+    assert_eq!(occupant(&b, p(0, 4)), None);
 }
 
 #[test]
@@ -254,6 +322,7 @@ fn enemy_ai_uses_limiter_actions() {
         target: Some(101),
     })
     .unwrap();
+    assert_eq!(g.battle.limiter_status(101), Some((true, 3)));
     g.dispatch(Command::EndTurn).unwrap();
     for left in [2, 1] {
         g.dispatch(Command::EnemyStep).unwrap();
@@ -261,13 +330,14 @@ fn enemy_ai_uses_limiter_actions() {
         assert_eq!(g.battle.limiter_status(101), Some((true, left)));
     }
     g.dispatch(Command::EnemyStep).unwrap();
+    assert_eq!(g.battle.turn, PLAYER);
     assert_eq!(g.battle.limiter_status(101), None);
     assert!(g.battle.board.cells().iter().flatten().all(|p| p.id != 101));
     assert_eq!(g.phase, RunPhase::Combat);
 }
 
 #[test]
-fn limiter_royal_expiry_reaches_run_result_on_manual_and_ai_turn_end() {
+fn limiter_royal_death_reaches_run_result_on_third_move() {
     let scene = || battle(vec![ally(5, KING, p(4, 7))], vec![foe(100, KING, p(4, 0))]);
     let mut own = game(CardKind::LimiterRelease, scene(), 6);
     own.dispatch(Command::PlayCard {
@@ -275,11 +345,14 @@ fn limiter_royal_expiry_reaches_run_result_on_manual_and_ai_turn_end() {
         target: Some(5),
     })
     .unwrap();
-    own.dispatch(Command::EndTurn).unwrap();
-    while own.phase == RunPhase::Combat && own.battle.turn == ENEMY {
-        own.dispatch(Command::EnemyStep).unwrap();
+    for (from, to) in [(p(4, 7), p(3, 7)), (p(3, 7), p(2, 7)), (p(2, 7), p(1, 7))] {
+        own.dispatch(Command::Move {
+            from: cell(from),
+            to: cell(to),
+            promotion: None,
+        })
+        .unwrap();
     }
-    own.dispatch(Command::EndTurn).unwrap();
     assert_eq!(own.phase, RunPhase::Defeat);
 
     let mut enemy = game(CardKind::LimiterRelease, scene(), 6);
@@ -294,6 +367,38 @@ fn limiter_royal_expiry_reaches_run_result_on_manual_and_ai_turn_end() {
         enemy.dispatch(Command::EnemyStep).unwrap();
     }
     assert_eq!(enemy.phase, RunPhase::Reward);
+}
+
+#[test]
+fn limiter_unused_moves_survive_an_early_turn_end() {
+    let mut b = battle(
+        vec![ally(5, KING, p(4, 7)), ally(1, ROOK, p(0, 7))],
+        vec![foe(100, KING, p(7, 0))],
+    );
+    b.grant_limiter(1).unwrap();
+    let first = b
+        .legal_actions(p(0, 7))
+        .unwrap()
+        .into_iter()
+        .find(|a| a.steps().last().unwrap().move_to == p(0, 6))
+        .unwrap();
+    b.apply_piece_action(&first).unwrap();
+    b.end_turn().unwrap();
+    b.end_turn().unwrap();
+    assert_eq!(b.limiter_status(1), Some((true, 2)));
+    assert_eq!(b.actions_left, 3);
+    for rank in [5, 4] {
+        let action = b
+            .legal_actions(p(0, rank + 1))
+            .unwrap()
+            .into_iter()
+            .find(|a| a.steps().last().unwrap().move_to == p(0, rank))
+            .unwrap();
+        b.apply_piece_action(&action).unwrap();
+    }
+    assert_eq!(b.turn, ENEMY);
+    assert_eq!(b.limiter_status(1), None);
+    assert_eq!(occupant(&b, p(0, 4)), None);
 }
 
 #[test]

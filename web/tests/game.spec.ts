@@ -436,6 +436,7 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
       await page.locator(".reward-cards button").nth(cmd.index).click();
       await page.getByRole("button", { name: /다음으로 진행/ }).click();
       await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
+      await expect(page.locator(".map-node-slot.is-current")).toBeInViewport();
     } else if (cmd.type === "rest_upgrade") {
       await page.locator('[data-square="a2"]').click();
       await page
@@ -445,7 +446,7 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
         .getByRole("button", { name: "강화 확정", exact: true })
         .click();
       await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
-      await page.getByRole("button", { name: "맵으로 돌아가기 →", exact: true }).click();
+      await expect(page.locator(".act-map-screen")).toBeVisible();
     } else if (cmd.type === "claim_treasure") {
       await expect(
         page.getByRole("heading", { name: "남겨진 보물", exact: true }),

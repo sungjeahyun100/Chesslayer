@@ -54,7 +54,7 @@ function BoardPiece({
       {piece.ward && <span className="ward-mark" title="가호">✦</span>}
       {piece.temporary_upgrade && <span className="temporary-mark" title="일시 강화 · 이번 전투 한정">↑</span>}
       {piece.self_defense && <span className="self-defense-mark">◆</span>}
-      {piece.limiter && <span className="limiter-mark" title={`리미터 해제: ${piece.limiter.active ? `남은 이동 ${piece.limiter.moves_left}회` : "다음 소속 턴에 3회"} · 턴 종료 후 사망`}>{piece.limiter.active ? piece.limiter.moves_left : "!"}</span>}
+      {piece.limiter && <span className="limiter-mark" title={`리미터 해제: 남은 이동 ${piece.limiter.moves_left}회 · 0회가 되면 사망하고 턴 종료`}>{piece.limiter.moves_left}</span>}
     </span>
   );
 }
@@ -68,7 +68,6 @@ function App() {
   const [selected, setSelected] = useState<number | null>(null);
   const [enemyInspection, setEnemyInspection] = useState<EnemyInspection | null>(null);
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
-  const [restCompleted, setRestCompleted] = useState(false);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const [upgradeHistory, setUpgradeHistory] = useState<Extract<Command, { type: "rest_upgrade" }>[]>([]);
   const [rewardUpgradeHistory, setRewardUpgradeHistory] = useState<{ id: number; target: number }[]>([]);
@@ -116,7 +115,7 @@ function App() {
   // A new run frees the previous engine in start(); avoid freeing live state during Vite hot reload.
   // The browser releases the WASM instance when this document closes.
   useEffect(() => {
-    if (state?.phase && state.phase !== previousPhase.current && !restCompleted) {
+    if (state?.phase && state.phase !== previousPhase.current) {
       if (state.phase !== "combat" && state.phase !== "rest")
         outcomeRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -129,7 +128,7 @@ function App() {
         });
     }
     previousPhase.current = state?.phase;
-  }, [state?.phase, restCompleted]);
+  }, [state?.phase]);
   useEffect(() => {
     if (targetCard)
       boardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -145,13 +144,7 @@ function App() {
         setState(next);
       }
       persist(engine.current);
-      if (command.type === "rest_upgrade") {
-        setRestCompleted(true);
-        setRestChoice((choice) => choice && { ...choice, target: command.target });
-      } else {
-        setRestChoice(null);
-        setRestCompleted(false);
-      }
+      setRestChoice(null);
       if (command.type === "claim_upgrade") setRewardUpgradeOpen(false);
       setPromotion(null);
       setSelected(null);
@@ -212,7 +205,6 @@ function App() {
         setSelected(null);
         setEnemyInspection(null);
         setRestChoice(null);
-        setRestCompleted(false);
         setPromotion(null);
         setTargetCard(null);
         setCardTargets([]);
@@ -252,7 +244,6 @@ function App() {
       setFloorTransition(null);
       persist(next);
       setRestChoice(null);
-      setRestCompleted(false);
       setRewardUpgradeOpen(false);
       setPromotion(null);
       setSelected(null);
@@ -285,7 +276,6 @@ function App() {
       }
       persist(next);
       setRestChoice(null);
-      setRestCompleted(false);
       setRewardUpgradeOpen(false);
       setPromotion(null);
       setSelected(null);
@@ -386,14 +376,13 @@ function App() {
   }
   const turn = state?.turn === 0;
   const rewardRevisit = state?.phase === "reward" && state.map.nodes.some((node) => node.current && node.visited);
-  const showMap = (state?.phase === "map" || rewardRevisit) && !restCompleted && !rewardUpgradeOpen;
+  const showMap = (state?.phase === "map" || rewardRevisit) && !rewardUpgradeOpen;
   const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
-  const restView = state?.phase === "rest" || restCompleted || rewardUpgradeOpen;
+  const restView = state?.phase === "rest" || rewardUpgradeOpen;
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
   const boardPieces = rewardUpgradeOpen ? state?.next_battle_pieces ?? [] : state?.pieces ?? [];
   function closeRest() {
     setRestChoice(null);
-    setRestCompleted(false);
   }
   function closeRewardUpgrade() {
     setRewardUpgradeOpen(false);
@@ -630,7 +619,7 @@ function App() {
                         <small>{state.actions_left}회 행동</small>
                       </>
                     ) : restView ? (
-                      rewardUpgradeOpen ? "전투 보상 · 기물 강화" : restCompleted ? "쉼터 · 강화 완료" : "쉼터 · 행동 1회"
+                      rewardUpgradeOpen ? "전투 보상 · 기물 강화" : "쉼터 · 행동 1회"
                     ) : (
                       "진형 계승"
                     )}
@@ -670,7 +659,7 @@ function App() {
                             !restView &&
                             (state.phase !== "combat" || !!promotion || (!turn && piece?.owner !== 1 && !(!piece && inspectedEnemy)))
                           }
-                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 효과 종료 후 사망` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
+                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 0회가 되면 사망하고 턴 종료` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
                           aria-pressed={
                             (restView
                               ? restChoice?.cell
@@ -751,7 +740,7 @@ function App() {
                     {targetCard ? (
                       <>
                         <strong>{targetCard.definition.name}</strong>
-                        {targetCard.definition.kind === "limiter_release" && <span>효과 종료 후 대상 사망</span>}
+                        {targetCard.definition.kind === "limiter_release" && <span>세 번째 이동 직후 대상 사망 · 턴 종료</span>}
                         <span>선택 {stagedCount}기 · 현재 코스트 {stagedCost} / 마나 {state.mana}</span>
                         {targetCard.definition.selection_mode === "upgrade" && cardUpgrades.length > 0 && <span className="staged-upgrades">{cardUpgrades.map((choice) => <button key={choice.id} onClick={() => setCardUpgrades((old) => old.filter((u) => u.id !== choice.id))}>{state.pieces.find((p) => p.id === choice.id)?.name} ×</button>)}</span>}
                         {stagedCount > 0 && (["multiple", "upgrade"].includes(targetCard.definition.selection_mode) || ["limiter_release", "sacred_domain"].includes(targetCard.definition.kind)) ? <button className="primary" onClick={confirmCard} disabled={stagedCost > state.mana}>확인</button> : null}
@@ -821,7 +810,6 @@ function App() {
                     onCancel={rewardUpgradeOpen ? closeRewardUpgrade : closeRest}
                     send={send}
                     history={rewardUpgradeOpen ? rewardUpgradeHistory : upgradeHistory}
-                    completed={restCompleted}
                     onContinue={rewardUpgradeOpen ? closeRewardUpgrade : closeRest}
                     reward={rewardUpgradeOpen}
                   />
@@ -856,7 +844,7 @@ function App() {
                           {selectedPiece.ward && <small className="effect-note">가호 · 다음 포획 시 공격 무효</small>}
                           {selectedPiece.self_defense && <small className="effect-note">호신용품 · 직접 포획되면 포획한 적도 사망</small>}
                           {selectedPiece.absorbed_moves.length > 0 && <small className="effect-note">흡수한 행마 · {selectedPiece.absorbed_moves.join(", ")}</small>}
-                          {selectedPiece.limiter && <small className="effect-note danger">리미터 해제 · {selectedPiece.limiter.active ? `남은 이동 ${selectedPiece.limiter.moves_left}회` : "다음 소속 턴에 최대 3회 이동"} · 턴 종료 후 사망</small>}
+                          {selectedPiece.limiter && <small className="effect-note danger">리미터 해제 · 남은 이동 {selectedPiece.limiter.moves_left}회 · 0회가 되면 사망하고 턴 종료</small>}
                         </div>
                       </section>
                     )}
@@ -885,7 +873,7 @@ function App() {
                       {activeEffects.map((p) => <div className="effect-row" key={p.id}>
                         <PieceImage pieceKey={p.key} owner={p.owner} name={p.name} />
                         <div><strong>{p.owner === 0 ? "아군" : "적"} {p.name} · {p.square}</strong>
-                          {p.limiter && <small>리미터 · {p.limiter.active ? `남은 이동 ${p.limiter.moves_left}회` : "다음 소속 턴 최대 3회"} · 종료 후 사망</small>}
+                          {p.limiter && <small>리미터 · 남은 이동 {p.limiter.moves_left}회 · 0회가 되면 사망하고 턴 종료</small>}
                           {p.temporary_upgrade && <small>일시 강화 · 전투 한정</small>}
                           {p.ward && <small>가호 · 다음 포획 무효</small>}
                         </div>
@@ -936,7 +924,7 @@ function App() {
               </aside>
             </>
           )}
-          {state.phase !== "combat" && state.phase !== "rest" && state.phase !== "reward" && !restCompleted && (
+          {state.phase !== "combat" && state.phase !== "rest" && state.phase !== "reward" && (
             <section className="outcome" ref={outcomeRef} aria-live="polite">
               {state.phase === "treasure" && (
                 <>

@@ -103,15 +103,17 @@ test("휴식 트리: 상위 복합 기물의 잠금 조건과 미리보기를 �
   await allImagesLoaded(page);
 });
 
-test("강화 트리: 선택 교체, 재클릭과 빈 공간 닫기, 확대와 고정된 확정 버튼", async ({ page }) => {
+test("강화 트리: 선택한 기물 옆에 확정 버튼이 뜨고 선택을 바꿀 수 있다", async ({ page }) => {
   await loadRest(page);
   await page.locator('[data-square="a2"]').click();
   const first = page.locator('.skill-node[data-kind="8"]');
   const second = page.locator('.skill-node[data-kind="13"]');
   await first.click();
-  const confirm = page.locator(".rest-workshop-actions .primary");
+  const confirm = page.locator(".skill-node-popup .primary");
   await expect(confirm).toBeVisible();
-  await expect(page.locator(".skill-node-popup")).toHaveCount(0);
+  const firstBox = await first.locator(".skill-node-orb").boundingBox();
+  const buttonBox = await confirm.boundingBox();
+  expect(Math.min(Math.abs(buttonBox!.x - firstBox!.x - firstBox!.width), Math.abs(buttonBox!.x + buttonBox!.width - firstBox!.x))).toBeLessThan(16);
   await first.click();
   await expect(confirm).toHaveCount(0);
   await first.click();
@@ -130,21 +132,21 @@ test("강화 트리: 선택 교체, 재클릭과 빈 공간 닫기, 확대와 �
   expect(await confirm.evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
 });
 
-test("강화 트리: 모바일에서 확정·취소가 화면 안에 남고 다른 노드를 선택할 수 있다", async ({ page }) => {
+test("강화 트리: 모바일에서도 기물 옆 확정 버튼으로 선택할 수 있다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await loadRest(page);
   await page.locator('[data-square="a2"]').click();
   await page.locator('.skill-node[data-kind="8"]').click();
-  const actions = page.locator(".rest-workshop-actions");
-  await expect(actions.getByRole("button", { name: "강화 확정" })).toBeVisible();
-  await expect.poll(async () => actions.evaluate((el) => {
+  const confirm = page.locator(".skill-node-popup .primary");
+  await expect(confirm).toBeVisible();
+  await expect.poll(async () => confirm.evaluate((el) => {
     const rect = el.getBoundingClientRect();
     return rect.left >= 0 && rect.right <= innerWidth && rect.top >= 0 && rect.bottom <= innerHeight;
   })).toBe(true);
   await page.setViewportSize({ width: 390, height: 600 });
-  await expect.poll(() => actions.evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
+  await expect.poll(() => confirm.evaluate((el) => el.getBoundingClientRect().bottom <= innerHeight)).toBe(true);
   await page.locator('.skill-node[data-kind="13"]').click();
-  await expect(actions.getByRole("button", { name: "강화 확정" })).toBeVisible();
+  await expect(confirm).toBeVisible();
   await expect(page.locator(".rest-piece-study h2")).toContainText("바운싱 폰");
 });
 
@@ -210,19 +212,9 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
     animations: "disabled",
   });
   await page.getByRole("button", { name: "강화 확정", exact: true }).click();
-  await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
-  await expect(page.getByRole("status").filter({ hasText: "강화 완료" })).toBeVisible();
-  await expect(page.locator(".skill-connection.acquired")).toHaveCount(1);
-  await expect(page.locator(".skill-connection.locked")).toHaveCount(1);
-  await page.getByRole("button", { name: "바운싱 폰 · 잠김 · 상세 보기" }).click();
-  await expect(page.locator(".skill-lock-reason")).toContainText("이 가지로 변경하는 강화 경로는 없습니다");
-  await expect(page.locator(".skill-requirements")).toContainText("살아 있는 일반 폰");
-  await expect(page.getByRole("button", { name: "강화 확정", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "템페스트 폰 · 현재 기물 · 상세 보기" }).click();
-  await expect(page.locator(".skill-inspector")).toContainText("현재 기물에 적용된 능력");
-  await page.screenshot({ path: "test-results/rest-tree-acquired.png", fullPage: true, animations: "disabled" });
-  await page.getByRole("button", { name: "맵으로 돌아가기 →", exact: true }).click();
+  await expect(page.locator(".rest-workshop")).toHaveCount(0);
   await expect(page.locator(".act-map-screen")).toBeVisible();
+  await expect(page.locator(".map-node-slot.is-current")).toBeInViewport();
   const snapshot = await restoreSnapshot(page);
   expect(snapshot.pieces.find((p: any) => p.id === 9).key).toBe("tempest_pawn");
   expect(snapshot.rest_options.find((p: any) => p.id === 9).upgrades).toEqual([

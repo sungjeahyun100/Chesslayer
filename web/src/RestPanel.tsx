@@ -8,14 +8,13 @@ export interface RestChoice {
   id: number;
   target?: number;
 }
-export function RestPanel({ state, choice, onChoose, onCancel, send, history, completed, onContinue, reward = false }: {
+export function RestPanel({ state, choice, onChoose, onCancel, send, history, onContinue, reward = false }: {
   state: Snapshot;
   choice: RestChoice | null;
   onChoose: (choice: RestChoice) => void;
   onCancel: () => void;
   send: (command: Command) => void;
   history: { id: number; target: number }[];
-  completed: boolean;
   onContinue: () => void;
   reward?: boolean;
 }) {
@@ -47,12 +46,11 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
           : !incoming.length ? "이 계열의 시작점입니다. 이전 종류로 되돌리는 강화는 없습니다."
             : !reachable.has(choice.target) ? `현재 ${piece.name}에서 이 가지로 변경하는 강화 경로는 없습니다.`
               : direct && !direct.unlocked ? `영구 로스터 필요: ${direct.required_pieces.filter((required) => !required.owned).map((required) => required.name).join(", ")}`
-                : completed ? reward ? "이번 보상 강화를 사용했습니다." : "이번 쉼터의 행동을 사용했습니다. 다음 쉼터에서 다시 살펴보세요."
-                  : !direct ? `선행 기물 ${incoming.map((path) => path.from_name).join(" 또는 ")} 상태가 필요합니다.` : null;
+                : !direct ? `선행 기물 ${incoming.map((path) => path.from_name).join(" 또는 ")} 상태가 필요합니다.` : null;
     return (
       <section className="rest-panel rest-workshop" ref={panel} aria-label={reward ? "보상 기물 강화" : "쉼터 기물 관리"}>
         <div className="rest-detail-heading">
-          <h2>기물 강화</h2><span className="rest-budget" role={completed ? "status" : undefined}>{completed ? "강화 완료" : reward ? "보상 1회" : "행동 1회"}</span>
+          <h2>기물 강화</h2><span className="rest-budget">{reward ? "보상 1회" : "행동 1회"}</span>
           <button className="text-button" onClick={onCancel} aria-label="기물 선택 닫기">닫기 ×</button>
         </div>
         <div className="rest-detail rest-workshop-layout">
@@ -75,13 +73,12 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, co
           <UpgradeTree key={piece.id} piece={piece} paths={state.upgrade_paths} acquired={acquired}
             onSelect={(target) => onChoose({ ...choice!, target })}
             onConfirm={(target) => send(reward ? { type: "claim_upgrade", id: piece.id, target } : { type: "rest_upgrade", id: piece.id, target })}
-            completed={completed} inlineConfirm />
+            completed={false} />
         </div>
         <div className="rest-workshop-actions">
-          {choice?.target !== undefined && direct?.unlocked && !reason && <button className="primary" onClick={() => send(reward ? { type: "claim_upgrade", id: piece.id, target: choice.target! } : { type: "rest_upgrade", id: piece.id, target: choice.target! })}>강화 확정</button>}
           <button className="text-button" onClick={onCancel}>대상 재선택</button>
-          <button className="text-button" onClick={() => reward || completed ? onContinue() : send({ type: "rest_skip" })}>
-            {reward ? "보상 화면으로 돌아가기 →" : completed ? "맵으로 돌아가기 →" : "휴식을 마치고 맵으로 →"}
+          <button className="text-button" onClick={() => reward ? onContinue() : send({ type: "rest_skip" })}>
+            {reward ? "보상 화면으로 돌아가기 →" : "휴식을 마치고 맵으로 →"}
           </button>
         </div>
       </section>

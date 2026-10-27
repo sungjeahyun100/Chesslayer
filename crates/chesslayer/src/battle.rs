@@ -144,7 +144,6 @@ pub struct Battle {
 #[derive(Clone, Copy)]
 struct LimiterState {
     owner: PlayerId,
-    active: bool,
     moves_left: u8,
 }
 impl Battle {
@@ -481,13 +480,13 @@ impl Battle {
         if self
             .limiter
             .get(&piece.id)
-            .is_some_and(|s| s.active && s.moves_left == 0)
+            .is_some_and(|s| s.moves_left == 0)
         {
             return Ok(vec![]);
         }
         if enforce_turn
             && self.limiter_turn
-            && !self.limiter.get(&piece.id).is_some_and(|s| s.active)
+            && !self.limiter.contains_key(&piece.id)
             && self.normal_actions_used >= self.actions_per_turn
         {
             return Ok(vec![]);
@@ -627,18 +626,25 @@ impl Battle {
             self.apply_effect(action, ActionSource::PieceMove)?;
         }
         self.moved_ids.insert(piece.id);
-        if let Some(state) = self.limiter.get_mut(&piece.id) {
-            if state.active {
-                state.moves_left = state.moves_left.saturating_sub(1);
-            }
+        let limiter_expired = if let Some(state) = self.limiter.get_mut(&piece.id) {
+            state.moves_left = state.moves_left.saturating_sub(1);
+            state.moves_left == 0
         } else {
             self.normal_actions_used = self.normal_actions_used.saturating_add(1);
-        }
+            false
+        };
         if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
             p.moved = true;
         }
         self.actions_left -= 1;
-        if self.phase == Phase::Active && self.actions_left == 0 {
+        if limiter_expired && self.phase == Phase::Active {
+            self.remove_for_limiter(&[piece.id])?;
+            self.events
+                .push("리미터 해제: 이동 횟수를 모두 사용해 기물이 사망했습니다.".into());
+            if self.phase == Phase::Active {
+                self.end_turn()?;
+            }
+        } else if self.phase == Phase::Active && self.actions_left == 0 {
             self.end_turn()?;
         }
         Ok(())
@@ -678,25 +684,6 @@ impl Battle {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
         }
-        let expired: Vec<_> = self
-            .limiter
-            .iter()
-            .filter(|(_, s)| s.active && s.owner == self.turn)
-            .map(|(&id, _)| id)
-            .collect();
-        if !expired.is_empty() {
-            self.remove_for_limiter(&expired)?;
-            self.events.push(format!(
-                "리미터 해제: 효과 종료로 {}기 사망했습니다.",
-                expired.len()
-            ));
-            for id in expired {
-                self.limiter.remove(&id);
-            }
-            if self.phase == Phase::Finished {
-                return Ok(());
-            }
-        }
         if self.turn == ENEMY && self.initiative_turns_left > 0 {
             self.initiative_turns_left -= 1;
             if self.initiative_turns_left == 0 {
@@ -714,22 +701,19 @@ impl Battle {
         self.turn = if self.turn == PLAYER { ENEMY } else { PLAYER };
         self.actions_left = self.actions_per_turn;
         self.normal_actions_used = 0;
-        let mut starts = false;
-        for s in self.limiter.values_mut() {
-            if s.owner == self.turn && !s.active {
-                s.active = true;
-                s.moves_left = 3;
-                starts = true;
-            }
-        }
-        self.limiter_turn = starts;
-        if starts {
-            self.actions_left = self.actions_left.max(3);
+        let remaining_moves = self
+            .limiter
+            .values()
+            .filter(|s| s.owner == self.turn)
+            .fold(0u8, |total, s| total.saturating_add(s.moves_left));
+        self.limiter_turn = remaining_moves > 0;
+        if self.limiter_turn {
+            self.actions_left = self.actions_left.saturating_add(remaining_moves);
         }
         Ok(())
     }
     pub fn limiter_status(&self, id: PieceId) -> Option<(bool, u8)> {
-        self.limiter.get(&id).map(|s| (s.active, s.moves_left))
+        self.limiter.get(&id).map(|s| (true, s.moves_left))
     }
     pub fn grant_limiter(&mut self, id: PieceId) -> Result<(), Error> {
         if self.phase != Phase::Active {
@@ -745,14 +729,18 @@ impl Battle {
             .flatten()
             .find(|p| p.id == id)
             .ok_or(Error::IllegalAction)?;
+        let owner = piece.owner;
         self.limiter.insert(
             id,
             LimiterState {
-                owner: piece.owner,
-                active: false,
+                owner,
                 moves_left: 3,
             },
         );
+        if owner == self.turn {
+            self.limiter_turn = true;
+            self.actions_left = self.actions_left.saturating_add(3);
+        }
         Ok(())
     }
     pub fn forward_pawn_candidates(&self) -> Vec<PieceId> {
