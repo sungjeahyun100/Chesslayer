@@ -330,5 +330,6 @@ fn upgrade_tree_uses_existing_hook_and_exposes_all_new_paths() {
             .iter()
             .any(|p| p.from == from && p.to == to));
     }
-    assert_eq!(snapshot.upgrade_paths.len(), 23);
+    let registered_paths: usize = pieces::ALL.iter().map(|piece| piece.upgrades.len()).sum();
+    assert_eq!(snapshot.upgrade_paths.len(), registered_paths);
 }

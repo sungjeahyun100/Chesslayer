@@ -9,6 +9,32 @@ mod sacred_domain;
 mod temporary_upgrade;
 pub mod ward;
 
+mod aimed_shot;
+mod backstage_sacrifice;
+mod bloody_invitation;
+mod body_slam;
+mod clear_tablecloth;
+mod cracked_conscience;
+mod delivered_supper;
+mod dining_etiquette;
+mod endless_ecstasy;
+mod excited_steps;
+mod extraction;
+mod frontline;
+mod infantry_support;
+mod infiltration;
+mod intermission_waltz;
+mod last_stand;
+mod last_supper;
+mod late_dinner;
+mod masquerade;
+mod meal_time;
+mod sacrifice;
+mod smoke_screen;
+mod stimpack;
+mod torn_mask;
+mod volley;
+
 use crate::{cards::Card, Battle, PieceId, PieceType};
 use serde::Serialize;
 
@@ -26,6 +52,31 @@ pub enum CardKind {
     LimiterRelease,
     TemporaryUpgrade,
     SacredDomain,
+    Stimpack,
+    BodySlam,
+    InfantrySupport,
+    Sacrifice,
+    LastStand,
+    ExcitedSteps,
+    BloodyInvitation,
+    DiningEtiquette,
+    Masquerade,
+    ClearTablecloth,
+    IntermissionWaltz,
+    LateDinner,
+    MealTime,
+    DeliveredSupper,
+    BackstageSacrifice,
+    TornMask,
+    CrackedConscience,
+    LastSupper,
+    EndlessEcstasy,
+    Volley,
+    Frontline,
+    AimedShot,
+    SmokeScreen,
+    Infiltration,
+    Extraction,
 }
 impl CardKind {
     pub fn definition(self) -> CardDefinition {
@@ -39,6 +90,31 @@ impl CardKind {
             Self::LimiterRelease => limiter_release::definition(),
             Self::TemporaryUpgrade => temporary_upgrade::definition(),
             Self::SacredDomain => sacred_domain::definition(),
+            Self::Stimpack => stimpack::definition(),
+            Self::BodySlam => body_slam::definition(),
+            Self::InfantrySupport => infantry_support::definition(),
+            Self::Sacrifice => sacrifice::definition(),
+            Self::LastStand => last_stand::definition(),
+            Self::ExcitedSteps => excited_steps::definition(),
+            Self::BloodyInvitation => bloody_invitation::definition(),
+            Self::DiningEtiquette => dining_etiquette::definition(),
+            Self::Masquerade => masquerade::definition(),
+            Self::ClearTablecloth => clear_tablecloth::definition(),
+            Self::IntermissionWaltz => intermission_waltz::definition(),
+            Self::LateDinner => late_dinner::definition(),
+            Self::MealTime => meal_time::definition(),
+            Self::DeliveredSupper => delivered_supper::definition(),
+            Self::BackstageSacrifice => backstage_sacrifice::definition(),
+            Self::TornMask => torn_mask::definition(),
+            Self::CrackedConscience => cracked_conscience::definition(),
+            Self::LastSupper => last_supper::definition(),
+            Self::EndlessEcstasy => endless_ecstasy::definition(),
+            Self::Volley => volley::definition(),
+            Self::Frontline => frontline::definition(),
+            Self::AimedShot => aimed_shot::definition(),
+            Self::SmokeScreen => smoke_screen::definition(),
+            Self::Infiltration => infiltration::definition(),
+            Self::Extraction => extraction::definition(),
         }
     }
 }
@@ -166,4 +242,93 @@ pub const REWARD_POOL: &[CardKind] = &[
 
 pub fn starter_deck() -> Vec<Card> {
     vec![]
+}
+
+/// Separate troop pools: the Guardian keeps its existing card definitions.
+pub fn reward_pool(character: &str) -> &'static [CardKind] {
+    match character {
+        "vanguard" => &[
+            CardKind::Stimpack,
+            CardKind::BodySlam,
+            CardKind::InfantrySupport,
+            CardKind::Sacrifice,
+            CardKind::LastStand,
+        ],
+        "heretic" => &[
+            CardKind::ExcitedSteps,
+            CardKind::BloodyInvitation,
+            CardKind::DiningEtiquette,
+            CardKind::Masquerade,
+            CardKind::ClearTablecloth,
+            CardKind::IntermissionWaltz,
+            CardKind::LateDinner,
+            CardKind::MealTime,
+            CardKind::DeliveredSupper,
+            CardKind::BackstageSacrifice,
+            CardKind::TornMask,
+            CardKind::CrackedConscience,
+            CardKind::LastSupper,
+            CardKind::EndlessEcstasy,
+        ],
+        "artillery" => &[CardKind::Volley, CardKind::Frontline],
+        "special" => &[
+            CardKind::AimedShot,
+            CardKind::SmokeScreen,
+            CardKind::Infiltration,
+            CardKind::Extraction,
+        ],
+        _ => REWARD_POOL,
+    }
+}
+
+pub fn starting_deck(character: &str) -> Vec<Card> {
+    use CardKind::*;
+    let kinds: &[CardKind] = match character {
+        "vanguard" => &[
+            Stimpack,
+            Stimpack,
+            Stimpack,
+            Stimpack,
+            InfantrySupport,
+            InfantrySupport,
+            Sacrifice,
+            Sacrifice,
+            BodySlam,
+            LastStand,
+        ],
+        "heretic" => &[
+            ExcitedSteps,
+            ExcitedSteps,
+            ExcitedSteps,
+            ExcitedSteps,
+            BloodyInvitation,
+            BloodyInvitation,
+            BloodyInvitation,
+            DiningEtiquette,
+            DiningEtiquette,
+            Masquerade,
+        ],
+        "artillery" => &[Volley, Volley, Volley, Volley, Frontline, Frontline],
+        "special" => &[
+            AimedShot,
+            AimedShot,
+            AimedShot,
+            SmokeScreen,
+            SmokeScreen,
+            SmokeScreen,
+            Infiltration,
+            Infiltration,
+            Extraction,
+            Extraction,
+        ],
+        _ => return starter_deck(),
+    };
+    kinds
+        .iter()
+        .enumerate()
+        .map(|(index, &kind)| Card {
+            id: index as u32 + 1,
+            kind,
+        })
+        .collect()
 }

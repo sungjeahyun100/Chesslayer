@@ -1,4 +1,4 @@
-use chesslayer::game::{Command, Game};
+use chesslayer::game::{Command, Game, Progress};
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
 
@@ -8,10 +8,12 @@ struct SavedRun {
     version: u32,
     character: String,
     seed: u32,
+    floor: u8,
+    progress: Progress,
     commands: Vec<Command>,
 }
 
-const SAVE_VERSION: u32 = 13;
+const SAVE_VERSION: u32 = 14;
 
 /// The only browser state owner. JavaScript sends intentions and renders snapshots.
 #[wasm_bindgen]
@@ -23,12 +25,31 @@ pub struct WebGame {
 impl WebGame {
     #[wasm_bindgen(constructor)]
     pub fn new(character: &str, seed: u32) -> Result<WebGame, JsValue> {
+        Self::start_run(
+            character,
+            seed,
+            1,
+            &serde_json::to_string(&Progress::default()).unwrap(),
+        )
+    }
+    pub fn start_run(
+        character: &str,
+        seed: u32,
+        floor: u8,
+        progress: &str,
+    ) -> Result<WebGame, JsValue> {
+        let progress: Progress = serde_json::from_str(progress)
+            .map_err(|_| JsValue::from_str("해금 정보를 읽을 수 없습니다."))?;
+        let game = Game::new_run(character, seed, floor, progress.clone())
+            .map_err(|e| JsValue::from_str(&e))?;
         Ok(Self {
-            game: Game::new(character, seed).map_err(|e| JsValue::from_str(&e))?,
+            game,
             save: SavedRun {
                 version: SAVE_VERSION,
                 character: character.into(),
                 seed,
+                floor,
+                progress,
                 commands: vec![],
             },
         })
@@ -64,7 +85,13 @@ impl WebGame {
         }
         let save: SavedRun = serde_json::from_str(saved)
             .map_err(|_| JsValue::from_str("저장된 원정을 읽을 수 없습니다."))?;
-        let mut game = Game::new(&save.character, save.seed).map_err(|e| JsValue::from_str(&e))?;
+        let mut game = Game::new_run(
+            &save.character,
+            save.seed,
+            save.floor,
+            save.progress.clone(),
+        )
+        .map_err(|e| JsValue::from_str(&e))?;
         for command in &save.commands {
             game.dispatch(command.clone())
                 .map_err(|_| JsValue::from_str("저장된 원정의 진행 기록이 올바르지 않습니다."))?;

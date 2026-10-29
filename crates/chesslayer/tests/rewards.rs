@@ -26,7 +26,7 @@ fn snapshot(g: &Game) -> String {
 
 #[test]
 fn elite_reward_can_be_skipped_reopened_and_claimed_once() {
-    let mut game = Game::new("vanguard", 2026).unwrap();
+    let mut game = Game::new("guardian", 2026).unwrap();
     let elite = game
         .map
         .nodes
@@ -119,8 +119,8 @@ fn elite_reward_can_be_skipped_reopened_and_claimed_once() {
 }
 
 #[test]
-fn boss_upgrade_can_be_revisited_before_advancing_floor() {
-    let mut game = Game::new("vanguard", 2026).unwrap();
+fn boss_upgrade_can_be_claimed_before_finishing_the_run() {
+    let mut game = Game::new("guardian", 2026).unwrap();
     let boss = game
         .map
         .nodes
@@ -135,11 +135,12 @@ fn boss_upgrade_can_be_revisited_before_advancing_floor() {
         .rewards
         .iter()
         .all(|r| matches!(r, RewardView::Card(_))));
-    game.dispatch(Command::ContinueReward).unwrap();
-    assert_eq!(game.phase, RunPhase::Map);
-    assert_eq!(game.floor, 1);
-    assert!(game.snapshot().map.nodes[boss].unclaimed_reward);
-    game.dispatch(Command::SelectNode { id: boss }).unwrap();
+    assert_eq!(game.progress.highest_floor, 2);
+    assert!(game
+        .progress
+        .unlocked_squads
+        .iter()
+        .any(|id| id == "vanguard"));
     let piece = game
         .snapshot()
         .rest_options
@@ -165,8 +166,8 @@ fn boss_upgrade_can_be_revisited_before_advancing_floor() {
         })
         .is_err());
     game.dispatch(Command::ContinueReward).unwrap();
-    assert_eq!(game.floor, 2);
-    assert_eq!(game.phase, RunPhase::Map);
+    assert_eq!(game.floor, 1);
+    assert_eq!(game.phase, RunPhase::Victory);
     assert_eq!(
         game.battle
             .outcome()
@@ -176,10 +177,15 @@ fn boss_upgrade_can_be_revisited_before_advancing_floor() {
             .kind,
         target
     );
+    let next = Game::new_run("vanguard", 2027, 2, game.progress.clone()).unwrap();
+    assert_eq!(next.floor, 2);
+    assert_eq!(next.phase, RunPhase::Map);
+    assert_eq!(next.deck.len(), 10);
+    assert!(next.battle.outcome().iter().all(|p| p.position.is_some()));
 }
 
 #[test]
-fn ascending_after_boss_revives_every_piece_without_losing_growth() {
+fn a_new_run_after_boss_restores_the_troop_without_carrying_old_growth() {
     let mut game = Game::new("guardian", 2026).unwrap();
     game.current_node = Some(
         game.map
@@ -222,17 +228,20 @@ fn ascending_after_boss_revives_every_piece_without_losing_growth() {
     game.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     replay.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     assert_eq!(snapshot(&game), snapshot(&replay));
-    assert_eq!(game.floor, 2);
-    assert_eq!(game.phase, RunPhase::Map);
-    let roster = game.battle.outcome();
+    assert_eq!(game.floor, 1);
+    assert_eq!(game.phase, RunPhase::Victory);
+    assert_eq!(game.progress.highest_floor, 2);
+    let old_roster = game.battle.outcome();
+    assert_eq!(old_roster[1].kind, TEMPEST_KNIGHT);
+    assert_eq!(old_roster[1].upgrades, ["tempest"]);
+    assert_eq!(old_roster[1].persistent.get("growth"), Some(&3));
+    assert!(old_roster[0].position.is_none());
+    let next = Game::new_run("guardian", 2027, 2, game.progress.clone()).unwrap();
+    let roster = next.battle.outcome();
+    assert_eq!(roster, Battle::standard_roster());
     assert!(roster.iter().all(|piece| piece.position.is_some()));
-    assert_eq!(roster[0].position, Some(Position::new(0, 7)));
-    assert_eq!(roster[1].position, Some(Position::new(1, 7)));
-    assert_eq!(roster[2].position, Some(Position::new(2, 7)));
-    assert_eq!(roster[1].kind, TEMPEST_KNIGHT);
-    assert_eq!(roster[1].upgrades, ["tempest"]);
-    assert_eq!(roster[1].persistent.get("growth"), Some(&3));
-    assert_eq!(game.snapshot().next_battle_pieces.len(), roster.len());
+    assert!(next.deck.is_empty());
+    assert_eq!(next.snapshot().next_battle_pieces.len(), roster.len());
     let after = snapshot(&game);
     assert!(game.dispatch(Command::ChooseReward { index: 0 }).is_err());
     assert_eq!(snapshot(&game), after);
@@ -242,7 +251,7 @@ fn ascending_after_boss_revives_every_piece_without_losing_growth() {
 fn mixed_slots_are_stable_seeded_and_grant_exactly_the_displayed_reward() {
     let mut offers = std::collections::HashSet::new();
     for seed in 0..32 {
-        let mut g = Game::new("vanguard", seed).unwrap();
+        let mut g = Game::new("guardian", seed).unwrap();
         assert!(g.snapshot().rewards.is_empty());
         g.dispatch(Command::SelectNode {
             id: g.available_nodes()[0],
@@ -300,7 +309,7 @@ fn mixed_slots_are_stable_seeded_and_grant_exactly_the_displayed_reward() {
 
 #[test]
 fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
-    let mut g = Game::new("vanguard", 2026).unwrap();
+    let mut g = Game::new("guardian", 2026).unwrap();
     g.relics = RELIC_REWARD_POOL.to_vec();
     let elite = g
         .map
@@ -362,33 +371,42 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
     win(&mut g);
     assert_eq!(g.snapshot().rewards.len(), 3);
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    assert_eq!(g.phase, RunPhase::Map);
-    assert_eq!(g.floor, 2);
-    assert_eq!(g.available_nodes().len(), 3);
-    assert!(g
+    assert_eq!(g.phase, RunPhase::Victory);
+    assert_eq!(g.floor, 1);
+    assert_eq!(g.progress.highest_floor, 2);
+    assert_eq!(
+        g.deck.iter().map(|c| c.id).collect::<Vec<_>>(),
+        (1..=8).collect::<Vec<_>>()
+    );
+    let mut next = Game::new_run("guardian", 2027, 2, g.progress.clone()).unwrap();
+    assert_eq!(next.available_nodes().len(), 3);
+    assert!(next
         .map
         .nodes
         .iter()
         .filter(|n| n.kind == NodeKind::Boss)
-        .all(|n| encounters::FLOOR_TWO_BOSSES.contains(&n.encounter.unwrap())));
-    g.current_node = Some(
-        g.map
+        .all(|n| n.encounter == Some(encounters::HERETIC_BOSS)));
+    next.current_node = Some(
+        next.map
             .nodes
             .iter()
             .find(|n| n.kind == NodeKind::Boss)
             .unwrap()
             .id,
     );
-    win(&mut g);
-    g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    assert_eq!(g.phase, RunPhase::Victory);
-    assert_eq!(
-        g.deck.iter().map(|c| c.id).collect::<Vec<_>>(),
-        (1..=9).collect::<Vec<_>>()
-    );
+    win(&mut next);
+    next.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    assert_eq!(next.phase, RunPhase::Victory);
+    assert_eq!(next.progress.highest_floor, 3);
+    assert!(next
+        .progress
+        .unlocked_squads
+        .iter()
+        .any(|id| id == "heretic"));
+    assert_eq!(next.deck.iter().map(|c| c.id).collect::<Vec<_>>(), vec![1]);
 
     // Elite offers contain no relic even when its old node relic is unowned.
-    let mut g = Game::new("vanguard", 2026).unwrap();
+    let mut g = Game::new("guardian", 2026).unwrap();
     g.current_node = Some(elite);
     let extra = g.map.nodes[elite].relic.unwrap();
     g.relics = RELIC_REWARD_POOL

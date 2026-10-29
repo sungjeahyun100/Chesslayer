@@ -12,6 +12,27 @@ pub enum RunPhase {
     Rest,
     Victory,
     Defeat,
+    Event,
+    Shop,
+}
+/// Campaign unlocks are independent of the disposable run and are saved by the host.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Progress {
+    pub highest_floor: u8,
+    pub unlocked_squads: Vec<String>,
+    pub final_unlocked: bool,
+    pub final_defeated: bool,
+}
+impl Default for Progress {
+    fn default() -> Self {
+        Self {
+            highest_floor: 1,
+            unlocked_squads: vec!["guardian".into()],
+            final_unlocked: false,
+            final_defeated: false,
+        }
+    }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Reward {
@@ -38,6 +59,32 @@ pub enum Command {
         #[serde(default)]
         upgrades: Vec<CardUpgradeChoice>,
     },
+    SpecialAction {
+        from: usize,
+        to: usize,
+    },
+    ResolveEffect {
+        target: u32,
+    },
+    RestConfess {
+        id: u32,
+    },
+    RestSupply {
+        id: u32,
+    },
+    Reinforce {
+        id: u32,
+    },
+    ProtectHunger {
+        id: u32,
+    },
+    EventChoice {
+        choice: String,
+    },
+    ShopBuy {
+        index: usize,
+    },
+    ShopLeave,
     EndTurn,
     EnemyStep,
     ChooseReward {
@@ -86,6 +133,15 @@ pub struct Game {
     pub seed: u32,
     pub floor: u8,
     pub character: String,
+    pub squad_id: String,
+    pub progress: Progress,
+    pub final_battle: bool,
+    pub gold: u32,
+    pub ammo: Option<u32>,
+    reinforcement_used: bool,
+    hunger_protection_used: bool,
+    shop_offers: Vec<CardKind>,
+    shop_bought: Vec<usize>,
     pub log: Vec<String>,
     pub round: u32,
     rng: Rng,
@@ -114,14 +170,14 @@ impl Game {
             .into_iter()
             .find(|c| c.id == character)
             .ok_or("캐릭터를 선택하세요.")?;
-        let deck = starter_deck();
+        let deck = content::cards::starting_deck(character);
         let next_card_id = deck.iter().map(|card| card.id).max().unwrap_or(0) + 1;
         let battle = Battle::new(BattleStart {
-            players: Battle::standard_roster(),
+            players: content::characters::roster(character),
             encounter: encounter(0),
         })
         .map_err(engine_error)?;
-        let game = Self {
+        let mut game = Self {
             battle,
             cards: CardCombat::default(),
             deck,
@@ -134,6 +190,15 @@ impl Game {
             seed,
             floor: 1,
             character: choice.name.into(),
+            squad_id: character.into(),
+            progress: Progress::default(),
+            final_battle: false,
+            gold: 0,
+            ammo: (character == "artillery").then_some(400),
+            reinforcement_used: false,
+            hunger_protection_used: false,
+            shop_offers: vec![],
+            shop_bought: vec![],
             log: vec![],
             round: 1,
             rng: Rng::new(seed),
@@ -144,7 +209,76 @@ impl Game {
             upgrade_claimed: false,
             last_cleared_node: None,
         };
+        game.assign_map_relics();
         Ok(game)
+    }
+    pub fn new_run(
+        character: &str,
+        seed: u32,
+        floor: u8,
+        progress: Progress,
+    ) -> Result<Self, String> {
+        if !progress.unlocked_squads.iter().any(|id| id == character) {
+            return Err("아직 해금되지 않은 부대입니다.".into());
+        }
+        if floor > 4
+            || (floor > 0 && floor > progress.highest_floor)
+            || (floor == 0 && !progress.final_unlocked)
+        {
+            return Err("아직 개방되지 않은 층입니다.".into());
+        }
+        let mut game = Self::new(character, seed)?;
+        game.progress = progress;
+        game.final_battle = floor == 0;
+        game.floor = if floor == 0 { 4 } else { floor };
+        game.map = if game.final_battle {
+            ActMap {
+                rows: 1,
+                nodes: vec![MapNode {
+                    id: 0,
+                    row: 0,
+                    lane: 2,
+                    kind: NodeKind::Boss,
+                    encounter: Some(content::encounters::DICTATOR_BOSS),
+                    relic: None,
+                    next: vec![],
+                }],
+            }
+        } else {
+            ActMap::generate_for_floor(seed, floor)
+        };
+        game.assign_map_relics();
+        Ok(game)
+    }
+    fn assign_map_relics(&mut self) {
+        let pool = content::relics::reward_pool(&self.squad_id);
+        let mut rng = Rng::new(self.seed ^ 0x0300_00ab);
+        for node in &mut self.map.nodes {
+            if node.relic.is_some() {
+                node.relic = Some(pool[rng.index(pool.len())]);
+            }
+        }
+    }
+    fn ammo_capacity(&self) -> Option<u32> {
+        self.ammo.map(|_| {
+            self.battle
+                .outcome()
+                .iter()
+                .filter(|p| p.kind == content::pieces::WAREHOUSE && p.position.is_some())
+                .count() as u32
+                * 200
+        })
+    }
+    fn resource_effects(&mut self) {
+        let (draw, mana, ammo) = self.battle.take_resource_effects();
+        self.cards.draw_cards(draw as usize, &mut self.rng);
+        if let Some(current) = &mut self.ammo {
+            *current = current.saturating_add_signed(ammo);
+            self.cards.mana = *current;
+        } else {
+            self.cards.mana = self.cards.mana.saturating_add_signed(mana);
+        }
+        self.battle.set_ammunition(self.ammo.unwrap_or(0));
     }
     fn log(&mut self, message: impl Into<String>) {
         self.log.push(message.into());
@@ -153,6 +287,7 @@ impl Game {
         }
     }
     fn events(&mut self) {
+        self.resource_effects();
         for e in std::mem::take(&mut self.battle.events) {
             self.log(e);
         }
@@ -200,32 +335,6 @@ impl Game {
         }
         Ok(roster)
     }
-    fn revive_for_next_floor(&mut self) -> Result<usize, String> {
-        let mut roster = self.battle.outcome();
-        let mut occupied: HashSet<_> = roster.iter().filter_map(|p| p.position).collect();
-        let mut revived = 0;
-        for piece in roster.iter_mut().filter(|p| p.position.is_none()) {
-            let position = if !occupied.contains(&piece.origin) {
-                piece.origin
-            } else {
-                (0..8)
-                    .rev()
-                    .flat_map(|rank| (0..8).map(move |file| Position::new(file, rank)))
-                    .find(|position| !occupied.contains(position))
-                    .ok_or("아군을 부활시킬 빈 칸이 없습니다.")?
-            };
-            occupied.insert(position);
-            piece.position = Some(position);
-            piece.moved = false;
-            revived += 1;
-        }
-        if revived > 0 {
-            self.battle
-                .replace_roster_at_rest(roster)
-                .map_err(engine_error)?;
-        }
-        Ok(revived)
-    }
     fn start_battle(&mut self) -> Result<(), String> {
         let index = self
             .current_node
@@ -242,7 +351,10 @@ impl Game {
             }
             self.log("소용돌이: 적의 시작 위치를 섞었습니다.");
         }
-        let players = self.starting_roster()?;
+        let mut players = self.starting_roster()?;
+        for piece in &mut players {
+            piece.persistent.remove("hunger_worsened");
+        }
         if let Some(relic) = self.latest_formation() {
             self.log(format!("{}: 시작 진형을 적용했습니다.", relic.name()));
         }
@@ -260,13 +372,16 @@ impl Game {
             self.log("선공권: 양측 효과가 서로 상쇄되었습니다.");
         }
         if haste {
-            self.log(format!(
-                "가속: 양 진영이 턴마다 최대 {HASTE_ACTIONS}회 이동합니다."
-            ));
+            self.log(format!("민첩성: 턴마다 최대 {HASTE_ACTIONS}회 이동합니다."));
         }
         self.phase = RunPhase::Combat;
         self.round = 1;
         self.cards = CardCombat::start(&self.deck, &mut self.rng);
+        if let Some(ammo) = self.ammo {
+            self.cards.mana = ammo;
+        }
+        self.battle.configure_v030(&self.relics);
+        self.resource_effects();
         self.events();
         self.check_finish()?;
         Ok(())
@@ -328,6 +443,21 @@ impl Game {
             .position(|p| p.id == id && p.position.is_some())
             .ok_or("살아 있는 아군 기물을 선택하세요.")?;
         let previous_kind = roster[index].kind;
+        if previous_kind == content::pieces::WAREHOUSE
+            && target == previous_kind
+            && self.ammo.is_some()
+        {
+            let capacity = self.ammo_capacity().unwrap();
+            let current = self.ammo.unwrap();
+            self.ammo = Some(current.saturating_add(current / 10).min(capacity));
+            self.log(format!(
+                "{source}: 창고 강화 · 탄약 {} → {}",
+                current,
+                self.ammo.unwrap()
+            ));
+            return Ok(());
+        }
+
         let upgrade = content::pieces::definition(previous_kind)
             .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
             .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
@@ -362,36 +492,48 @@ impl Game {
         let id = self.current_node.expect("reward requires a selected node");
         if self.completed.contains(&id) {
             self.phase = RunPhase::Map;
-            if self.map.nodes[id].kind == NodeKind::Boss && self.upgrade_claimed {
+            if self.map.nodes[id].kind == NodeKind::Boss {
                 self.finish_boss()?;
             }
             return Ok(());
         }
         self.complete_node();
-        if self.map.nodes[id].kind == NodeKind::Boss && self.upgrade_claimed {
+        if self.map.nodes[id].kind == NodeKind::Boss {
             self.finish_boss()?;
         }
         Ok(())
     }
     fn finish_boss(&mut self) -> Result<(), String> {
-        if self.floor == 1 {
-            let revived = self.revive_for_next_floor()?;
-            self.floor = 2;
-            self.map = ActMap::generate_for_floor(self.seed, 2);
-            self.current_node = None;
-            self.path.clear();
-            self.completed.clear();
-            self.reward_node = None;
-            self.rewards.clear();
-            self.reward_choice = None;
-            self.last_cleared_node = None;
-            self.log(format!(
-                "2층에 도착했습니다. 아군 전원이 회복되었습니다. 부활한 기물 {revived}기."
-            ));
+        self.phase = RunPhase::Victory;
+        self.log(if self.final_battle {
+            "부족의 독재자를 쓰러뜨렸습니다. 원정을 완수했습니다."
         } else {
-            self.phase = RunPhase::Victory;
-        }
+            "영토를 수복했습니다. 해금된 부대와 층을 선택해 새 런을 시작하세요."
+        });
         Ok(())
+    }
+    fn unlock_boss(&mut self) {
+        if self.final_battle {
+            self.progress.final_defeated = true;
+        } else {
+            let unlocked =
+                ["vanguard", "heretic", "artillery", "special"][(self.floor - 1) as usize];
+            if !self
+                .progress
+                .unlocked_squads
+                .iter()
+                .any(|id| id == unlocked)
+            {
+                self.progress.unlocked_squads.push(unlocked.into());
+            }
+            self.progress.highest_floor = self.progress.highest_floor.max((self.floor + 1).min(4));
+            if self.floor == 4 {
+                self.progress.final_unlocked = true;
+            }
+        }
+        if let Some(capacity) = self.ammo_capacity() {
+            self.ammo = Some(capacity);
+        }
     }
     fn grant_node_relic(&mut self) {
         let relic = self.map.nodes[self.current_node.unwrap()]
@@ -408,9 +550,9 @@ impl Game {
     }
     fn grant_relic(&mut self, relic: Relic) {
         if self.relics.contains(&relic) {
-            self.add_card(CardKind::Ward);
+            self.add_card(content::cards::reward_pool(&self.squad_id)[0]);
             self.log(format!(
-                "{}은 이미 보유 중입니다. 대신 가호 카드 1장을 얻었습니다.",
+                "{}은 이미 보유 중입니다. 대신 부대 전용 카드 1장을 얻었습니다.",
                 relic.name()
             ));
         } else {
@@ -423,19 +565,22 @@ impl Game {
         }
     }
     fn generate_rewards(&mut self) {
-        let mut cards = content::cards::REWARD_POOL.to_vec();
+        let mut cards = content::cards::reward_pool(&self.squad_id).to_vec();
         if self
             .current_node
             .is_some_and(|id| matches!(self.map.nodes[id].kind, NodeKind::Elite | NodeKind::Boss))
         {
             let mut rewards = Vec::with_capacity(3);
             for _ in 0..3 {
+                if cards.is_empty() {
+                    cards = content::cards::reward_pool(&self.squad_id).to_vec();
+                }
                 rewards.push(Reward::Card(cards.swap_remove(self.rng.index(cards.len()))));
             }
             self.rewards = rewards;
             return;
         }
-        let mut relics: Vec<_> = RELIC_REWARD_POOL
+        let mut relics: Vec<_> = content::relics::reward_pool(&self.squad_id)
             .iter()
             .copied()
             .filter(|r| !self.relics.contains(r))
@@ -453,6 +598,14 @@ impl Game {
             .collect();
         // Registered card kinds fill every slot when relics run out.
         while rewards.len() < 3 {
+            if remaining.is_empty() {
+                remaining.extend(
+                    content::cards::reward_pool(&self.squad_id)
+                        .iter()
+                        .copied()
+                        .map(Reward::Card),
+                );
+            }
             rewards.push(remaining.swap_remove(self.rng.index(remaining.len())));
         }
         self.rng.shuffle(&mut rewards);
@@ -511,6 +664,9 @@ impl Game {
         if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
             return Err("플레이어의 전투 턴에만 사용할 수 있습니다.".into());
         }
+        if self.battle.pending_choice().is_some() {
+            return Err("먼저 발동한 효과의 대상을 선택하세요.".into());
+        }
         Ok(())
     }
     pub fn dispatch(&mut self, command: Command) -> Result<(), String> {
@@ -532,9 +688,10 @@ impl Game {
                     .transpose()?;
                 if !self.perform_action(|battle| {
                     Ok(battle.generated_legal_actions(from)?.into_iter().find(|a| {
-                        a.action().steps().last().is_some_and(|s| {
-                            s.move_to == to && s.transition.as_deref() == promotion_key
-                        })
+                        a.action().first.effect != Effect::Catch
+                            && a.action().steps().last().is_some_and(|s| {
+                                s.move_to == to && s.transition.as_deref() == promotion_key
+                            })
                     }))
                 })? {
                     return Err("합법적인 이동이 아닙니다.".into());
@@ -555,6 +712,149 @@ impl Game {
                     upgrades: upgrades.into_iter().map(|u| (u.id, u.target)).collect(),
                 },
             )?,
+            Command::ResolveEffect { target } => {
+                if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
+                    return Err("지금은 효과 대상을 선택할 수 없습니다.".into());
+                }
+                self.battle.resolve_choice(target)?;
+                self.events();
+                self.check_finish()?;
+                if self.phase == RunPhase::Combat && self.battle.turn != PLAYER {
+                    self.cards.end_turn();
+                }
+            }
+            Command::SpecialAction { from, to } => {
+                self.require_player()?;
+                let from = pos(from)?;
+                let to = pos(to)?;
+                if !self.perform_action(|battle| {
+                    Ok(battle.generated_legal_actions(from)?.into_iter().find(|a| {
+                        a.action().first.effect == Effect::Catch && a.action().first.take == to
+                    }))
+                })? {
+                    return Err("사용할 수 없는 특수 능력 대상입니다.".into());
+                }
+            }
+            Command::RestConfess { id } => {
+                if self.phase != RunPhase::Rest {
+                    return Err("쉼터에서만 고해성사할 수 있습니다.".into());
+                }
+                let mut roster = self.battle.outcome();
+                let p = roster
+                    .iter_mut()
+                    .find(|p| {
+                        p.id == id && p.persistent.get("incapacitated").copied().unwrap_or(0) > 0
+                    })
+                    .ok_or("영구 전투불능인 기물을 선택하세요.")?;
+                p.persistent.remove("incapacitated");
+                self.battle
+                    .replace_roster_at_rest(roster)
+                    .map_err(engine_error)?;
+                self.complete_node();
+                self.log("고해성사: 영구 전투불능이 해제되었습니다.");
+            }
+            Command::RestSupply { id } => {
+                if self.phase != RunPhase::Rest {
+                    return Err("쉼터에서만 창고를 강화합니다.".into());
+                }
+                self.upgrade_piece(id, content::pieces::WAREHOUSE, "휴식")?;
+                self.complete_node();
+            }
+            Command::Reinforce { id } => {
+                if self.phase != RunPhase::Reward
+                    || self.reinforcement_used
+                    || !self.relics.contains(&Relic::Reinforcement)
+                {
+                    return Err("지금은 충원할 수 없습니다.".into());
+                }
+                let mut roster = self.battle.outcome();
+                let baseline = content::characters::roster(&self.squad_id);
+                let base = baseline
+                    .iter()
+                    .find(|p| p.id == id)
+                    .ok_or("초기 부대 기물만 충원할 수 있습니다.")?;
+                if roster.iter().any(|p| p.position == Some(base.origin)) {
+                    return Err("초기 칸이 점유되어 있습니다.".into());
+                }
+                let p = roster
+                    .iter_mut()
+                    .find(|p| p.id == id && p.position.is_none())
+                    .ok_or("사망한 기물을 선택하세요.")?;
+                let permanent_incapacitated = p.persistent.get("incapacitated").copied();
+                *p = base.clone();
+                if let Some(value) = permanent_incapacitated {
+                    p.persistent.insert("incapacitated".into(), value);
+                }
+                self.battle
+                    .replace_roster_at_rest(roster)
+                    .map_err(engine_error)?;
+                self.reinforcement_used = true;
+                self.log("충원: 선택한 기물이 초기 단계로 돌아왔습니다.");
+            }
+            Command::ProtectHunger { id } => {
+                if self.phase != RunPhase::Reward
+                    || self.hunger_protection_used
+                    || !self.relics.contains(&Relic::LastPlate)
+                {
+                    return Err("지금은 마지막 접시를 사용할 수 없습니다.".into());
+                }
+                let mut roster = self.battle.outcome();
+                let p = roster
+                    .iter_mut()
+                    .find(|p| {
+                        p.id == id && p.persistent.get("hunger_worsened").copied().unwrap_or(0) > 0
+                    })
+                    .ok_or("허기가 악화된 아군을 선택하세요.")?;
+                if let Some(hunger) = p.persistent.get_mut("hunger") {
+                    *hunger = (*hunger - 1).max(0);
+                }
+                p.persistent.remove("hunger_worsened");
+                self.battle
+                    .replace_roster_at_rest(roster)
+                    .map_err(engine_error)?;
+                self.hunger_protection_used = true;
+                self.log("마지막 접시: 선택한 아군의 허기 악화를 방지했습니다.");
+            }
+            Command::EventChoice { choice } => {
+                if self.phase != RunPhase::Event {
+                    return Err("이벤트 중이 아닙니다.".into());
+                }
+                match choice.as_str() {
+                    "eat" => {
+                        let mut roster = self.battle.outcome();
+                        for p in &mut roster {
+                            p.persistent.remove("hunger");
+                            p.persistent.remove("hunger_worsened");
+                        }
+                        self.battle
+                            .replace_roster_at_rest(roster)
+                            .map_err(engine_error)?;
+                        self.log("식당: 모든 아군이 식사를 마치고 허기를 해소했습니다.");
+                    }
+                    "leave" => self.log("식당을 떠났습니다."),
+                    _ => return Err("올바른 이벤트 선택이 아닙니다.".into()),
+                }
+                self.complete_node();
+            }
+            Command::ShopBuy { index } => {
+                if self.phase != RunPhase::Shop || self.shop_bought.contains(&index) {
+                    return Err("구입할 수 없는 상품입니다.".into());
+                }
+                let kind = *self.shop_offers.get(index).ok_or("상품이 없습니다.")?;
+                if self.gold < 20 {
+                    return Err("금화가 부족합니다.".into());
+                }
+                self.gold -= 20;
+                self.shop_bought.push(index);
+                self.add_card(kind);
+                self.log(format!("상점: {} 구입 · 금화 20", kind.definition().name));
+            }
+            Command::ShopLeave => {
+                if self.phase != RunPhase::Shop {
+                    return Err("상점에 있지 않습니다.".into());
+                }
+                self.complete_node();
+            }
             Command::EndTurn => {
                 self.require_player()?;
                 self.battle.end_turn().map_err(engine_error)?;
@@ -610,6 +910,17 @@ impl Game {
                         self.phase = RunPhase::Rest;
                         self.log("작은 쉼터 · 강화 또는 부활을 한 번 선택하세요.");
                     }
+                    NodeKind::Event => {
+                        self.phase = RunPhase::Event;
+                        self.log("작은 식당에서 따뜻한 음식을 내놓았습니다.");
+                    }
+                    NodeKind::Shop => {
+                        self.phase = RunPhase::Shop;
+                        self.shop_offers = content::cards::reward_pool(&self.squad_id).to_vec();
+                        self.rng.shuffle(&mut self.shop_offers);
+                        self.shop_offers.truncate(3);
+                        self.shop_bought.clear();
+                    }
                     NodeKind::Treasure => {
                         self.phase = RunPhase::Treasure;
                         self.log("남겨진 보물 · 새로운 힘을 발견했습니다.");
@@ -645,7 +956,11 @@ impl Game {
                 }
                 let p = roster
                     .iter_mut()
-                    .find(|p| p.id == id && p.position.is_none() && p.kind != KING)
+                    .find(|p| {
+                        p.id == id
+                            && p.position.is_none()
+                            && (self.ammo.is_some() || p.id != self.battle.king_id)
+                    })
                     .ok_or("사망한 아군 기물을 선택하세요.")?;
                 p.position = Some(origin);
                 p.moved = false;
@@ -690,7 +1005,7 @@ impl Game {
             square(action.first.from),
             square(destination),
             if still_at {
-                " (가호로 저지)".to_string()
+                " (제자리 판정)".to_string()
             } else {
                 captured
                     .map(|p| format!(" · {} 포획", piece_name(p.kind)))
@@ -720,10 +1035,27 @@ impl Game {
             return Ok(());
         }
         if let GameResult::Win { winner, reason } = self.battle.result {
+            self.resource_effects();
             self.battle.reset_after_battle().map_err(engine_error)?;
             self.cards = CardCombat::default();
             if winner == PLAYER {
                 self.phase = RunPhase::Reward;
+                self.gold += if self
+                    .current_node
+                    .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Combat)
+                {
+                    15
+                } else {
+                    30
+                };
+                self.reinforcement_used = false;
+                self.hunger_protection_used = false;
+                if self
+                    .current_node
+                    .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Boss)
+                {
+                    self.unlock_boss();
+                }
                 self.generate_rewards();
                 self.reward_node = self.current_node;
                 self.reward_choice = None;
@@ -747,6 +1079,9 @@ impl Game {
         self.round = self.round.saturating_add(1);
         self.cards
             .begin_turn(&mut self.rng, self.relics.contains(&Relic::IceCream));
+        if let Some(ammo) = self.ammo {
+            self.cards.mana = ammo;
+        }
     }
     fn play_card(
         &mut self,
@@ -804,7 +1139,7 @@ impl Game {
             }
             _ => {}
         }
-        let cost = d.selected_cost(selection)?;
+        let mut cost = d.selected_cost(selection)?;
         if self.cards.mana < cost {
             return Err("마나가 부족합니다.".into());
         }
@@ -814,14 +1149,28 @@ impl Game {
         } else {
             (d.effect)(&mut next, selection.target)?
         };
+        if d.kind == CardKind::Volley {
+            cost = removed.unwrap_or(0) as u32;
+            if self.cards.mana < cost {
+                return Err(format!("일제사격에 필요한 탄약이 부족합니다: {cost}"));
+            }
+        }
         self.battle = next;
         self.cards.spend_with_cost(index, &d, cost);
+        if self.ammo.is_some() {
+            self.ammo = Some(self.cards.mana);
+        }
         self.log(format!(
-            "{} 사용 · 마나 −{}{}",
+            "{} 사용 · {} −{}{}",
             d.name,
+            if self.ammo.is_some() {
+                "탄약"
+            } else {
+                "마나"
+            },
             cost,
             removed
-                .map(|n| format!(" · {n}기 제거 (로얄 보호)"))
+                .map(|n| format!(" · {n}기 처리"))
                 .unwrap_or_default()
         ));
         self.events();
@@ -843,27 +1192,34 @@ impl Game {
                 for action in
                     battle.generated_legal_actions(pos(i).map_err(|_| Error::IllegalAction)?)?
                 {
-                    let mut score = action
-                        .action()
-                        .steps()
-                        .filter_map(|s| {
-                            battle
-                                .board
-                                .piece_at(s.take)
-                                .ok()
-                                .flatten()
-                                .filter(|p| p.owner == PLAYER)
-                        })
-                        .map(|p| {
-                            if battle.has_ward(p.id) {
-                                1
-                            } else if p.id == battle.king_id {
-                                100_000
-                            } else {
-                                content::pieces::definition(p.kind).map_or(10, |d| d.value)
-                            }
-                        })
-                        .sum();
+                    let mut score =
+                        action
+                            .action()
+                            .steps()
+                            .filter_map(|s| {
+                                battle.board.piece_at(s.take).ok().flatten().filter(|p| {
+                                    p.owner == PLAYER || p.kind == content::pieces::CORPSE
+                                })
+                            })
+                            .map(|p| {
+                                if p.kind == content::pieces::CORPSE {
+                                    let status = battle.status(piece.unwrap().id);
+                                    if status.blessing {
+                                        30
+                                    } else if status.hunger > 0 {
+                                        15
+                                    } else {
+                                        2
+                                    }
+                                } else if battle.has_ward(p.id) {
+                                    1
+                                } else if battle.is_royal_piece(p.id) {
+                                    100_000
+                                } else {
+                                    content::pieces::definition(p.kind).map_or(10, |d| d.value)
+                                }
+                            })
+                            .sum();
                     if let Some(key) = action
                         .action()
                         .steps()
@@ -914,7 +1270,7 @@ impl Game {
     pub fn snapshot(&self) -> Snapshot {
         let resting = matches!(
             self.phase,
-            RunPhase::Rest | RunPhase::Map | RunPhase::Treasure
+            RunPhase::Rest | RunPhase::Map | RunPhase::Treasure | RunPhase::Event | RunPhase::Shop
         );
         let pieces: Vec<_> = self
             .battle
@@ -933,7 +1289,7 @@ impl Game {
                         owner: p.owner,
                         cell: i,
                         square: square(pos(i).unwrap()),
-                        royal: self.battle.is_enemy_royal(p.id) || p.id == self.battle.king_id,
+                        royal: self.battle.is_royal_piece(p.id),
                         ward: self.battle.has_ward(p.id),
                         self_defense: self.battle.has_self_defense(p.id),
                         temporary_upgrade: self.battle.has_temporary_upgrade(p.id),
@@ -941,6 +1297,7 @@ impl Game {
                             .battle
                             .limiter_status(p.id)
                             .map(|(active, moves_left)| LimiterView { active, moves_left }),
+                        statuses: self.battle.status_labels(p.id),
                         absorbed_moves: self
                             .battle
                             .absorbed_kinds(p.id)
@@ -959,6 +1316,7 @@ impl Game {
                         .legal_actions(pos(p.cell).unwrap())
                         .unwrap_or_default()
                         .into_iter()
+                        .filter(|a| a.first.effect != Effect::Catch)
                         .map(move |a| MoveView {
                             from: p.cell,
                             to: cell(a.steps().last().unwrap().move_to),
@@ -989,25 +1347,28 @@ impl Game {
                 let targets = if d.targeted {
                     (d.target_candidates)(&self.battle)
                         .into_iter()
-                        .filter(|id| pieces.iter().any(|p| p.id == *id))
+                        .filter(|id| {
+                            (*id >= 10_000 && *id < 10_064) || pieces.iter().any(|p| p.id == *id)
+                        })
                         .collect::<Vec<_>>()
                 } else {
                     vec![]
                 };
-                let disabled_reason =
-                    if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
-                        Some("내 턴을 기다리세요.")
-                    } else if self.cards.mana < if d.cost_per_target { 1 } else { d.cost } {
-                        Some("마나가 부족합니다.")
-                    } else if d.targeted && targets.is_empty() {
-                        Some(if c.kind == CardKind::SacredDomain {
-                            "희생할 아군 비숍이 없습니다."
-                        } else {
-                            "선택 가능한 기물이 없습니다."
-                        })
+                let disabled_reason = if self.battle.pending_choice().is_some() {
+                    Some("발동 효과의 대상을 먼저 선택하세요.")
+                } else if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
+                    Some("내 턴을 기다리세요.")
+                } else if self.cards.mana < if d.cost_per_target { 1 } else { d.cost } {
+                    Some("마나가 부족합니다.")
+                } else if d.targeted && targets.is_empty() {
+                    Some(if c.kind == CardKind::SacredDomain {
+                        "희생할 아군 비숍이 없습니다."
                     } else {
-                        None
-                    };
+                        "선택 가능한 기물이 없습니다."
+                    })
+                } else {
+                    None
+                };
                 CardView {
                     id: c.id,
                     definition: d,
@@ -1034,12 +1395,13 @@ impl Game {
                                     owner: PLAYER,
                                     cell: cell(position),
                                     square: square(position),
-                                    royal: p.id == self.battle.king_id,
+                                    royal: self.battle.is_royal_piece(p.id),
                                     ward: false,
                                     self_defense: false,
                                     temporary_upgrade: false,
                                     limiter: None,
                                     absorbed_moves: vec![],
+                                    statuses: self.battle.status_labels(p.id),
                                 }
                             })
                         })
@@ -1049,7 +1411,7 @@ impl Game {
         } else {
             vec![]
         };
-        let rest_options = roster
+        let rest_options: Vec<RestOption> = roster
             .iter()
             .map(|p| {
                 let origin = Some(p.origin);
@@ -1083,15 +1445,67 @@ impl Game {
                     can_revive: self.phase == RunPhase::Rest
                         && origin.is_some()
                         && p.position.is_none()
-                        && p.kind != KING
+                        && (self.ammo.is_some() || p.id != self.battle.king_id)
                         && !roster
                             .iter()
                             .any(|other| other.position.is_some() && other.position == origin),
                     dead: p.position.is_none(),
+                    statuses: self.battle.status_labels(p.id),
+                    can_confess: self.phase == RunPhase::Rest
+                        && p.persistent.get("incapacitated").copied().unwrap_or(0) > 0,
                 }
             })
             .collect();
+        let reinforcement_options = rest_options
+            .iter()
+            .filter(|p| {
+                self.phase == RunPhase::Reward
+                    && !self.reinforcement_used
+                    && self.relics.contains(&Relic::Reinforcement)
+                    && p.dead
+                    && content::characters::roster(&self.squad_id)
+                        .iter()
+                        .any(|base| base.id == p.id)
+                    && !roster
+                        .iter()
+                        .any(|r| r.position.is_some() && r.position.map(cell) == p.origin)
+            })
+            .cloned()
+            .collect();
+        let hunger_protection_options = rest_options
+            .iter()
+            .filter(|p| {
+                self.phase == RunPhase::Reward
+                    && !self.hunger_protection_used
+                    && self.relics.contains(&Relic::LastPlate)
+                    && roster.iter().find(|r| r.id == p.id).is_some_and(|r| {
+                        r.persistent.get("hunger_worsened").copied().unwrap_or(0) > 0
+                    })
+            })
+            .cloned()
+            .collect();
+        let abilities = if self.phase == RunPhase::Combat && self.battle.turn == PLAYER {
+            pieces.iter().filter(|p| p.owner == PLAYER).filter_map(|p| {
+                let from = pos(p.cell).unwrap();
+                let targets: Vec<_> = self.battle.special_actions(from).into_iter().filter(|a| a.first.effect == Effect::Catch).map(|a| AbilityTarget { cell: cell(a.first.take), chance: self.battle.hit_chance(from, a.first.take) }).collect();
+                (!targets.is_empty()).then_some(AbilityView { piece_id: p.id, kind: "special", name: "특수 능력", description: "대상을 선택해 사격 또는 제물 능력을 사용합니다. 기물 행동 1회를 소모합니다.", targets })
+            }).collect()
+        } else {
+            vec![]
+        };
         Snapshot {
+            effect_choice: self.battle.pending_choice(),
+            squad_id: self.squad_id.clone(),
+            progress: self.progress.clone(),
+            final_battle: self.final_battle,
+            gold: self.gold,
+            ammo: self.ammo,
+            ammo_capacity: self.ammo_capacity(),
+            shop_offers: self.shop_offers.iter().map(|c| c.definition()).collect(),
+            shop_bought: self.shop_bought.clone(),
+            reinforcement_options,
+            hunger_protection_options,
+            abilities,
             phase: self.phase,
             map: self.map_view(),
             encounter: self
@@ -1105,10 +1519,9 @@ impl Game {
                 .and_then(|id| self.map.nodes[id].relic)
                 .map(|r| RelicView {
                     id: r,
-                    status: self
-                        .relics
-                        .contains(&r)
-                        .then(|| "이미 가진 유물입니다. 대신 가호 카드 1장을 얻습니다.".into()),
+                    status: self.relics.contains(&r).then(|| {
+                        "이미 가진 유물입니다. 대신 부대 전용 카드 1장을 얻습니다.".into()
+                    }),
                     name: r.name(),
                     description: r.description(),
                 }),
@@ -1117,7 +1530,9 @@ impl Game {
             round: self.round,
             actions_left: self.battle.actions_left,
             mana: self.cards.mana,
-            mana_rule: if self.relics.contains(&Relic::IceCream) {
+            mana_rule: if self.ammo.is_some() {
+                "탄약은 턴이나 전투가 끝나도 회복되지 않습니다. 보스 격파 시 전량 보급됩니다."
+            } else if self.relics.contains(&Relic::IceCream) {
                 "아이스크림: 내 턴 시작마다 남은 코스트에 3을 더합니다."
             } else {
                 "내 턴 시작 시 코스트가 3으로 회복됩니다."
@@ -1280,6 +1695,19 @@ impl Game {
     }
 }
 #[derive(Serialize)]
+pub struct AbilityView {
+    pub piece_id: PieceId,
+    pub kind: &'static str,
+    pub name: &'static str,
+    pub description: &'static str,
+    pub targets: Vec<AbilityTarget>,
+}
+#[derive(Serialize)]
+pub struct AbilityTarget {
+    pub cell: usize,
+    pub chance: Option<u8>,
+}
+#[derive(Serialize)]
 pub struct EnemyInspectionView {
     pub piece_id: PieceId,
     pub cell: usize,
@@ -1293,6 +1721,18 @@ pub struct EnemyMoveView {
 }
 #[derive(Serialize)]
 pub struct Snapshot {
+    pub effect_choice: Option<crate::EffectChoice>,
+    pub squad_id: String,
+    pub progress: Progress,
+    pub final_battle: bool,
+    pub gold: u32,
+    pub ammo: Option<u32>,
+    pub ammo_capacity: Option<u32>,
+    pub shop_offers: Vec<CardDefinition>,
+    pub shop_bought: Vec<usize>,
+    pub reinforcement_options: Vec<RestOption>,
+    pub hunger_protection_options: Vec<RestOption>,
+    pub abilities: Vec<AbilityView>,
     pub phase: RunPhase,
     pub map: MapView,
     pub node_kind: Option<NodeKind>,
@@ -1334,6 +1774,7 @@ pub enum RewardView {
 }
 #[derive(Serialize)]
 pub struct PieceView {
+    pub statuses: Vec<String>,
     pub id: u32,
     pub kind: u16,
     pub name: &'static str,
@@ -1381,8 +1822,10 @@ pub struct RelicView {
     pub description: &'static str,
     pub status: Option<String>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct RestOption {
+    pub statuses: Vec<String>,
+    pub can_confess: bool,
     pub id: u32,
     pub kind: PieceType,
     pub key: &'static str,
@@ -1431,6 +1874,7 @@ mod relic_resource_tests {
             id: game.available_nodes()[0],
         })
         .unwrap();
+        game.cards.hand.clear();
         game.cards.hand.push(Card {
             id: 1,
             kind: CardKind::Ward,

@@ -35,7 +35,10 @@ impl CardCombat {
         } else {
             BASE_MANA
         };
-        for _ in 0..DRAW_PER_TURN {
+        self.draw_cards(DRAW_PER_TURN, rng);
+    }
+    pub fn draw_cards(&mut self, count: usize, rng: &mut Rng) {
+        for _ in 0..count {
             if self.hand.len() >= HAND_LIMIT {
                 break;
             }

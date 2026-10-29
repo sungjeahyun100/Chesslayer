@@ -10,7 +10,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
         let map = ActMap::generate(seed);
         assert_eq!(map, ActMap::generate(seed));
         assert_eq!(map.rows, MAP_ROWS);
-        assert_eq!(map.rows, 14);
+        assert_eq!(map.rows, 15);
         distinct.insert(serde_json::to_string(&map).unwrap());
         let starts = map.starts();
         assert_eq!(starts.len(), 3);
@@ -28,8 +28,8 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                 .count(),
             1
         );
-        assert_eq!(map.nodes[boss].row, 13);
-        for row in [6, 12] {
+        assert_eq!(map.nodes[boss].row, 14);
+        for row in [6, 13] {
             let rests: Vec<_> = map.nodes.iter().filter(|n| n.row == row).collect();
             assert!(!rests.is_empty());
             assert!(rests.iter().all(|n| n.kind == NodeKind::Rest));
@@ -44,7 +44,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                     assert!(n.relic.is_some());
                     assert!(n.description().contains("기물 강화 기회 1회"));
                 }
-                NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::HOOK_BOSS)),
+                NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::VANGUARD_BOSS)),
                 NodeKind::Combat => assert!(n.encounter.unwrap() < 4),
                 _ => (),
             }
@@ -87,52 +87,64 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
 }
 
 #[test]
-fn second_floor_nodes_draw_only_registered_encounters() {
-    let mut normal = HashSet::new();
-    let mut elite = HashSet::new();
-    let mut boss = HashSet::new();
-    for seed in 0..128 {
-        let map = ActMap::generate_for_floor(seed, 2);
-        assert_eq!(map.rows, MAP_ROWS);
-        assert!(map
-            .nodes
-            .iter()
-            .filter(|n| n.row == 6 || n.row == 12)
-            .all(|n| n.kind == NodeKind::Rest));
-        assert!(map
-            .nodes
-            .iter()
-            .filter(|n| n.row == 13)
-            .all(|n| n.kind == NodeKind::Boss));
-        for node in &map.nodes {
-            match node.kind {
-                NodeKind::Combat => {
-                    let id = node.encounter.unwrap();
-                    assert!(encounters::FLOOR_TWO_NORMALS.contains(&id));
-                    normal.insert(id);
+fn later_floor_nodes_draw_only_registered_encounters() {
+    for floor in 2..=4 {
+        let mut normal = HashSet::new();
+        let mut elite = HashSet::new();
+        let mut boss = HashSet::new();
+        let expected_boss = match floor {
+            2 => encounters::HERETIC_BOSS,
+            3 => encounters::ARTILLERY_BOSS,
+            _ => encounters::SPECIAL_BOSS,
+        };
+        for seed in 0..128 {
+            let map = ActMap::generate_for_floor(seed, floor);
+            assert_eq!(map.rows, MAP_ROWS);
+            assert!(map
+                .nodes
+                .iter()
+                .filter(|n| n.row == 6 || n.row == 13)
+                .all(|n| n.kind == NodeKind::Rest));
+            assert!(map
+                .nodes
+                .iter()
+                .filter(|n| n.row == 14)
+                .all(|n| n.kind == NodeKind::Boss));
+            for node in &map.nodes {
+                match node.kind {
+                    NodeKind::Combat => {
+                        let id = node.encounter.unwrap();
+                        assert!(encounters::floor_normals(floor).contains(&id));
+                        normal.insert(id);
+                    }
+                    NodeKind::Elite => {
+                        let id = node.encounter.unwrap();
+                        assert!(encounters::floor_elites(floor).contains(&id));
+                        elite.insert(id);
+                    }
+                    NodeKind::Boss => {
+                        assert_eq!(node.encounter, Some(expected_boss));
+                        boss.insert(node.encounter.unwrap());
+                    }
+                    _ => {}
                 }
-                NodeKind::Elite => {
-                    let id = node.encounter.unwrap();
-                    assert!(encounters::FLOOR_TWO_ELITES.contains(&id));
-                    elite.insert(id);
-                }
-                NodeKind::Boss => {
-                    let id = node.encounter.unwrap();
-                    assert!(encounters::FLOOR_TWO_BOSSES.contains(&id));
-                    boss.insert(id);
-                }
-                _ => {}
             }
         }
+        assert_eq!(
+            normal,
+            encounters::floor_normals(floor).iter().copied().collect()
+        );
+        assert_eq!(
+            elite,
+            encounters::floor_elites(floor).iter().copied().collect()
+        );
+        assert_eq!(boss, HashSet::from([expected_boss]));
     }
-    assert_eq!(normal, encounters::FLOOR_TWO_NORMALS.into());
-    assert_eq!(elite, encounters::FLOOR_TWO_ELITES.into());
-    assert_eq!(boss, encounters::FLOOR_TWO_BOSSES.into());
 }
 
 #[test]
 fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
-    let mut game = Game::new("vanguard", 2026).unwrap();
+    let mut game = Game::new("guardian", 2026).unwrap();
     let original = game.map.clone();
     assert_eq!(game.phase, RunPhase::Map);
     let invalid = original.nodes.iter().find(|n| n.row == 3).unwrap().id;

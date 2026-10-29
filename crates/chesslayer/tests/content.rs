@@ -20,22 +20,36 @@ fn catalog_entries_are_unique_and_connected() {
         }
         for upgrade in definition.upgrades {
             assert!(content::pieces::definition(upgrade.target).is_some());
-            assert_ne!(upgrade.target, definition.kind);
+            assert!(
+                upgrade.target != definition.kind || definition.kind == content::pieces::WAREHOUSE
+            );
         }
         for &target in definition.promotions {
             assert!(content::pieces::definition(target).is_some());
             assert_ne!(target, definition.kind);
         }
         assert!(keys.insert(definition.key), "duplicate Chesssembly name");
+        let mut enemies = vec![EnemyPiece {
+            id: 100,
+            kind: definition.kind,
+            position: Position::new(4, 0),
+        }];
+        // A corpse is neutral and cannot itself satisfy a living royal objective.
+        let royal_id = if definition.kind == content::pieces::CORPSE {
+            enemies.push(EnemyPiece {
+                id: 101,
+                kind: KING,
+                position: Position::new(0, 0),
+            });
+            101
+        } else {
+            100
+        };
         let mut battle = Battle::new(BattleStart {
             players: Battle::standard_roster(),
             encounter: Encounter {
-                enemies: vec![EnemyPiece {
-                    id: 100,
-                    kind: definition.kind,
-                    position: Position::new(4, 0),
-                }],
-                royal_id: 100,
+                enemies,
+                royal_id,
                 additional_royal_ids: vec![],
             },
         })
@@ -44,7 +58,14 @@ fn catalog_entries_are_unique_and_connected() {
         assert_eq!(battle.board.piece_name(piece).unwrap(), definition.key);
         assert_eq!(piece_name(definition.kind), definition.name);
         battle.turn = ENEMY;
-        battle.legal_actions(Position::new(4, 0)).unwrap();
+        if definition.kind == content::pieces::CORPSE {
+            assert!(battle
+                .preview_actions(Position::new(4, 0))
+                .unwrap()
+                .is_empty());
+        } else {
+            battle.legal_actions(Position::new(4, 0)).unwrap();
+        }
     }
 
     for kind in content::cards::REWARD_POOL

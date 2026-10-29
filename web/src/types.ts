@@ -1,11 +1,18 @@
 export type Phase =
-  "map" | "combat" | "reward" | "treasure" | "rest" | "victory" | "defeat";
+  "map" | "combat" | "reward" | "treasure" | "rest" | "event" | "shop" | "victory" | "defeat";
+export interface Progress {
+  highest_floor: number;
+  unlocked_squads: string[];
+  final_unlocked: boolean;
+  final_defeated: boolean;
+}
 export interface Character {
   id: string;
   name: string;
   title: string;
   description: string;
-  relic: "haste" | "whirlwind" | "self_defense";
+  relic: string;
+  unlock_floor: number;
 }
 export interface Piece {
   id: number;
@@ -22,6 +29,14 @@ export interface Piece {
   temporary_upgrade: boolean;
   limiter: { active: boolean; moves_left: number } | null;
   absorbed_moves: string[];
+  statuses: string[];
+}
+export interface Ability {
+  piece_id: number;
+  kind: string;
+  name: string;
+  description: string;
+  targets: { cell: number; chance: number | null }[];
 }
 export interface EnemyInspection {
   piece_id: number;
@@ -47,7 +62,7 @@ export interface Card {
   targets: number[];
   disabled_reason: string | null;
 }
-export type RelicId = Character["relic"] | "kings_indian" | "queens_indian" | "hedgehog" | "initiative" | "ice_cream";
+export type RelicId = string;
 export interface Relic {
   id: RelicId;
   name: string;
@@ -96,6 +111,18 @@ export interface Snapshot {
   royal_name: string;
   seed: number;
   floor: number;
+  squad_id: string;
+  progress: Progress;
+  final_battle: boolean;
+  gold: number;
+  shop_offers: CardDefinition[];
+  shop_bought: number[];
+  reinforcement_options: RestOption[];
+  hunger_protection_options: RestOption[];
+  ammo: number | null;
+  ammo_capacity: number | null;
+  abilities: Ability[];
+  effect_choice: { name: string; targets: number[]; can_finish: boolean } | null;
 }
 export type Command =
   | { type: "select_node"; id: number }
@@ -108,9 +135,15 @@ export type Command =
   | { type: "continue_reward" | "advance_floor" }
   | { type: "claim_upgrade"; id: number; target: number }
   | { type: "rest_upgrade"; id: number; target: number }
-  | { type: "rest_revive"; id: number };
+  | { type: "rest_revive" | "rest_confess" | "rest_supply" | "reinforce"; id: number }
+  | { type: "event_choice"; choice: "eat" | "leave" }
+  | { type: "shop_buy"; index: number }
+  | { type: "shop_leave" }
+  | { type: "special_action"; from: number; to: number }
+  | { type: "protect_hunger"; id: number }
+  | { type: "resolve_effect"; target: number };
 
-export type NodeKind = "combat" | "elite" | "rest" | "treasure" | "boss";
+export type NodeKind = "combat" | "elite" | "rest" | "treasure" | "boss" | "event" | "shop";
 export interface MapNode {
   id: number;
   row: number;
@@ -141,6 +174,8 @@ export interface RestOption {
   can_upgrade: boolean;
   can_revive: boolean;
   dead: boolean;
+  statuses: string[];
+  can_confess?: boolean;
 }
 export interface UpgradePath {
   key: string;

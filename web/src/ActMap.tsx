@@ -1,6 +1,7 @@
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { PieceImage } from "./PieceImage";
 import type { Command, MapNode, NodeKind, Snapshot } from "./types";
+import { floorLabel, floorNames } from "./progress";
 
 export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
   combat: { icon: "⚔", label: "일반 전투" },
@@ -8,6 +9,8 @@ export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
   rest: { icon: "⌂", label: "휴식" },
   treasure: { icon: "◇", label: "보물" },
   boss: { icon: "♛", label: "보스" },
+  event: { icon: "♨", label: "식당" },
+  shop: { icon: "¤", label: "상점" },
 };
 const status = (node: MapNode) =>
   node.reward_revisit
@@ -114,15 +117,15 @@ export function ActMap({
     <main className={`act-map-screen ${overlay ? "map-overlay" : ""}`} data-phase={mapPhase ? "map" : state.phase} data-floor={state.floor} ref={top}>
       <div className="map-heading">
         <div>
-          <p className="eyebrow">{state.floor}층 / {state.character}</p>
-          <h1>{state.floor === 1 ? "갈림길의 숲" : "두 번째 층"}</h1>
-          <p>하나의 원정, 당신이 고르는 길.</p>
+          <p className="eyebrow">{floorLabel(state.floor, state.final_battle)} / {state.character}</p>
+          <h1>{state.final_battle ? "부족의 독재자" : floorNames[state.floor]}</h1>
+          <p>{state.final_battle ? "최후의 로얄을 향한 결전." : "하나의 원정, 당신이 고르는 길."} · 금화 {state.gold}</p>
         </div>
         <div className="map-progress">
           <strong>{map.nodes.filter((n) => n.visited).length}</strong>
           <span> / {map.rows}개 지점 완료</span>
           {state.phase === "map" && map.nodes.some((node) => node.current && node.visited && node.kind === "boss") &&
-            <button className="primary" onClick={() => send({ type: "advance_floor" })}>{state.floor === 1 ? "다음 층으로 진행 →" : "원정 마치기 →"}</button>}
+            <button className="primary" onClick={() => send({ type: "advance_floor" })}>원정 마치기 →</button>}
           {overlay && onClose && (
             <button className="primary" onClick={onClose}>
               {ended ? "원정 결과로 돌아가기" : "진행 중인 노드로 돌아가기"} →
