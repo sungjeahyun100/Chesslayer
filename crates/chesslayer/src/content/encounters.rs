@@ -19,6 +19,11 @@ pub const TWO_EMPEROR: usize = 14;
 pub const TWO_MONGOLS: usize = 15;
 pub const TWO_HORDE: usize = 16;
 pub const TWO_TWINS: usize = 17;
+pub const VANGUARD_BOSS: usize = 18;
+pub const HERETIC_BOSS: usize = 19;
+pub const ARTILLERY_BOSS: usize = 20;
+pub const SPECIAL_BOSS: usize = 21;
+pub const DICTATOR_BOSS: usize = 22;
 
 pub struct EncounterDefinition {
     pub id: &'static str,
@@ -26,7 +31,7 @@ pub struct EncounterDefinition {
     pub description: &'static str,
 }
 
-pub const ENCOUNTERS: [EncounterDefinition; 18] = [
+pub const ENCOUNTERS: [EncounterDefinition; 23] = [
     EncounterDefinition {
         id: "1F-N01",
         name: "홀로 선 왕",
@@ -118,6 +123,31 @@ pub const ENCOUNTERS: [EncounterDefinition; 18] = [
         name: "쌍둥이 신",
         description: "e8·d8의 행마의 신이 모두 로얄이며 둘 다 포획해야 승리합니다.",
     },
+    EncounterDefinition {
+        id: "1F-B-VANGUARD",
+        name: "선봉대",
+        description: "v0.3 임시 보스: 표준 체스 진형에 가까운 선봉대 16기. e8의 지휘관이 로얄입니다.",
+    },
+    EncounterDefinition {
+        id: "2F-B-HERETIC",
+        name: "이단 부대",
+        description: "v0.3 임시 보스: 연회를 준비하는 16기. 시체·허기 판정은 후속 전투 구현 대상입니다.",
+    },
+    EncounterDefinition {
+        id: "3F-B-ARTILLERY",
+        name: "포병대대",
+        description: "v0.3 임시 보스: 룩 중심 포격 진형 16기. 사격 판정은 후속 구현 대상입니다.",
+    },
+    EncounterDefinition {
+        id: "4F-B-SPECIAL",
+        name: "특수부대",
+        description: "v0.3 임시 보스: 기동 기물 중심 16기. 특수 사격은 후속 구현 대상입니다.",
+    },
+    EncounterDefinition {
+        id: "FINAL-DICTATOR",
+        name: "부족의 독재자",
+        description: "v0.3 임시 최종 보스: 로얄 아마존과 호위 기물. 격파해도 플레이어블로 해금되지 않습니다.",
+    },
 ];
 
 pub fn encounter(index: usize) -> Encounter {
@@ -135,6 +165,7 @@ pub fn encounter(index: usize) -> Encounter {
         TWO_MONGOLS => CENTAUR,
         TWO_HORDE => PAWN,
         TWO_TWINS => MOVEMENT_GOD,
+        DICTATOR_BOSS => AMAZON,
         _ => KING,
     };
     let initial = EnemyPiece {
@@ -256,6 +287,30 @@ pub fn encounter(index: usize) -> Encounter {
             }
         }
         TWO_TWINS => add(MOVEMENT_GOD, 3, 0),
+        VANGUARD_BOSS | HERETIC_BOSS | ARTILLERY_BOSS | SPECIAL_BOSS => {
+            // Distinct prototype formations; per-squad custom Chesssembly pieces follow later.
+            let back = match index {
+                ARTILLERY_BOSS => [ROOK, ROOK, BISHOP, QUEEN, KING, BISHOP, ROOK, ROOK],
+                SPECIAL_BOSS => [ROOK, KNIGHT, KNIGHT, QUEEN, KING, KNIGHT, KNIGHT, ROOK],
+                _ => [ROOK, KNIGHT, BISHOP, QUEEN, KING, BISHOP, KNIGHT, ROOK],
+            };
+            for (file, kind) in back.into_iter().enumerate() {
+                if file != 4 {
+                    add(kind, file as i32, 0);
+                }
+            }
+            for file in 0..8 {
+                add(PAWN, file, 1);
+            }
+        }
+        DICTATOR_BOSS => {
+            add(ROOK, 0, 0);
+            add(ROOK, 7, 0);
+            add(KNIGHT, 1, 1);
+            add(KNIGHT, 6, 1);
+            add(BISHOP, 2, 1);
+            add(BISHOP, 5, 1);
+        }
         _ => panic!("unknown encounter index: {index}"),
     }
     Encounter {
