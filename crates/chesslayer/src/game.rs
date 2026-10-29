@@ -113,7 +113,7 @@ impl Game {
         let choice = characters()
             .into_iter()
             .find(|c| c.id == character)
-            .ok_or("캐릭터를 선택하세요.")?;
+            .ok_or("부대를 선택하세요.")?;
         let deck = starter_deck();
         let next_card_id = deck.iter().map(|card| card.id).max().unwrap_or(0) + 1;
         let battle = Battle::new(BattleStart {
@@ -144,6 +144,17 @@ impl Game {
             upgrade_claimed: false,
             last_cleared_node: None,
         };
+        Ok(game)
+    }
+    /// Start a fresh expedition from a permanently unlocked act (browser controls unlocks).
+    /// The fifth selection is a single final encounter, not another fifteen-node floor.
+    pub fn new_at_floor(character: &str, seed: u32, floor: u8) -> Result<Self, String> {
+        if !(1..=5).contains(&floor) {
+            return Err("선택할 수 없는 층입니다.".into());
+        }
+        let mut game = Self::new(character, seed)?;
+        game.floor = floor;
+        game.map = ActMap::generate_for_floor(seed, floor);
         Ok(game)
     }
     fn log(&mut self, message: impl Into<String>) {
@@ -362,34 +373,28 @@ impl Game {
         let id = self.current_node.expect("reward requires a selected node");
         if self.completed.contains(&id) {
             self.phase = RunPhase::Map;
-            if self.map.nodes[id].kind == NodeKind::Boss && self.upgrade_claimed {
+            if self.map.nodes[id].kind == NodeKind::Boss {
                 self.finish_boss()?;
             }
             return Ok(());
         }
         self.complete_node();
-        if self.map.nodes[id].kind == NodeKind::Boss && self.upgrade_claimed {
+        if self.map.nodes[id].kind == NodeKind::Boss {
             self.finish_boss()?;
         }
         Ok(())
     }
     fn finish_boss(&mut self) -> Result<(), String> {
-        if self.floor == 1 {
-            let revived = self.revive_for_next_floor()?;
-            self.floor = 2;
-            self.map = ActMap::generate_for_floor(self.seed, 2);
-            self.current_node = None;
-            self.path.clear();
-            self.completed.clear();
-            self.reward_node = None;
-            self.rewards.clear();
-            self.reward_choice = None;
-            self.last_cleared_node = None;
+        // v0.3: a boss ends the current expedition. Unlocks persist in the browser
+        // profile rather than in a replay log so a new run starts with a clean roster.
+        self.phase = RunPhase::Victory;
+        if self.floor < 5 {
             self.log(format!(
-                "2층에 도착했습니다. 아군 전원이 회복되었습니다. 부활한 기물 {revived}기."
+                "{}층 보스 격파! 다음 구간과 보스 부대를 해금했습니다. 새 원정을 시작하세요.",
+                self.floor
             ));
         } else {
-            self.phase = RunPhase::Victory;
+            self.log("부족의 독재자를 격파했습니다. 최종 원정 완료!".to_owned());
         }
         Ok(())
     }
