@@ -87,12 +87,15 @@ pub enum PieceFamily {
     Bishop,
 }
 
+/// Existing native movement hook, named to keep the catalogue definition readable.
+pub type NativeMovement = fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>;
+
 pub struct PieceDefinition {
     pub kind: PieceType,
     pub key: &'static str,
     pub name: &'static str,
     pub movement: fn() -> String,
-    pub native_movement: Option<fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>>,
+    pub native_movement: Option<NativeMovement>,
     pub value: i32,
     pub description: &'static str,
     pub upgrades: &'static [UpgradeDefinition],
