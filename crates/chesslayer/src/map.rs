@@ -1,6 +1,9 @@
 //! One immutable, seeded Act graph. Run traversal is kept separately by Game.
 use crate::content::{
-    encounters::{ELITES, FLOOR_TWO_BOSSES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS, HOOK_BOSS},
+    encounters::{
+        ELITES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS, VANGUARD_BOSS,
+        HERETIC_BOSS, ARTILLERY_BOSS, SPECIAL_BOSS, DICTATOR_BOSS,
+    },
     Relic, Rng, ENCOUNTERS, RELIC_REWARD_POOL,
 };
 use serde::Serialize;
@@ -64,11 +67,25 @@ impl ActMap {
         Self::generate_for_floor(seed, 1)
     }
     pub fn generate_for_floor(seed: u32, floor: u8) -> Self {
+        if floor == 5 {
+            // Final encounter is a single showdown, not a fifth 15-node act.
+            return Self {
+                nodes: vec![MapNode {
+                    id: 0,
+                    row: 0,
+                    lane: MAP_LANES / 2,
+                    kind: NodeKind::Boss,
+                    encounter: Some(DICTATOR_BOSS),
+                    relic: None,
+                    next: vec![],
+                }],
+                rows: 1,
+            };
+        }
         // Map creation never consumes the combat/deck RNG stream.
         let mut rng = Rng::new(seed ^ 0x41c7_9e35 ^ (u32::from(floor - 1) << 24));
         // Keep the graph, normal encounters and relic stream stable when elite selection changes.
         let mut elite_rng = Rng::new(seed ^ 0xe11e_0001 ^ (u32::from(floor - 1) << 24));
-        let mut boss_rng = Rng::new(seed ^ 0xb055_0002);
         let mut later_width_rng = Rng::new(seed ^ 0x7a1e_0003 ^ (u32::from(floor - 1) << 24));
         let mut treasure_rng = Rng::new(seed ^ 0x7a1e_0004 ^ (u32::from(floor - 1) << 24));
         let widths = [
@@ -130,10 +147,12 @@ impl ActMap {
             let mut layer = vec![];
             for (i, (lane, kind)) in lanes.into_iter().zip(kinds).enumerate() {
                 let encounter = match kind {
-                    NodeKind::Boss => Some(if floor == 1 {
-                        HOOK_BOSS
-                    } else {
-                        FLOOR_TWO_BOSSES[boss_rng.index(FLOOR_TWO_BOSSES.len())]
+                    NodeKind::Boss => Some(match floor {
+                        1 => VANGUARD_BOSS,
+                        2 => HERETIC_BOSS,
+                        3 => ARTILLERY_BOSS,
+                        4 => SPECIAL_BOSS,
+                        _ => unreachable!("floor five is handled above"),
                     }),
                     NodeKind::Elite => Some(if floor == 1 {
                         // Preserve the former four-way roll so existing seeded paths
