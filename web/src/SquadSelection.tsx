@@ -14,10 +14,10 @@ const tactics: Record<string, string> = {
   special: "소수 정예 · 사격 · 기동",
 };
 
-export function SquadSelection({ choices, character, onCharacter, floor, onFloor, progress, onBack, onStart, ready }: {
+export function SquadSelection({ choices, character, onCharacter, floor, onFloor, progress, onBack, onStart, onUnlockAll, ready }: {
   choices: Character[]; character: string; onCharacter: (id: string) => void;
   floor: number; onFloor: (floor: number) => void; progress: Progress;
-  onBack: () => void; onStart: () => void; ready: boolean;
+  onBack: () => void; onStart: () => void; onUnlockAll: () => void; ready: boolean;
 }) {
   const selected = choices.find((choice) => choice.id === character);
   return <main className="selection-page">
@@ -25,6 +25,12 @@ export function SquadSelection({ choices, character, onCharacter, floor, onFloor
     <p className="eyebrow">CHOOSE YOUR EXPEDITION</p>
     <h1>원정에 나설 부대</h1>
     <p className="muted">각 층의 보스를 격파하면 다음 층과 새로운 부대가 해금됩니다.</p>
+    <div className="developer-access">
+      <button className="developer-unlock" onClick={onUnlockAll} disabled={!ready || (progress.highest_floor === 4 && progress.final_unlocked && choices.every((choice) => progress.unlocked_squads.includes(choice.id)))}>
+        개발자 모드 · 전체 해금
+      </button>
+      <span role="status">플레이 확인용 · 모든 부대와 층, 최종 결전을 개방합니다.</span>
+    </div>
     <div className="characters">
       {choices.map((choice) => {
         const unlocked = progress.unlocked_squads.includes(choice.id);

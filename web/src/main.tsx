@@ -265,6 +265,21 @@ function App() {
       );
     }
   }
+  function unlockAll() {
+    const nextProgress = mergeProgress(progress, {
+      highest_floor: 4,
+      unlocked_squads: choices.map((choice) => choice.id),
+      final_unlocked: true,
+      final_defeated: false,
+    });
+    setProgress(nextProgress);
+    try {
+      localStorage.setItem(PROGRESS_KEY, JSON.stringify(nextProgress));
+      setSaveNotice("");
+    } catch {
+      setSaveNotice("모든 부대와 층을 열었습니다. 브라우저 저장소를 사용할 수 없어 새로고침 후에는 다시 눌러 주세요.");
+    }
+  }
   function resume() {
     try {
       const saved = localStorage.getItem(SAVE_KEY);
@@ -600,7 +615,7 @@ function App() {
         </main>
       )}
       {screen === "choose" && <SquadSelection choices={choices} character={character} onCharacter={setCharacter}
-        floor={startFloor} onFloor={setStartFloor} progress={progress} onBack={() => setScreen("home")} onStart={start} ready={ready} />}
+        floor={startFloor} onFloor={setStartFloor} progress={progress} onBack={() => setScreen("home")} onStart={start} onUnlockAll={unlockAll} ready={ready} />}
       {screen === "game" && state && showMap && (
         <ActMap state={state} send={send} coveredByReward={rewardRevisit} />
       )}
