@@ -5,7 +5,7 @@ export interface Character {
   name: string;
   title: string;
   description: string;
-  relic: "haste" | "whirlwind" | "self_defense";
+  relic: "haste" | "whirlwind" | "self_defense" | "initiative" | "ice_cream";
 }
 export interface Piece {
   id: number;
