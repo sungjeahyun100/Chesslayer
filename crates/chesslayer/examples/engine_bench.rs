@@ -89,7 +89,7 @@ fn main() {
             .into_iter()
             .next()
             .unwrap();
-        let mut game = Game::new("vanguard", 7).unwrap();
+        let mut game = Game::new("guardian", 7).unwrap();
         game.battle = board.clone();
         game.phase = RunPhase::Combat;
         let move_command = Command::Move {
@@ -101,7 +101,8 @@ fn main() {
             promotion: None,
         };
         let selected = measure_stateful(&game, repeats, |g| {
-            black_box(g.dispatch(move_command.clone()).unwrap());
+            g.dispatch(move_command.clone()).unwrap();
+            black_box(());
         });
         game.battle.turn = ENEMY;
         let legal = measure(
@@ -117,10 +118,12 @@ fn main() {
             repeats,
         );
         let apply = measure_stateful(&board, repeats, |b| {
-            black_box(b.apply_piece_action(&action).unwrap());
+            b.apply_piece_action(&action).unwrap();
+            black_box(());
         });
         let enemy = measure_stateful(&game, repeats, |g| {
-            black_box(g.dispatch(Command::EnemyStep).unwrap());
+            g.dispatch(Command::EnemyStep).unwrap();
+            black_box(());
         });
         println!("{} repeats={} legal_us={legal:.3} public_apply_us={apply:.3} selected_move_us={selected:.3} preview_us={preview:.3} enemy_us={enemy:.3}",
             if complex { "complex" } else { "standard" }, repeats);

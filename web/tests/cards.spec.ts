@@ -7,15 +7,17 @@ test("일시 강화: 경로 선택과 취소는 무소모, 확정만 전투 보�
     const url = "/src/wasm/chesslayer_web.js";
     const { default: init, WebGame } = await import(url);
     await init();
-    const game = new WebGame("vanguard", 0);
+    const game = new WebGame("guardian", 2026);
     try {
       for (const command of [
-        { type: "select_node", id: 0 },
-        { type: "move", from: 50, to: 42 },
-        { type: "move", from: 59, to: 32 },
-        { type: "move", from: 32, to: 4 },
-        { type: "choose_reward", index: 2 },
-        { type: "select_node", id: 4 },
+        { type: "select_node", id: 2 },
+        { type: "move", from: 52, to: 44 },
+        { type: "move", from: 59, to: 45 },
+        { type: "move", from: 45, to: 5 },
+        { type: "choose_reward", index: 0 },
+        { type: "select_node", id: 6 },
+        { type: "claim_treasure" },
+        { type: "select_node", id: 8 },
       ]) {
         let state = JSON.parse(game.snapshot());
         while (state.phase === "combat" && state.turn === 1)

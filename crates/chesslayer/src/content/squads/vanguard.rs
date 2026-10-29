@@ -1,0 +1,66 @@
+use super::{CardKind, Relic, Squad, SquadRules};
+use crate::content::pieces::*;
+pub const DEFINITION: Squad = Squad {
+    id: "vanguard",
+    name: "선봉대",
+    title: "민첩한 전열",
+    description: "두 번의 부대 행동과 기물별 민첩으로 전선을 돌파합니다.",
+    relic: Relic::Agility,
+    unlock_floor: 1,
+    rules: SquadRules::Standard,
+    starting_roster: || {
+        super::formation(
+            &[
+                AXE_INFANTRY,
+                AXE_INFANTRY,
+                AXE_INFANTRY,
+                VANGUARD_OFFICER,
+                VANGUARD_COMMANDER,
+                AXE_INFANTRY,
+                AXE_INFANTRY,
+                AXE_INFANTRY,
+            ],
+            Some(AXE_INFANTRY),
+        )
+    },
+    starting_deck: &[
+        CardKind::Stimpack,
+        CardKind::Stimpack,
+        CardKind::Stimpack,
+        CardKind::Stimpack,
+        CardKind::InfantrySupport,
+        CardKind::InfantrySupport,
+        CardKind::Sacrifice,
+        CardKind::Sacrifice,
+        CardKind::MassCrash,
+        CardKind::LastStand,
+    ],
+    reward_cards: &[
+        CardKind::Stimpack,
+        CardKind::MassCrash,
+        CardKind::InfantrySupport,
+        CardKind::Sacrifice,
+        CardKind::LastStand,
+    ],
+    available_pieces: &[
+        AXE_INFANTRY,
+        PIKE_INFANTRY,
+        HALBERD_INFANTRY,
+        SWORD_INFANTRY,
+        VANGUARD_OFFICER,
+        MOUNTED_OFFICER,
+        VANGUARD_COMMANDER,
+        MOUNTED_COMMANDER,
+        PISTOL_INFANTRY,
+    ],
+    upgrade_paths: &[
+        (AXE_INFANTRY, PIKE_INFANTRY),
+        (PIKE_INFANTRY, SWORD_INFANTRY),
+        (SWORD_INFANTRY, HALBERD_INFANTRY),
+        (HALBERD_INFANTRY, PISTOL_INFANTRY),
+        (VANGUARD_OFFICER, MOUNTED_OFFICER),
+        (VANGUARD_COMMANDER, MOUNTED_COMMANDER),
+    ],
+    reward_relics: &[Relic::Agility, Relic::Reinforcements],
+    duplicate_relic_card: CardKind::Stimpack,
+};

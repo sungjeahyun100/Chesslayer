@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { PieceImage } from "./PieceImage";
 import type { Command, MapNode, NodeKind, Snapshot } from "./types";
 
 export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
+  restaurant: { icon: "♨", label: "식당" },
   combat: { icon: "⚔", label: "일반 전투" },
   elite: { icon: <PieceImage pieceKey="rook" owner={1} />, label: "엘리트" },
   rest: { icon: "⌂", label: "휴식" },
@@ -89,11 +90,14 @@ export function ActMap({
   coveredByReward?: boolean;
   overlay?: boolean;
 }) {
-  const top = useRef<HTMLElement>(null);
-  useEffect(() => {
-    top.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, []);
   const { map } = state;
+  const top = useRef<HTMLElement>(null);
+  useLayoutEffect(() => {
+    const position = top.current?.querySelector<HTMLElement>(
+      map.current === null ? ".map-start" : ".map-node-slot.is-current",
+    );
+    position?.scrollIntoView({ behavior: "instant", block: "center" });
+  }, [state.floor, state.map.current]);
   const ended = state.phase === "victory" || state.phase === "defeat";
   const mapPhase = state.phase === "map" || coveredByReward;
   const rows = useMemo(() => Array.from({ length: map.rows }, (_, row) =>
@@ -111,8 +115,8 @@ export function ActMap({
     <main className={`act-map-screen ${overlay ? "map-overlay" : ""}`} data-phase={mapPhase ? "map" : state.phase} data-floor={state.floor} ref={top}>
       <div className="map-heading">
         <div>
-          <p className="eyebrow">{state.floor}층 / {state.character}</p>
-          <h1>{state.floor === 1 ? "갈림길의 숲" : "두 번째 층"}</h1>
+          <p className="eyebrow">{state.floor}층 / {state.squad}</p>
+          <h1>{state.floor === 1 ? "갈림길의 숲" : `${state.floor}층 원정`}</h1>
           <p>하나의 원정, 당신이 고르는 길.</p>
         </div>
         <div className="map-progress">

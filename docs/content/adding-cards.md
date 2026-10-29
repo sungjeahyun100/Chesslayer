@@ -63,7 +63,7 @@ pub fn definition() -> CardDefinition {
 
 ## 3. 등록하기 — 필수
 
-`crates/chesslayer/src/content/cards/mod.rs`의 세 곳에 추가한다. 기존 항목은 유지한다.
+`crates/chesslayer/src/content/cards/mod.rs`의 모듈 선언, `CardKind`, `definition()` 분기, `affiliation()` 분기에 추가한다. 기존 항목은 유지한다.
 
 모듈 선언은 파일 첫 줄의 `//!` 문서 주석 아래, 기존 `mod` 선언들과 함께 둔다.
 
@@ -83,24 +83,13 @@ SteadyWard,
 Self::SteadyWard => steady_ward::definition(),
 ```
 
-등록은 이 파일에서 끝난다. `game.rs`의 실행 분기나 화면 대상 필터에 카드 이름을 추가하지 않는다. 기존 `chesslayer::cards::{CardKind, CardDefinition}` 경로도 계속 사용할 수 있다.
+`game.rs`의 실행 분기나 화면 대상 필터에 카드 이름을 추가하지 않는다. 기존 `chesslayer::cards::{CardKind, CardDefinition}` 경로도 계속 사용할 수 있다.
 
-## 4. 획득 경로 설정하기
+## 4. 소속과 획득 경로 설정하기
 
-등록만으로 기존 덱이나 보상에 들어가지는 않는다. 다음 중 원하는 경로를 같은 `content/cards/mod.rs`에서 정한다.
+`CardKind::affiliation()`에 `CardAffiliation::Squad("<id>")` 또는 `CardAffiliation::Shared`를 명시한다. 현재 카드 9종은 모두 수호자 전용이다. 정의를 등록해도 다른 부대에는 자동 제공되지 않는다.
 
-**보상에 추가:** 아래 후보 풀에 등록한다. Rust가 원정 RNG로 실제 보상 3칸을 생성하고 보관한다. 화면과 `choose_reward`는 이 생성된 목록의 슬롯을 사용한다.
-
-```rust
-pub const REWARD_POOL: &[CardKind] = &[
-    CardKind::Ward,
-    CardKind::Jeans,
-    CardKind::Gun,
-    CardKind::SteadyWard,
-];
-```
-
-**시작 덱은 비워 둔다:** `starter_deck()`은 빈 목록을 반환한다. 새 카드 효과는 Rust 테스트의 명시적인 손패 또는 정상 보상 획득 경로로 검증한다. 카드 ID는 획득 시 공통 할당기가 발급하며 영구 덱 장수에는 제한이 없다.
+시작 덱에 넣으려면 해당 `content/squads/<id>.rs`의 `starting_deck`에, 전투 보상에 넣으려면 `reward_cards`에 추가한다. 공용 카드의 보상 경로는 `content/cards/mod.rs`의 `SHARED_REWARD_POOL`에 명시한다. 현재 이 목록은 비어 있다. 수호자의 시작 덱도 비어 있고 기존 보상 카드 8종만 `guardian.rs`에 등록되어 있다. Rust가 원정 RNG로 보상 3칸을 생성·보관하며 카드 ID는 획득 시 할당한다.
 
 후보 풀이나 추첨 규칙을 바꾸면 RNG 소비와 과거 명령의 결과가 달라질 수 있다. 저장 버전과 기보를 함께 검토한다. 현재 `choose_reward.index`는 고정 카드 풀 인덱스가 아니다. 휘발성은 매 턴 종료 시 소멸하고 보존은 유지한다. 일반 카드는 종료 처리 전 손패가 5장 이상일 때만 버린다.
 

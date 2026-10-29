@@ -2,6 +2,12 @@
 use chesslayer::{content::pieces, game::*, *};
 use std::collections::HashSet;
 
+fn haste_game(seed: u32) -> Game {
+    let mut game = Game::new("guardian", seed).unwrap();
+    game.relics = vec![chesslayer::content::Relic::Haste];
+    game
+}
+
 fn q(side: u16, x: i32, y: i32) -> Position {
     if side == PLAYER {
         Position::new(3 + x, 4 - y)
@@ -50,7 +56,7 @@ fn royal_horde_pawn_promotes_to_queen_without_losing_royal_id() {
         player.position = None;
     }
     players[4].position = Some(Position::new(7, 7));
-    let mut game = Game::new("vanguard", 12).unwrap();
+    let mut game = haste_game(12);
     game.battle = Battle::new(BattleStart {
         players,
         encounter: Encounter {
@@ -483,7 +489,7 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
         ),
     ] {
         let commands: Vec<Command> = serde_json::from_str(fixture).unwrap();
-        let mut g = Game::new("vanguard", 2026).unwrap();
+        let mut g = haste_game(2026);
         for (index, c) in commands.into_iter().enumerate() {
             if let Command::RestUpgrade { id, .. } = c {
                 let before = serde_json::to_string(&g.snapshot()).unwrap();
@@ -540,7 +546,7 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
                 target: family
             })
             .is_err());
-        let mut ai = Game::new("vanguard", 2026).unwrap();
+        let mut ai = haste_game(2026);
         ai.phase = RunPhase::Combat;
         ai.battle = scene(family, ENEMY);
         // Only the upgraded pawn has moves, forcing AI to exercise promotion candidates.
@@ -600,7 +606,7 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
 
 #[test]
 fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
-    let mut rest = Game::new("vanguard", 2026).unwrap();
+    let mut rest = haste_game(2026);
     let commands: Vec<Command> =
         serde_json::from_str(include_str!("fixtures/winning-run.json")).unwrap();
     for command in commands {

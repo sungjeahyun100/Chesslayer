@@ -152,7 +152,7 @@ fn twins_require_both_captures_and_surviving_god_can_act() {
     assert_eq!(battle.result, GameResult::Ongoing);
     assert!(battle.is_enemy_royal(101));
     assert!(!battle.legal_actions(p("d8")).unwrap().is_empty());
-    let mut game = Game::new("vanguard", 7).unwrap();
+    let mut game = Game::new("guardian", 7).unwrap();
     game.phase = RunPhase::Combat;
     game.battle = battle.clone();
     game.battle.grant_ward(game.battle.king_id).unwrap();
@@ -309,7 +309,7 @@ fn hook_turns_once_only_on_empty_squares_and_stops_at_blockers() {
 
 #[test]
 fn hook_uses_shared_ai_ward_royal_capture_and_counterattack() {
-    let mut g = Game::new("vanguard", 2026).unwrap();
+    let mut g = Game::new("guardian", 2026).unwrap();
     g.phase = RunPhase::Combat;
     g.battle = scene(ENEMY);
     let king_id = g.battle.king_id;

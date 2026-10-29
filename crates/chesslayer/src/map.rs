@@ -1,11 +1,11 @@
 //! One immutable, seeded Act graph. Run traversal is kept separately by Game.
 use crate::content::{
-    encounters::{ELITES, FLOOR_TWO_BOSSES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS, HOOK_BOSS},
+    encounters::{ELITES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS},
     Relic, Rng, ENCOUNTERS, RELIC_REWARD_POOL,
 };
 use serde::Serialize;
 
-pub const MAP_ROWS: usize = 14;
+pub const MAP_ROWS: usize = 15;
 pub const MAP_LANES: usize = 5;
 const REST_ROWS: [usize; 2] = [6, 12];
 const BOSS_ROW: usize = MAP_ROWS - 1;
@@ -16,6 +16,7 @@ pub enum NodeKind {
     Elite,
     Rest,
     Treasure,
+    Restaurant,
     Boss,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -31,6 +32,7 @@ pub struct MapNode {
 impl MapNode {
     pub fn name(&self) -> &'static str {
         match self.kind {
+            NodeKind::Restaurant => "식당",
             NodeKind::Rest => "작은 쉼터",
             NodeKind::Treasure => "남겨진 보물",
             _ => ENCOUNTERS[self.encounter.expect("combat node has encounter")].name,
@@ -38,6 +40,7 @@ impl MapNode {
     }
     pub fn description(&self) -> String {
         match self.kind {
+            NodeKind::Restaurant => "아군 전체의 허기를 해소하거나 떠납니다.".into(),
             NodeKind::Combat => {
                 "적 로얄을 쓰러뜨리고 카드·유물 보상 3개 중 하나를 선택합니다.".into()
             }
@@ -47,8 +50,8 @@ impl MapNode {
                     .into()
             }
             NodeKind::Treasure => format!(
-                "{}을 얻습니다. 이미 가진 유물이면 가호 카드 1장을 얻습니다.",
-                self.relic.unwrap().name()
+                "{}을 얻습니다. 이미 가진 유물이면 부대 카드 1장을 얻습니다.",
+                self.relic.map_or("부대 카드", |r| r.name())
             ),
             NodeKind::Boss => "승리하면 카드 보상과 기물 강화 기회 1회를 얻습니다.".into(),
         }
@@ -68,7 +71,6 @@ impl ActMap {
         let mut rng = Rng::new(seed ^ 0x41c7_9e35 ^ (u32::from(floor - 1) << 24));
         // Keep the graph, normal encounters and relic stream stable when elite selection changes.
         let mut elite_rng = Rng::new(seed ^ 0xe11e_0001 ^ (u32::from(floor - 1) << 24));
-        let mut boss_rng = Rng::new(seed ^ 0xb055_0002);
         let mut later_width_rng = Rng::new(seed ^ 0x7a1e_0003 ^ (u32::from(floor - 1) << 24));
         let mut treasure_rng = Rng::new(seed ^ 0x7a1e_0004 ^ (u32::from(floor - 1) << 24));
         let widths = [
@@ -84,6 +86,7 @@ impl ActMap {
             3 + later_width_rng.index(2),
             2,
             3 + later_width_rng.index(2),
+            2,
             2,
             1,
         ];
@@ -102,6 +105,7 @@ impl ActMap {
                 0 => vec![NodeKind::Combat; width],
                 row if REST_ROWS.contains(&row) => vec![NodeKind::Rest; width],
                 BOSS_ROW => vec![NodeKind::Boss],
+                13 => vec![NodeKind::Restaurant, NodeKind::Combat],
                 1 | 7 => vec![
                     NodeKind::Combat,
                     NodeKind::Rest,
@@ -130,11 +134,7 @@ impl ActMap {
             let mut layer = vec![];
             for (i, (lane, kind)) in lanes.into_iter().zip(kinds).enumerate() {
                 let encounter = match kind {
-                    NodeKind::Boss => Some(if floor == 1 {
-                        HOOK_BOSS
-                    } else {
-                        FLOOR_TWO_BOSSES[boss_rng.index(FLOOR_TWO_BOSSES.len())]
-                    }),
+                    NodeKind::Boss => Some(17 + usize::from(floor)),
                     NodeKind::Elite => Some(if floor == 1 {
                         // Preserve the former four-way roll so existing seeded paths
                         // keep their encounter unless they rolled the retired Horde.

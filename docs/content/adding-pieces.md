@@ -120,11 +120,11 @@ if index == 0 {
 
 ### 아군 시작 진형 — 필요할 때만
 
-`crates/chesslayer/src/battle.rs::Battle::standard_roster()`에서 원하는 종류를 `crate::content::pieces::DANCER`로 바꾼다. 기존 ID와 위치를 유지하고 `KING` 한 개를 남겨야 한다. 모든 캐릭터에 공통 적용되며 부활 원점도 이 함수에서 읽는다. `PlayerPiece`의 `moved`, `upgrades`, `persistent`는 개별 인스턴스 상태이며 종류 정의에 넣지 않는다.
+`content/squads/<id>.rs`의 `starting_roster`에서 원하는 종류를 지정하고 `available_pieces`에도 등록한다. 수호자의 표준 16기 편성을 바꾸는 경우에만 `Battle::standard_roster()`를 수정한다. 초기 편성에는 로얄 킹 한 개와 고유 ID·시작 위치를 유지해야 하며, `origin`은 부활과 전투 간 복귀에 사용된다. `PlayerPiece`의 `moved`, `upgrades`, `persistent`는 개별 인스턴스 상태이며 종류 정의에 넣지 않는다.
 
 ### 휴식 강화·다른 콘텐츠의 참조 — 필요할 때만
 
-일반 폰·룩·비숍·퀸의 템페스트/바운싱 분기, 일반 나이트의 템페스트 분기는 각 기본 기물 파일의 `upgrades`에 정의한다. `RestUpgrade { id, target }`, `rest_options`, `upgrade_paths`는 같은 정의를 읽는다. 새 분기는 `upgrades`에 추가하고 대상 ID와 SVG를 등록한다. 최종 랭크 승격은 `promotions`에 등록하며 `Move { from, to, promotion }`과 공통 선택 UI로 처리한다. 새 자원 비용을 도입한다면 실제 비용 검증도 구현해야 한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
+일반 폰·룩·비숍·퀸의 템페스트/바운싱 분기, 일반 나이트의 템페스트 분기는 각 기본 기물 파일의 `upgrades`에 정의한다. `RestUpgrade { id, target }`, `rest_options`, `upgrade_paths`는 같은 정의를 읽는다. 새 분기는 `upgrades`에 추가하고 대상 ID·SVG 및 사용할 부대의 `upgrade_paths`와 `available_pieces`에도 등록한다. 최종 랭크 승격은 `promotions`에 등록하며 `Move { from, to, promotion }`과 공통 선택 UI로 처리한다. 새 자원 비용을 도입한다면 실제 비용 검증도 구현해야 한다. 카드는 기존 종류 ID를 정확히 검사하므로, 새 기물에 룩 행마를 주더라도 청바지의 제거 대상이나 총의 진형으로 자동 편입되지 않는다.
 
 ## 5. 특수 능력의 경계
 

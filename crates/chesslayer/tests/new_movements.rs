@@ -284,7 +284,7 @@ fn cardinal_native_actions_reach_preview_and_enemy_ai() {
             .as_ref()
             .is_some_and(|route| route.first() == Some(&from) && route.last() == Some(&victim))));
 
-    let mut game = Game::new("vanguard", 42).unwrap();
+    let mut game = Game::new("guardian", 42).unwrap();
     game.battle = battle;
     game.battle.turn = ENEMY;
     game.phase = RunPhase::Combat;
@@ -316,7 +316,7 @@ fn cardinal_native_actions_reach_preview_and_enemy_ai() {
 fn upgrade_tree_uses_existing_hook_and_exposes_all_new_paths() {
     assert_eq!(pieces::HOOK, 17);
     assert_eq!(pieces::definition(pieces::HOOK).unwrap().key, "hook");
-    let snapshot = Game::new("vanguard", 2026).unwrap().snapshot();
+    let snapshot = Game::new("guardian", 2026).unwrap().snapshot();
     for (from, to) in [
         (KNIGHT, pieces::KNIGHTRIDER),
         (pieces::KNIGHTRIDER, pieces::UNICORN),

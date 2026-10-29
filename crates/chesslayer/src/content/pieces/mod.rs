@@ -87,12 +87,14 @@ pub enum PieceFamily {
     Bishop,
 }
 
+pub type NativeMovement = fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>;
+
 pub struct PieceDefinition {
     pub kind: PieceType,
     pub key: &'static str,
     pub name: &'static str,
     pub movement: fn() -> String,
-    pub native_movement: Option<fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>>,
+    pub native_movement: Option<NativeMovement>,
     pub value: i32,
     pub description: &'static str,
     pub upgrades: &'static [UpgradeDefinition],
@@ -124,6 +126,47 @@ impl PieceDefinition {
 }
 
 pub const ALL: &[PieceDefinition] = &[
+    axe_infantry::DEFINITION,
+    pike_infantry::DEFINITION,
+    halberd_infantry::DEFINITION,
+    sword_infantry::DEFINITION,
+    vanguard_officer::DEFINITION,
+    mounted_officer::DEFINITION,
+    vanguard_commander::DEFINITION,
+    mounted_commander::DEFINITION,
+    pistol_infantry::DEFINITION,
+    smiling_king::DEFINITION,
+    toast_king::DEFINITION,
+    ecstatic_king::DEFINITION,
+    masked_lady::DEFINITION,
+    red_lady::DEFINITION,
+    banquet_lady::DEFINITION,
+    inviting_lady::DEFINITION,
+    butcher_cart::DEFINITION,
+    funeral_cart::DEFINITION,
+    slaughter_cart::DEFINITION,
+    feast_cart::DEFINITION,
+    intoxicated_priest::DEFINITION,
+    feast_priest::DEFINITION,
+    locust_priest::DEFINITION,
+    hunger_priest::DEFINITION,
+    frenzied_dancer::DEFINITION,
+    masked_dancer::DEFINITION,
+    ecstatic_dancer::DEFINITION,
+    tempting_dancer::DEFINITION,
+    procession_follower::DEFINITION,
+    hungry_follower::DEFINITION,
+    glutton_follower::DEFINITION,
+    inviting_follower::DEFINITION,
+    eternal_guest::DEFINITION,
+    corpse::DEFINITION,
+    warehouse::DEFINITION,
+    rifleman::DEFINITION,
+    mortar::DEFINITION,
+    drone::DEFINITION,
+    tank::DEFINITION,
+    special_commander::DEFINITION,
+    operative::DEFINITION,
     pawn::DEFINITION,
     knight::DEFINITION,
     bishop::DEFINITION,
@@ -187,4 +230,120 @@ pub(crate) fn catalog() -> Vec<String> {
 
 pub fn piece_name(kind: PieceType) -> &'static str {
     definition(kind).map_or("기물", |d| d.name)
+}
+
+mod axe_infantry;
+pub use axe_infantry::AXE_INFANTRY;
+mod pike_infantry;
+pub use pike_infantry::PIKE_INFANTRY;
+mod halberd_infantry;
+pub use halberd_infantry::HALBERD_INFANTRY;
+mod sword_infantry;
+pub use sword_infantry::SWORD_INFANTRY;
+mod vanguard_officer;
+pub use vanguard_officer::VANGUARD_OFFICER;
+mod mounted_officer;
+pub use mounted_officer::MOUNTED_OFFICER;
+mod vanguard_commander;
+pub use vanguard_commander::VANGUARD_COMMANDER;
+mod mounted_commander;
+pub use mounted_commander::MOUNTED_COMMANDER;
+mod pistol_infantry;
+pub use pistol_infantry::PISTOL_INFANTRY;
+mod smiling_king;
+pub use smiling_king::SMILING_KING;
+mod toast_king;
+pub use toast_king::TOAST_KING;
+mod ecstatic_king;
+pub use ecstatic_king::ECSTATIC_KING;
+mod masked_lady;
+pub use masked_lady::MASKED_LADY;
+mod red_lady;
+pub use red_lady::RED_LADY;
+mod banquet_lady;
+pub use banquet_lady::BANQUET_LADY;
+mod inviting_lady;
+pub use inviting_lady::INVITING_LADY;
+mod butcher_cart;
+pub use butcher_cart::BUTCHER_CART;
+mod funeral_cart;
+pub use funeral_cart::FUNERAL_CART;
+mod slaughter_cart;
+pub use slaughter_cart::SLAUGHTER_CART;
+mod feast_cart;
+pub use feast_cart::FEAST_CART;
+mod intoxicated_priest;
+pub use intoxicated_priest::INTOXICATED_PRIEST;
+mod feast_priest;
+pub use feast_priest::FEAST_PRIEST;
+mod locust_priest;
+pub use locust_priest::LOCUST_PRIEST;
+mod hunger_priest;
+pub use hunger_priest::HUNGER_PRIEST;
+mod frenzied_dancer;
+pub use frenzied_dancer::FRENZIED_DANCER;
+mod masked_dancer;
+pub use masked_dancer::MASKED_DANCER;
+mod ecstatic_dancer;
+pub use ecstatic_dancer::ECSTATIC_DANCER;
+mod tempting_dancer;
+pub use tempting_dancer::TEMPTING_DANCER;
+mod procession_follower;
+pub use procession_follower::PROCESSION_FOLLOWER;
+mod hungry_follower;
+pub use hungry_follower::HUNGRY_FOLLOWER;
+mod glutton_follower;
+pub use glutton_follower::GLUTTON_FOLLOWER;
+mod inviting_follower;
+pub use inviting_follower::INVITING_FOLLOWER;
+mod eternal_guest;
+pub use eternal_guest::ETERNAL_GUEST;
+mod corpse;
+pub use corpse::CORPSE;
+mod warehouse;
+pub use warehouse::WAREHOUSE;
+mod rifleman;
+pub use rifleman::RIFLEMAN;
+mod mortar;
+pub use mortar::MORTAR;
+mod drone;
+pub use drone::DRONE;
+mod tank;
+pub use tank::TANK;
+mod special_commander;
+pub use special_commander::SPECIAL_COMMANDER;
+mod operative;
+pub use operative::OPERATIVE;
+
+pub fn is_player_royal(kind: PieceType) -> bool {
+    matches!(
+        kind,
+        KING | VANGUARD_COMMANDER
+            | MOUNTED_COMMANDER
+            | SMILING_KING
+            | TOAST_KING
+            | ECSTATIC_KING
+            | SPECIAL_COMMANDER
+    )
+}
+pub fn is_follower(kind: PieceType) -> bool {
+    matches!(
+        kind,
+        PROCESSION_FOLLOWER | HUNGRY_FOLLOWER | GLUTTON_FOLLOWER | INVITING_FOLLOWER
+    )
+}
+pub fn base_kind(kind: PieceType) -> PieceType {
+    let mut k = kind;
+    while let Some(d) = ALL
+        .iter()
+        .find(|d| d.upgrades.iter().any(|u| u.target == k))
+    {
+        k = d.kind;
+    }
+    k
+}
+pub fn previous_kind(kind: PieceType) -> Option<PieceType> {
+    ALL.iter()
+        .find(|d| d.upgrades.iter().any(|u| u.target == kind))
+        .map(|d| d.kind)
 }

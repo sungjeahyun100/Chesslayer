@@ -14,7 +14,7 @@ chesslayer-web (WebGame: WASM 객체 하나가 Game 하나를 소유)
 chesslayer
   battle.rs   기존 Battle 기반 이동·턴·가호·로얄 보호·역습·outcome
   cards.rs    영구 덱과 별개인 전투 더미, 마나·키워드 처리
-  content/    카드·기물·캐릭터별 정의, 명시적 등록 목록
+  content/    카드·기물·부대별 정의, 명시적 등록 목록
     mod.rs    콘텐츠 재노출, 임시 규칙 상수, 결정적 RNG
     relics.rs 유물 식별자·설명·후보 풀·ID별 명시적 진형 좌표
   map.rs      한 번 생성하는 제1막 그래프, 노드 콘텐츠와 표시 자료형
@@ -23,7 +23,7 @@ chesslayer
 chessembly (보드, 액션, 파서와 이동 후보 계산)
 ```
 
-카드별 효과·대상 검증은 `content/cards/`, 기물의 ID·이름·행마·AI 가치·표시는 `content/pieces/`, 캐릭터 기본 정보·시작 유물은 `content/characters/`에 있다. 각 디렉터리의 `mod.rs`에서 명시적으로 등록한다. 카드 효과는 공통 `Battle` 메서드를 호출하고, 기물 행마는 기존 Chesssembly 계산기를 사용한다. [콘텐츠 추가 가이드](content/README.md)에 전체 파일 구조와 복사 가능한 예제가 있다.
+카드별 효과·대상 검증은 `content/cards/`, 기물의 ID·이름·행마·AI 가치·표시는 `content/pieces/`, 부대의 시작 상태·보상 카드·기물 권한은 `content/squads/`에 있다. 각 디렉터리의 `mod.rs`에서 명시적으로 등록한다. 카드 효과는 공통 `Battle` 메서드를 호출하고, 기물 행마는 기존 Chesssembly 계산기를 사용한다. [콘텐츠 추가 가이드](content/README.md)에 전체 파일 구조와 복사 가능한 예제가 있다.
 
 ## 한 번의 명령
 
@@ -62,7 +62,7 @@ AI는 기존 합법 후보에서 킹 포획을 최우선으로, 그다음 포획
 
 - 기물 정의의 `description`, `upgrades`, `promotions`가 스냅샷과 실제 강화 명령을 함께 구동한다. 행마는 공통 Chesssembly를 사용하며, 체인별 반사벽 설정만 확장한다. [템페스트·바운싱 연결](VARIANTS.md)을 참고한다.
 - `PieceImage.tsx`가 key·진영으로 사용 중인 SVG만 조회한다. `RestPanel.tsx`는 로컬 선택/미리보기만 관리하고 확정할 때 기존 명령을 전송한다.
-- `WebGame.save/restore`는 버전·캐릭터 ID·시드·성공한 명령(적 행동 포함)을 JSON으로 저장/재생한다. UI는 매 확정 행동 후 localStorage에 쓴다. 별도 보드 복제나 임의 상태 주입 API가 아니다. 게임 규칙 변경으로 재생 결과가 달라지면 저장 버전도 변경해야 한다.
+- `WebGame.save/restore`는 버전·부대 ID·시드·성공한 명령(적 행동 포함)을 JSON으로 저장/재생한다. UI는 매 확정 행동 후 localStorage에 쓴다. 별도 보드 복제나 임의 상태 주입 API가 아니다. 게임 규칙 변경으로 재생 결과가 달라지면 저장 버전도 변경해야 한다.
 
 ## 덱·혼합 보상 (저장 v6)
 

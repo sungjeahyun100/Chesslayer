@@ -3,7 +3,7 @@ import type { Command } from "../src/types";
 
 async function startMap(
   page: import("@playwright/test").Page,
-  character = "선봉대",
+  squad = "수호자",
   fixedSeed = true,
 ) {
   if (fixedSeed)
@@ -19,16 +19,16 @@ async function startMap(
     });
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
-  await page.getByRole("button", { name: new RegExp(character) }).click();
+  await page.getByRole("button", { name: new RegExp(squad) }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
   await expect(page.locator(".map-node:enabled")).toHaveCount(3);
 }
 async function start(
   page: import("@playwright/test").Page,
-  character = "선봉대",
+  squad = "수호자",
 ) {
-  await startMap(page, character);
+  await startMap(page, squad);
   const firstEncounter = await page.evaluate(async () => {
     const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
     await init();
@@ -49,6 +49,43 @@ async function layout(page: import("@playwright/test").Page) {
     })),
   );
 }
+
+test("5개 부대 중 수호자만 해금되어 있고 저장에 부대 ID가 기록된다", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await expect(page.locator(".squad")).toHaveCount(5);
+  await expect(page.locator(".squad:enabled")).toContainText("수호자");
+  await page.getByRole("button", { name: "런 시작" }).click();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("chesslayer.run.v1")!));
+  expect(saved).toMatchObject({ version: 15, squad: "guardian" });
+});
+
+test("개발자 모드는 원정을 보존하며 전체 부대·층을 영구 해금한다", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await startMap(page);
+  const original = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
+  await page.reload();
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await expect(page.locator(".squad:disabled")).toHaveCount(4);
+  await expect(page.locator(".floor-select button:disabled")).toHaveCount(3);
+  await page.getByRole("button", { name: "개발자 모드 · 전체 해금" }).click();
+  await expect(page.locator(".squad:enabled")).toHaveCount(5);
+  await expect(page.locator(".floor-select button:enabled")).toHaveCount(4);
+  expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(original);
+  await expect(page.getByRole("status")).toContainText("모든 부대와 층이 개방되어 있습니다.");
+  await page.reload();
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await expect(page.locator(".squad:enabled")).toHaveCount(5);
+  await expect(page.locator(".floor-select button:enabled")).toHaveCount(4);
+  await page.locator(".squad").filter({ has: page.getByRole("heading", { name: "특수부대", exact: true }) }).click();
+  await page.getByRole("group", { name: "시작 층 선택" }).getByRole("button", { name: "4층", exact: true }).click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await expect(page.locator(".act-map-screen")).toHaveAttribute("data-floor", "4");
+  await page.locator(".map-node:enabled").first().click();
+  await expect(page.locator("main")).toHaveAttribute("data-phase", "combat");
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("chesslayer.run.v1")!));
+  expect(saved).toMatchObject({ squad: "special", floor: 4 });
+});
 
 test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 바꾸지 않는다", async ({ page }) => {
   await start(page);
@@ -74,7 +111,7 @@ test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 �
 
 test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 연출을 반복하지 않는다", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".home-version")).toHaveText("v0.2.4");
+  await expect(page.locator(".home-version")).toHaveText("v0.3.0");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.getByRole("status", { name: "제1층 진입" })).toContainText("ACT I");
@@ -154,11 +191,11 @@ test("원정 현황 버튼은 우측 상단에 고정되고 실제 덱·진입 �
   await expect(page.locator(".map-node:enabled")).toHaveCount(3);
 });
 
-test("14단계 지도의 두 휴식 구간과 보스를 스크롤해서 확인한다", async ({ page }) => {
+test("15단계 지도의 두 휴식 구간과 보스를 스크롤해서 확인한다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await startMap(page);
   const map = page.locator(".map-chart");
-  await expect(page.locator('.map-node[data-row="13"][data-kind="boss"]')).toHaveCount(1);
+  await expect(page.locator('.map-node[data-row="14"][data-kind="boss"]')).toHaveCount(1);
   for (const row of [6, 12]) {
     const nodes = page.locator(`.map-node[data-row="${row}"]`);
     expect(await nodes.count()).toBeGreaterThan(0);
@@ -274,16 +311,13 @@ test("실제 WASM: 빈 초기 덱, 합법 수, 적 행동", async ({ page }) => 
   await expect(page.getByTestId("deck-count")).toHaveText("0");
   await expect(page.getByTestId("draw-count")).toHaveText("0");
   await expect(page.locator(".mana-orb")).toHaveText("3");
-  await expect(page.getByTestId("turn")).toContainText("2회 행동");
+  await expect(page.getByTestId("turn")).toContainText("1회 행동");
   await page.locator('[data-square="e2"]').click();
   await expect(page.locator('[data-square="e4"]')).toHaveAttribute(
     "data-legal",
     "true",
   );
   await page.locator('[data-square="e4"]').click();
-  await expect(page.getByTestId("turn")).toContainText("1회 행동");
-  await page.locator('[data-square="d2"]').click();
-  await page.locator('[data-square="d4"]').click();
   await expect(page.getByTestId("turn")).toContainText("적의 턴");
   await expect(page.getByTestId("turn")).toContainText("나의 턴");
   await expect(page.getByRole("log")).toContainText("흑 킹");
@@ -324,7 +358,7 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
   const { readFileSync } = await import("node:fs");
   const commands = (JSON.parse(
     readFileSync(
-      "../crates/chesslayer/tests/fixtures/winning-run.json",
+      "../crates/chesslayer/tests/fixtures/guardian-run.json",
       "utf8",
     ),
   ) as Command[]);
@@ -445,7 +479,7 @@ test("생성된 맵을 유지하며 분기·보물·전투·휴식까지 진행"
         .getByRole("button", { name: "강화 확정", exact: true })
         .click();
       await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
-      await page.getByRole("button", { name: "맵으로 돌아가기 →", exact: true }).click();
+      await expect(page.locator(".rest-workshop")).toHaveCount(0);
     } else if (cmd.type === "claim_treasure") {
       await expect(
         page.getByRole("heading", { name: "남겨진 보물", exact: true }),
@@ -509,7 +543,7 @@ test("킹 포획 시 패배하고 새 원정을 시작할 수 있다", async ({ 
   await expect(page.getByRole("button", { name: "턴 종료" })).toBeDisabled();
   await page.getByRole("button", { name: "새 원정 시작" }).click();
   await expect(
-    page.getByRole("heading", { name: "어떤 수를 두시겠어요?" }),
+    page.getByRole("heading", { name: "부대를 선택하세요" }),
   ).toBeVisible();
 });
 

@@ -1,0 +1,15 @@
+[
+  {"type":"select_node","id":2},
+  {"type":"move","from":52,"to":44},
+  {"type":"move","from":59,"to":45},
+  {"type":"move","from":45,"to":5},
+  {"type":"choose_reward","index":2},
+  {"type":"select_node","id":6},
+  {"type":"claim_treasure"},
+  {"type":"select_node","id":8},
+  {"type":"play_card","id":1,"target":null},
+  {"type":"move","from":48,"to":40},
+  {"type":"move","from":60,"to":52},
+  {"type":"choose_reward","index":0},
+  {"type":"select_node","id":10}
+]

@@ -44,10 +44,15 @@ fn catalog_entries_are_unique_and_connected() {
         assert_eq!(battle.board.piece_name(piece).unwrap(), definition.key);
         assert_eq!(piece_name(definition.kind), definition.name);
         battle.turn = ENEMY;
-        battle.legal_actions(Position::new(4, 0)).unwrap();
+        if definition.kind == content::pieces::CORPSE {
+            assert_eq!(battle.phase, Phase::Finished);
+        } else {
+            battle.legal_actions(Position::new(4, 0)).unwrap();
+        }
     }
 
-    for kind in content::cards::REWARD_POOL
+    for kind in content::squads::ALL[0]
+        .reward_cards
         .iter()
         .copied()
         .chain([CardKind::FleetingWard])
@@ -55,13 +60,87 @@ fn catalog_entries_are_unique_and_connected() {
         assert_eq!(kind.definition().kind, kind, "miswired card registration");
     }
     let mut ids = HashSet::new();
-    for character in content::characters::ALL {
-        assert!(!character.id.is_empty());
-        assert!(ids.insert(character.id), "duplicate character ID");
-        let game = Game::new(character.id, 2026).unwrap();
-        assert_eq!(game.character, character.name);
-        assert_eq!(game.relics, vec![character.relic]);
+    for squad in content::squads::ALL {
+        assert!(!squad.id.is_empty());
+        assert!(ids.insert(squad.id), "duplicate squad ID");
+        let game = Game::new(squad.id, 2026).unwrap();
+        assert_eq!(game.squad, squad.name);
+        assert_eq!(game.relics, vec![squad.relic]);
     }
+}
+
+#[test]
+fn guardian_keeps_existing_content_and_new_squads_are_registered() {
+    use content::cards::{CardAffiliation, CardKind::*};
+    use content::relics::{Relic, RELIC_REWARD_POOL};
+
+    let squads = content::squads::ALL;
+    assert_eq!(squads.len(), 5);
+    let guardian = squads[0];
+    assert_eq!(guardian.id, "guardian");
+    assert_eq!(guardian.relic, Relic::SelfDefense);
+    assert!(guardian.starting_deck.is_empty());
+    assert_eq!((guardian.starting_roster)(), Battle::standard_roster());
+    assert!(Game::new("vanguard", 2026).is_ok());
+    assert!(Game::new("wanderer", 2026).is_err());
+    assert_eq!(RELIC_REWARD_POOL.len(), 8);
+    assert!(RELIC_REWARD_POOL.contains(&Relic::Haste));
+    assert!(RELIC_REWARD_POOL.contains(&Relic::Whirlwind));
+
+    let all_cards = [
+        Jeans,
+        Ward,
+        Gun,
+        FleetingWard,
+        PawnStorm,
+        ReverseJeans,
+        LimiterRelease,
+        TemporaryUpgrade,
+        SacredDomain,
+    ];
+    for card in all_cards {
+        assert_eq!(card.affiliation(), CardAffiliation::Squad("guardian"));
+        assert!(!card.affiliation().available_to("future"));
+    }
+    assert!(content::cards::SHARED_REWARD_POOL.is_empty());
+    assert_eq!(
+        guardian.reward_cards,
+        &[
+            Ward,
+            Jeans,
+            Gun,
+            PawnStorm,
+            ReverseJeans,
+            LimiterRelease,
+            TemporaryUpgrade,
+            SacredDomain,
+        ]
+    );
+
+    for &(from, to) in guardian.upgrade_paths {
+        assert!(guardian.allows_upgrade(from, to));
+    }
+    for piece in content::pieces::ALL
+        .iter()
+        .filter(|d| guardian.allows_piece(d.kind))
+    {
+        for path in piece.upgrades {
+            assert!(guardian.allows_upgrade(piece.kind, path.target));
+        }
+        for &promotion in piece.promotions {
+            assert!(guardian.allows_piece(promotion));
+        }
+    }
+    let future = content::Squad {
+        id: "future",
+        starting_deck: &[],
+        reward_cards: &[],
+        available_pieces: &[],
+        upgrade_paths: &[],
+        ..guardian
+    };
+    assert!(!future.allows_upgrade(PAWN, TEMPEST_PAWN));
+    assert!(!future.allows_piece(KING));
 }
 
 #[test]
@@ -81,7 +160,15 @@ fn each_piece_keeps_its_own_movement_source() {
     for definition in content::pieces::ALL {
         let source = (definition.movement)();
         if definition.native_movement.is_none() {
-            assert!(!source.is_empty(), "{} has no DSL", definition.key);
+            assert!(
+                !source.is_empty()
+                    || matches!(
+                        definition.kind,
+                        content::pieces::CORPSE | content::pieces::WAREHOUSE
+                    ),
+                "{} has no DSL",
+                definition.key
+            );
             chessembly::Program::parse(&source).unwrap();
         }
     }

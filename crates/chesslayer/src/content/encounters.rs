@@ -26,7 +26,7 @@ pub struct EncounterDefinition {
     pub description: &'static str,
 }
 
-pub const ENCOUNTERS: [EncounterDefinition; 18] = [
+pub const ENCOUNTERS: [EncounterDefinition; 22] = [
     EncounterDefinition {
         id: "1F-N01",
         name: "홀로 선 왕",
@@ -118,9 +118,33 @@ pub const ENCOUNTERS: [EncounterDefinition; 18] = [
         name: "쌍둥이 신",
         description: "e8·d8의 행마의 신이 모두 로얄이며 둘 다 포획해야 승리합니다.",
     },
+    EncounterDefinition {
+        id: "V03-B1",
+        name: "선봉대",
+        description: "민첩한 선봉대의 로얄을 직접 포획하세요.",
+    },
+    EncounterDefinition {
+        id: "V03-B2",
+        name: "영원한 주빈",
+        description: "강화된 이단 부대와 시체 두 기. 만찬의 종소리를 주의하세요.",
+    },
+    EncounterDefinition {
+        id: "V03-B3",
+        name: "포병대대",
+        description: "모든 적 창고를 파괴하세요.",
+    },
+    EncounterDefinition {
+        id: "V03-B4",
+        name: "특수부대",
+        description: "임시 특수부대 편성의 지휘관을 직접 포획하세요.",
+    },
 ];
 
 pub fn encounter(index: usize) -> Encounter {
+    if index >= 18 {
+        return squad_boss(index - 18);
+    }
+
     let royal_kind = match index {
         1 => KNIGHT,
         MAHARAJA => AMAZON,
@@ -273,5 +297,57 @@ pub fn encounter(index: usize) -> Encounter {
 pub fn choose_random_royal(index: usize, encounter: &mut Encounter, rng: &mut crate::content::Rng) {
     if matches!(index, TWO_LOBSTERS | TWO_TEMPEST_PAWNS) {
         encounter.royal_id = encounter.enemies[rng.index(encounter.enemies.len())].id;
+    }
+}
+
+fn squad_boss(index: usize) -> Encounter {
+    let squad = super::squads::squads()[index + 1];
+    let mut roster = (squad.starting_roster)();
+    if index == 1 {
+        let back = [
+            FUNERAL_CART,
+            MASKED_DANCER,
+            INTOXICATED_PRIEST,
+            BANQUET_LADY,
+            ETERNAL_GUEST,
+            FEAST_PRIEST,
+            TEMPTING_DANCER,
+            FUNERAL_CART,
+        ];
+        let front = [
+            PROCESSION_FOLLOWER,
+            HUNGRY_FOLLOWER,
+            PROCESSION_FOLLOWER,
+            INVITING_FOLLOWER,
+            PROCESSION_FOLLOWER,
+            HUNGRY_FOLLOWER,
+            PROCESSION_FOLLOWER,
+            PROCESSION_FOLLOWER,
+        ];
+        for (i, p) in roster.iter_mut().enumerate() {
+            p.kind = if i < 8 { back[i] } else { front[i - 8] };
+        }
+    }
+    let mut enemies = roster
+        .iter()
+        .map(|p| EnemyPiece {
+            id: p.id + 100,
+            kind: p.kind,
+            position: Position::new(p.origin.file, 7 - p.origin.rank),
+        })
+        .collect::<Vec<_>>();
+    if index == 1 {
+        for (id, file) in [(150, 3), (151, 5)] {
+            enemies.push(EnemyPiece {
+                id,
+                kind: CORPSE,
+                position: Position::new(file, 2),
+            });
+        }
+    }
+    Encounter {
+        enemies,
+        royal_id: if index == 2 { 103 } else { 105 },
+        additional_royal_ids: if index == 2 { vec![106] } else { vec![] },
     }
 }

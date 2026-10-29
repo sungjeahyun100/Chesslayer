@@ -15,6 +15,11 @@ pub use crate::content::pieces::{
     TEMPEST_ROOK,
 };
 use crate::content::{pieces, Rng, INITIATIVE_TURNS};
+#[path = "mechanics.rs"]
+mod mechanics;
+#[path = "tactical_effects.rs"]
+mod tactical_effects;
+pub use mechanics::{accuracy, AbilityView, ChoiceView, Status};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BattleOptions {
@@ -117,6 +122,7 @@ impl From<ActionError> for Error {
 }
 #[derive(Clone)]
 pub struct Battle {
+    pub mechanics: mechanics::Mechanics,
     pub board: Board,
     pub turn: PlayerId,
     pub result: GameResult,
@@ -191,7 +197,7 @@ impl Battle {
             {
                 return Err(Error::InvalidSetup);
             }
-            if p.kind == KING && king_id.replace(p.id).is_some() {
+            if pieces::is_player_royal(p.kind) && king_id.replace(p.id).is_some() {
                 return Err(Error::InvalidSetup);
             }
             if let Some(pos) = p.position {
@@ -208,7 +214,15 @@ impl Battle {
                 )?
             }
         }
-        let king_id = king_id.ok_or(Error::InvalidSetup)?;
+        let king_id = king_id
+            .or_else(|| {
+                start
+                    .players
+                    .iter()
+                    .find(|p| p.kind == pieces::WAREHOUSE)
+                    .map(|p| p.id)
+            })
+            .ok_or(Error::InvalidSetup)?;
         let mut players = start.players;
         let mut required_royals = start.encounter.additional_royal_ids.clone();
         required_royals.push(start.encounter.royal_id);
@@ -261,7 +275,9 @@ impl Battle {
             .collect::<Result<_, _>>()?;
         let initial_double_step = Program::parse(pieces::movement::INITIAL_DOUBLE_STEP)?;
         let moved_ids = players.iter().filter(|p| p.moved).map(|p| p.id).collect();
+        let mechanics = mechanics::Mechanics::from_roster(&players);
         let mut battle = Self {
+            mechanics,
             events,
             wards: HashSet::new(),
             temporary_upgrades: HashSet::new(),
@@ -354,6 +370,10 @@ impl Battle {
         self.enemy_initiative_turns_left = 0;
         self.absorbed.clear();
         self.moved_ids = roster.iter().filter(|p| p.moved).map(|p| p.id).collect();
+        self.mechanics.statuses = roster
+            .iter()
+            .map(|p| (p.id, Status::load(&p.persistent)))
+            .collect();
         self.board = next;
         self.players = roster;
         Ok(())
@@ -376,7 +396,11 @@ impl Battle {
         kinds
     }
     pub fn outcome(&self) -> Vec<PlayerPiece> {
-        self.players.clone()
+        let mut roster = self.players.clone();
+        for p in &mut roster {
+            self.status(p.id).save(&mut p.persistent);
+        }
+        roster
     }
     pub fn legal_actions(&self, from: Position) -> Result<Vec<DefaultAction>, Error> {
         self.actions_from(from, true)
@@ -443,15 +467,18 @@ impl Battle {
                         && self
                             .board
                             .piece_at(step.take)?
-                            .is_some_and(|p| p.owner != owner)
+                            .is_some_and(|p| p.owner != owner || p.kind == pieces::CORPSE)
                     {
                         captures.push(step.take);
                     }
                 } else {
-                    let mut board = self.board.clone();
+                    let mut board =
+                        self.movement_board(self.board.piece_at(from)?.unwrap().kind, from)?;
                     for step in action.steps() {
                         if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
-                            && board.piece_at(step.take)?.is_some_and(|p| p.owner != owner)
+                            && board
+                                .piece_at(step.take)?
+                                .is_some_and(|p| p.owner != owner || p.kind == pieces::CORPSE)
                         {
                             captures.push(step.take);
                         }
@@ -477,6 +504,16 @@ impl Battle {
         let piece = self.board.piece_at(from)?.ok_or(Error::IllegalAction)?;
         if enforce_turn && piece.owner != self.turn {
             return Err(Error::WrongTurn);
+        }
+        if piece.kind == pieces::CORPSE || self.status(piece.id).disabled {
+            return Ok(vec![]);
+        }
+        if enforce_turn
+            && self.normal_actions_used >= self.base_actions(piece.owner)
+            && self.status(piece.id).agile == 0
+            && !self.limiter.contains_key(&piece.id)
+        {
+            return Ok(vec![]);
         }
         if self
             .limiter
@@ -511,6 +548,7 @@ impl Battle {
                 actions.push(second.clone())
             }
         }
+        self.extra_corpse_actions(piece, from, &mut actions)?;
         let definition = pieces::definition(piece.kind).ok_or(Error::InvalidSetup)?;
         let last_rank = if piece.owner == PLAYER { 0 } else { 7 };
         // A promotion is part of the validated move, including captures of the royal.
@@ -545,18 +583,20 @@ impl Battle {
                 push_unique_action(&mut result, &mut seen, action);
             }
         }
+        self.filter_hunger(piece, &mut result);
         Ok(result)
     }
     fn piece_actions(&self, kind: PieceType, from: Position) -> Result<Vec<DefaultAction>, Error> {
         let definition = pieces::definition(kind).ok_or(Error::InvalidSetup)?;
+        let board = self.movement_board(kind, from)?;
         if let Some(calculate) = definition.native_movement {
-            Ok(calculate(&self.board, from)?)
+            Ok(calculate(&board, from)?)
         } else {
             Ok(self
                 .programs
                 .get(&kind)
                 .ok_or(Error::InvalidSetup)?
-                .execute(&self.board, from)?)
+                .execute(&board, from)?)
         }
     }
     // Inspect each step on its actual intermediate board, including remote/jump captures.
@@ -626,21 +666,7 @@ impl Battle {
         } else {
             self.apply_effect(action, ActionSource::PieceMove)?;
         }
-        self.moved_ids.insert(piece.id);
-        if let Some(state) = self.limiter.get_mut(&piece.id) {
-            if state.active {
-                state.moves_left = state.moves_left.saturating_sub(1);
-            }
-        } else {
-            self.normal_actions_used = self.normal_actions_used.saturating_add(1);
-        }
-        if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
-            p.moved = true;
-        }
-        self.actions_left -= 1;
-        if self.phase == Phase::Active && self.actions_left == 0 {
-            self.end_turn()?;
-        }
+        self.spend_action(piece)?;
         Ok(())
     }
     fn warded_victim(
@@ -660,7 +686,7 @@ impl Battle {
                 },
             );
         }
-        let mut board = self.board.clone();
+        let mut board = self.movement_board(0, action.first.from)?;
         for step in action.steps() {
             if !matches!(step.effect, crate::Effect::Shift | crate::Effect::Move) {
                 if let Some(victim) = board
@@ -677,6 +703,10 @@ impl Battle {
     pub fn end_turn(&mut self) -> Result<(), Error> {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
+        }
+        self.finish_mechanics_turn()?;
+        if self.phase == Phase::Finished {
+            return Ok(());
         }
         let expired: Vec<_> = self
             .limiter
@@ -712,7 +742,7 @@ impl Battle {
             }
         }
         self.turn = if self.turn == PLAYER { ENEMY } else { PLAYER };
-        self.actions_left = self.actions_per_turn;
+        self.actions_left = self.base_actions(self.turn);
         self.normal_actions_used = 0;
         let mut starts = false;
         for s in self.limiter.values_mut() {
@@ -726,6 +756,7 @@ impl Battle {
         if starts {
             self.actions_left = self.actions_left.max(3);
         }
+        self.start_mechanics_turn()?;
         Ok(())
     }
     pub fn limiter_status(&self, id: PieceId) -> Option<(bool, u8)> {
@@ -923,6 +954,9 @@ impl Battle {
         Ok(removed)
     }
     fn apply_effect(&mut self, action: &DefaultAction, source: ActionSource) -> Result<(), Error> {
+        if source == ActionSource::PieceMove && self.mechanics.active {
+            return self.apply_mechanics_action(action);
+        }
         // Card effects need royal-protection rollback; compound moves need a staging board
         // while rule effects inspect each intermediate position. A single piece step can
         // use chessembly's changed-square rollback directly on the live board.
@@ -1034,7 +1068,7 @@ impl Battle {
         }
         for (index, piece) in self.board.cells().iter().enumerate() {
             if let Some(piece) = piece {
-                if piece.owner == PLAYER {
+                if piece.owner == PLAYER && piece.kind != pieces::CORPSE {
                     if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
                         p.position = Some(Position::new(index as i32 % 8, index as i32 / 8));
                     }
@@ -1049,16 +1083,29 @@ impl Battle {
         }
     }
     fn update_result(&mut self, reason: ResultReason) {
-        let king_alive = self
-            .players
-            .iter()
-            .any(|p| p.id == self.king_id && p.position.is_some());
-        let royal_alive = self
-            .board
-            .cells()
-            .iter()
-            .flatten()
-            .any(|p| p.owner == ENEMY && self.is_enemy_royal(p.id));
+        let king_alive = if self.mechanics.warehouse_side[0] {
+            self.board
+                .cells()
+                .iter()
+                .flatten()
+                .any(|p| p.owner == PLAYER && p.kind == pieces::WAREHOUSE)
+        } else {
+            self.players
+                .iter()
+                .any(|p| p.id == self.king_id && p.position.is_some())
+        };
+        let royal_alive =
+            if self.mechanics.warehouse_side[1] {
+                self.board
+                    .cells()
+                    .iter()
+                    .flatten()
+                    .any(|p| p.owner == ENEMY && p.kind == pieces::WAREHOUSE)
+            } else {
+                self.board.cells().iter().flatten().any(|p| {
+                    p.owner == ENEMY && p.kind != pieces::CORPSE && self.is_enemy_royal(p.id)
+                })
+            };
         self.result = if !king_alive {
             GameResult::Win {
                 winner: ENEMY,

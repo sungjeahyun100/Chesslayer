@@ -1,5 +1,5 @@
 use chesslayer::{
-    content::{pieces::HOOK, Rng},
+    content::{pieces::HOOK, Relic, Rng},
     game::*,
     map::NodeKind,
     *,
@@ -169,7 +169,8 @@ fn self_defense_ignores_other_victims_removals_cards_and_swaps() {
 
 #[test]
 fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
-    let mut g = Game::new("vanguard", 2026).unwrap();
+    let mut g = Game::new("guardian", 2026).unwrap();
+    g.relics = vec![Relic::Haste];
     let start = g
         .map
         .starts()

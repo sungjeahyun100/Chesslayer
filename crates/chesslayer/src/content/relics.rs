@@ -5,6 +5,18 @@ use serde::Serialize;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Relic {
+    Agility,
+    Reinforcements,
+    CarnivalFlare,
+    SilverCutlery,
+    EmptyGoblet,
+    TornMenu,
+    LastPlate,
+    GoldenTray,
+    LaughingMask,
+    EternalBell,
+    SupplyMarker,
+    SpecialInsignia,
     Haste,
     Whirlwind,
     SelfDefense,
@@ -87,6 +99,18 @@ pub const HEDGEHOG: [(i32, i32); 16] = [
 impl Relic {
     pub fn name(self) -> &'static str {
         match self {
+            Self::Agility => "민첩성",
+            Self::Reinforcements => "충원",
+            Self::CarnivalFlare => "카니발의 신호탄",
+            Self::SilverCutlery => "은제 식기",
+            Self::EmptyGoblet => "빈 술잔",
+            Self::TornMenu => "찢어진 메뉴판",
+            Self::LastPlate => "마지막 접시",
+            Self::GoldenTray => "금박 쟁반",
+            Self::LaughingMask => "웃는 가면",
+            Self::EternalBell => "영원한 향연의 종",
+            Self::SupplyMarker => "보급 표식",
+            Self::SpecialInsignia => "특수부대 표식",
             Self::Haste => "가속",
             Self::Whirlwind => "소용돌이",
             Self::SelfDefense => "호신용품",
@@ -99,6 +123,18 @@ impl Relic {
     }
     pub fn description(self) -> &'static str {
         match self {
+            Self::Agility => "아군 부대가 턴마다 일반 행동을 2회 합니다.",
+            Self::Reinforcements => "전투 승리 후 사망한 기물 하나를 초기 종류로 부활시킵니다.",
+            Self::CarnivalFlare => "전투 시작 시 살아 있는 양 진영에 식재료, 아군에 황충의 축복을 부여합니다.",
+            Self::SilverCutlery => "전투 첫 아군 시체 포획 시 카드 1장 드로우.",
+            Self::EmptyGoblet => "턴마다 첫 아군 시체 포획 시 마나 1 회복.",
+            Self::TornMenu => "전투 시작 시 무작위 비로얄 적 하나에 공복.",
+            Self::LastPlate => "전투 종료 시 선택한 아군 하나의 허기 악화를 방지.",
+            Self::GoldenTray => "시체 포획 시 인접한 다른 아군 하나에 민첩 1. 턴당 1회.",
+            Self::LaughingMask => "아군 시체 포획 시 선택한 적 하나의 허기 악화. 전투당 1회.",
+            Self::EternalBell => "전투 세 번째 아군 시체 포획 시 드로우 2, 마나 1.",
+            Self::SupplyMarker => "포병대대의 임시 시작 표식. 추가 효과 없음.",
+            Self::SpecialInsignia => "특수부대의 임시 시작 표식. 추가 효과 없음.",
             Self::Haste => "양 진영이 턴마다 최대 2회 이동합니다.",
             Self::Whirlwind => "전투 시작 시 적들끼리 시작 위치를 무작위로 교환합니다.",
             Self::SelfDefense => "전투 시작 시 무작위 아군 하나를 보호합니다. 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다.",

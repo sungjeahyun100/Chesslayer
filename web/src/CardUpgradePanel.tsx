@@ -35,7 +35,7 @@ export function CardUpgradePanel({ card, piece, paths, onConfirm, onCancel }: {
         <strong>{piece.name} <span>· {piece.square}</span></strong>
         <span className="card-upgrade-cost">{card.definition.cost_per_target ? "1 마나/기" : `${card.definition.cost} 마나`}</span>
       </div>
-      <UpgradeTree key={piece.id} piece={{ ...piece, origin: piece.cell, upgrades: [], can_upgrade: true, can_revive: false, dead: false }}
+      <UpgradeTree key={piece.id} piece={{ ...piece, origin: piece.cell, disabled:piece.status.disabled, hunger:piece.status.hunger, upgrades: [], can_upgrade: true, can_revive: false, dead: false }}
         paths={paths} acquired={[]} onSelect={setSelected} onConfirm={onConfirm}
         completed={false} selectionOnly inlineConfirm />
       {preview && <div className="card-upgrade-selection" aria-live="polite">

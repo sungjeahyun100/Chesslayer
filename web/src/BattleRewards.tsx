@@ -70,7 +70,8 @@ export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snap
           );
         })}
       </div>
-      {special && <div className="elite-reward-group">
+      {special && state.ammo!==null && !state.upgrade_claimed && <div className="elite-reward-group">{state.rest_options.filter(p=>p.key==="warehouse" && !p.dead).map(p=><button className="primary" key={p.id} onClick={()=>send({type:"warehouse_upgrade",id:p.id})}>{p.square} 창고 강화 · 탄약 +10%</button>)}</div>}
+      {special && state.ammo===null && <div className="elite-reward-group">
         <button className="primary large" onClick={onUpgrade} disabled={state.upgrade_claimed || !state.rest_options.some((piece) => piece.can_upgrade)}>기물 강화</button>
         {state.upgrade_claimed && <p role="status">강화 보상을 수령했습니다.</p>}
       </div>}

@@ -10,7 +10,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
         let map = ActMap::generate(seed);
         assert_eq!(map, ActMap::generate(seed));
         assert_eq!(map.rows, MAP_ROWS);
-        assert_eq!(map.rows, 14);
+        assert_eq!(map.rows, 15);
         distinct.insert(serde_json::to_string(&map).unwrap());
         let starts = map.starts();
         assert_eq!(starts.len(), 3);
@@ -28,7 +28,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                 .count(),
             1
         );
-        assert_eq!(map.nodes[boss].row, 13);
+        assert_eq!(map.nodes[boss].row, 14);
         for row in [6, 12] {
             let rests: Vec<_> = map.nodes.iter().filter(|n| n.row == row).collect();
             assert!(!rests.is_empty());
@@ -44,7 +44,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                     assert!(n.relic.is_some());
                     assert!(n.description().contains("기물 강화 기회 1회"));
                 }
-                NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::HOOK_BOSS)),
+                NodeKind::Boss => assert_eq!(n.encounter, Some(18)),
                 NodeKind::Combat => assert!(n.encounter.unwrap() < 4),
                 _ => (),
             }
@@ -102,7 +102,7 @@ fn second_floor_nodes_draw_only_registered_encounters() {
         assert!(map
             .nodes
             .iter()
-            .filter(|n| n.row == 13)
+            .filter(|n| n.row == 14)
             .all(|n| n.kind == NodeKind::Boss));
         for node in &map.nodes {
             match node.kind {
@@ -118,7 +118,7 @@ fn second_floor_nodes_draw_only_registered_encounters() {
                 }
                 NodeKind::Boss => {
                     let id = node.encounter.unwrap();
-                    assert!(encounters::FLOOR_TWO_BOSSES.contains(&id));
+                    assert!(id == 19);
                     boss.insert(id);
                 }
                 _ => {}
@@ -127,12 +127,12 @@ fn second_floor_nodes_draw_only_registered_encounters() {
     }
     assert_eq!(normal, encounters::FLOOR_TWO_NORMALS.into());
     assert_eq!(elite, encounters::FLOOR_TWO_ELITES.into());
-    assert_eq!(boss, encounters::FLOOR_TWO_BOSSES.into());
+    assert_eq!(boss, HashSet::from([19]));
 }
 
 #[test]
 fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
-    let mut game = Game::new("vanguard", 2026).unwrap();
+    let mut game = Game::new("guardian", 2026).unwrap();
     let original = game.map.clone();
     assert_eq!(game.phase, RunPhase::Map);
     let invalid = original.nodes.iter().find(|n| n.row == 3).unwrap().id;

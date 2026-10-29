@@ -1,13 +1,13 @@
 //! Replaceable prototype content and provisional rules, not final game design.
 pub mod cards;
-pub mod characters;
 pub mod encounters;
 pub mod pieces;
 pub mod relics;
+pub mod squads;
 pub use cards::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
-pub use characters::{characters, Character};
 pub use encounters::{encounter, ENCOUNTERS};
 pub use relics::{Relic, INITIATIVE_TURNS, RELIC_REWARD_POOL};
+pub use squads::{squads, Squad};
 
 pub const BASE_MANA: u32 = 3;
 pub const DRAW_PER_TURN: usize = 1;

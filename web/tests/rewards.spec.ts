@@ -5,7 +5,7 @@ import type { Command, Snapshot } from "../src/types";
 test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재현", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  const commands: Command[] = JSON.parse(readFileSync("../crates/chesslayer/tests/fixtures/winning-run.json", "utf8"));
+  const commands: Command[] = JSON.parse(readFileSync("../crates/chesslayer/tests/fixtures/guardian-run.json", "utf8"));
   const beforeChoice = commands.slice(0, commands.findIndex((c) => c.type === "choose_reward"));
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
@@ -13,7 +13,7 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
     const url = "/src/wasm/chesslayer_web.js";
     const { default: init, WebGame } = await import(url);
     await init();
-    const game = new WebGame("vanguard", 2026);
+    const game = new WebGame("guardian", 2026);
     const verify = () => {
       const before = game.snapshot();
       if (game.snapshot() !== before) throw new Error("snapshot rerolled rewards");
@@ -35,7 +35,7 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
       return { saved: game.save(), snapshot: JSON.parse(game.snapshot()) as Snapshot };
     } finally { game.free(); }
   }, beforeChoice);
-  expect(JSON.parse(prepared.saved).version).toBe(13);
+  expect(JSON.parse(prepared.saved).version).toBe(15);
   expect(prepared.snapshot.phase).toBe("reward");
   expect(prepared.snapshot.rewards).toHaveLength(3);
   for (const type of ["card", "relic"] as const) {
@@ -103,9 +103,15 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
       await expect(page.getByRole("heading", { name: "손패 1/10" })).toBeVisible();
       await expect(page.locator(".hand .playing-card")).toContainText(chosen.definition.name);
       await page.locator(".hand .playing-card").click();
-      await page.locator('[data-square="g1"]').click();
-      await expect(page.locator(".mana-orb")).toHaveText("2");
-      await expect(page.locator('[data-square="g1"]')).toHaveAccessibleName(/가호/);
+      if (chosen.definition.kind === "temporary_upgrade") {
+        await page.locator('[data-square="a2"]').click();
+        await expect(page.locator(".card-upgrade-picker")).toBeVisible();
+        await expect(page.locator(".mana-orb")).toHaveText("3");
+      } else {
+        await page.locator('[data-square="g1"]').click();
+        await expect(page.locator(".mana-orb")).toHaveText("2");
+        await expect(page.locator('[data-square="g1"]')).toHaveAccessibleName(/가호/);
+      }
     } else {
       expect(after.deck_count).toBe(prepared.snapshot.deck_count);
       expect(after.relics).toHaveLength(prepared.snapshot.relics.length + 1);
@@ -116,13 +122,13 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
 });
 
 test("엘리트 강화 보상을 건너뛴 뒤 노드에서 한 번만 받는다", async ({ page }) => {
-  const commands: Command[] = JSON.parse(readFileSync("../crates/chesslayer/tests/fixtures/winning-run.json", "utf8"));
+  const commands: Command[] = JSON.parse(readFileSync("../crates/chesslayer/tests/fixtures/guardian-run.json", "utf8"));
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
   const saved = await page.evaluate(async (commands) => {
     const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
     await init();
-    const game = new WebGame("vanguard", 2026);
+    const game = new WebGame("guardian", 2026);
     try {
       for (const command of commands) {
         let state = JSON.parse(game.snapshot()) as Snapshot;
@@ -164,6 +170,8 @@ test("엘리트 강화 보상을 건너뛴 뒤 노드에서 한 번만 받는다
   await page.locator(`[data-square="${boardPiece.square}"]`).click();
   await expect(page.locator(".rest-workshop .skill-tree")).toBeVisible();
   await page.locator(".rest-workshop .skill-node.available").first().click();
+  await expect(page.locator(".skill-node-popup .primary")).toBeVisible();
+  await expect(page.locator(".rest-workshop-actions").getByRole("button", { name: "강화 확정", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "강화 확정", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "전투 승리" })).toBeVisible();
   await expect(page.getByRole("button", { name: "기물 강화", exact: true })).toBeDisabled();

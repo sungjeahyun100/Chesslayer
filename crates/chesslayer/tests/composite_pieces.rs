@@ -296,7 +296,7 @@ fn tempest_ray_reflects_once_then_ends_at_the_next_wall() {
 }
 
 fn resting_game(source_kind: PieceType, donor_kinds: &[PieceType], source_alive: bool) -> Game {
-    let mut game = Game::new("vanguard", 91).unwrap();
+    let mut game = Game::new("guardian", 91).unwrap();
     let mut players = Battle::standard_roster();
     for p in &mut players {
         p.position = None;

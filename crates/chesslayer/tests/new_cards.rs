@@ -1,6 +1,7 @@
+use chesslayer::content::pieces::TYPHOON_KNIGHT;
 use chesslayer::{
     cards::{Card, CardKind},
-    content::cards::REWARD_POOL,
+    content::squads::ALL,
     game::{CardUpgradeChoice, Command, Game, RunPhase},
     Battle, BattleStart, Encounter, EnemyPiece, GameResult, PieceType, PlayerPiece, Position,
     BISHOP, BOUNCING_BISHOP, ENEMY, KING, KNIGHT, PAWN, PLAYER, ROOK, TEMPEST_BISHOP,
@@ -41,7 +42,7 @@ fn foe(id: u32, kind: PieceType, at: Position) -> EnemyPiece {
     }
 }
 fn game(kind: CardKind, battle: Battle, mana: u32) -> Game {
-    let mut g = Game::new("vanguard", 2026).unwrap();
+    let mut g = Game::new("guardian", 2026).unwrap();
     g.dispatch(Command::SelectNode {
         id: g.available_nodes()[0],
     })
@@ -57,7 +58,7 @@ fn occupant(b: &Battle, at: Position) -> Option<u32> {
 
 #[test]
 fn registered_rewards_and_atomic_pawn_storm() {
-    assert!(REWARD_POOL.contains(&CardKind::PawnStorm));
+    assert!(ALL[0].reward_cards.contains(&CardKind::PawnStorm));
     let b = battle(
         vec![
             ally(5, KING, p(4, 7)),
@@ -208,6 +209,50 @@ fn temporary_upgrade_cost_branch_and_permanent_roster() {
         .upgrades
         .is_empty());
     assert_eq!(g.cards.mana, 0);
+}
+
+#[test]
+fn temporary_upgrade_uses_the_current_piece_for_a_second_guardian_path() {
+    let scene = battle(
+        vec![ally(5, KING, p(4, 7)), ally(2, KNIGHT, p(1, 7))],
+        vec![foe(100, KING, p(4, 0))],
+    );
+    let mut g = game(CardKind::TemporaryUpgrade, scene, 2);
+    g.cards.hand.push(Card {
+        id: 1000,
+        kind: CardKind::TemporaryUpgrade,
+    });
+    g.dispatch(Command::PlayCardSelection {
+        id: 999,
+        targets: vec![],
+        upgrades: vec![CardUpgradeChoice {
+            id: 2,
+            target: TEMPEST_KNIGHT,
+        }],
+    })
+    .unwrap();
+    assert!(g
+        .snapshot()
+        .hand
+        .iter()
+        .any(|card| card.targets.contains(&2)));
+    g.dispatch(Command::PlayCardSelection {
+        id: 1000,
+        targets: vec![],
+        upgrades: vec![CardUpgradeChoice {
+            id: 2,
+            target: TYPHOON_KNIGHT,
+        }],
+    })
+    .unwrap();
+    assert_eq!(
+        g.battle.board.piece_at(p(1, 7)).unwrap().unwrap().kind,
+        TYPHOON_KNIGHT
+    );
+    assert_eq!(
+        g.battle.outcome().iter().find(|p| p.id == 2).unwrap().kind,
+        KNIGHT
+    );
 }
 
 #[test]

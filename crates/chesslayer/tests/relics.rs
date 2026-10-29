@@ -213,7 +213,8 @@ fn initiative_filters_engine_and_ai_counts_enemy_turns_including_haste_and_passe
         .iter()
         .any(|a| a.first.take == at("e2")));
 
-    let mut g = Game::new("vanguard", 5).unwrap();
+    let mut g = Game::new("guardian", 5).unwrap();
+    g.relics = vec![Relic::Haste];
     g.relics.push(Relic::Initiative);
     start(&mut g, 0);
     g.battle = initiative_scene(2);
@@ -299,7 +300,8 @@ fn initiative_ends_only_on_successful_piece_capture_not_ward_or_card_removal() {
 #[test]
 fn ice_cream_accumulates_only_on_player_turns_and_saturates_safely() {
     for ice in [false, true] {
-        let mut g = Game::new("vanguard", 10).unwrap();
+        let mut g = Game::new("guardian", 10).unwrap();
+        g.relics = vec![Relic::Haste];
         g.deck.push(Card {
             id: 1,
             kind: CardKind::Ward,

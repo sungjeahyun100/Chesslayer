@@ -64,7 +64,7 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
     <div className="expedition-status-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="expedition-status-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="expedition-status-title">
         <header className="expedition-status-heading">
-          <div><p className="eyebrow">CHESSLAYER / ACT {state.floor === 1 ? "I" : "II"}</p><h2 id="expedition-status-title">원정 현황</h2></div>
+          <div><p className="eyebrow">CHESSLAYER / ACT {["I","II","III","IV"][state.floor-1]}</p><h2 id="expedition-status-title">원정 현황</h2></div>
           <button className="expedition-status-close" ref={closeRef} onClick={onClose} aria-label="원정 현황 닫기">닫기 ×</button>
         </header>
         <div className="expedition-status-content">
@@ -73,7 +73,7 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
             <div className="status-piece-list">
               {groups.map((group) => {
                 const example = group[0];
-                const alive = group.filter((piece) => !piece.dead).length;
+                const alive = group.filter((piece) => !piece.dead && !piece.disabled).length;
                 const upgraded = group.filter((piece) => piece.upgrades.length > 0).length;
                 return <button key={example.kind} className={`status-piece-group ${selectedGroup?.[0].kind === example.kind ? "is-selected" : ""}`}
                   onClick={() => setSelectedId(group[0].id)} aria-pressed={selectedGroup?.[0].kind === example.kind}>
@@ -92,7 +92,8 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
               </div>
               <strong>{selectedPiece.name}</strong>
               <p>{selectedPiece.description}</p>
-              <small>{selectedPiece.dead ? "전투 불가" : "다음 전투 참가"} · 강화 {selectedPiece.upgrades.length}회</small>
+              <small>{selectedPiece.disabled ? "영구 전투불능 · 고해성사 필요" : selectedPiece.dead ? "전투 불가" : "다음 전투 참가"} · 강화 {selectedPiece.upgrades.length}회</small>
+              {selectedPiece.hunger>0 && <small>허기 · {["정상","공복","굶주림","기아"][selectedPiece.hunger]}</small>}
               {selectedPiece.upgrades.length > 0 && <ol className="status-upgrade-history">
                 {upgradeSteps.map(({ key, path }, index) => {
                   return <li key={`${key}-${index}`}>{path ? <><strong>{path.from_name} → {path.to_name}</strong><span>{path.effect}</span></> : <span>{key}</span>}</li>;

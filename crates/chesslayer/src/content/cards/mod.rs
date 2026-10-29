@@ -6,10 +6,11 @@ mod limiter_release;
 mod pawn_storm;
 mod reverse_jeans;
 mod sacred_domain;
+pub mod tactical;
 mod temporary_upgrade;
 pub mod ward;
 
-use crate::{cards::Card, Battle, PieceId, PieceType};
+use crate::{Battle, PieceId, PieceType};
 use serde::Serialize;
 
 pub use gun::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
@@ -17,6 +18,28 @@ pub use gun::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CardKind {
+    Stimpack,
+    MassCrash,
+    InfantrySupport,
+    Sacrifice,
+    LastStand,
+    ExcitedSteps,
+    BloodyInvitation,
+    TableManners,
+    Masquerade,
+    PullTablecloth,
+    InterludeWaltz,
+    LateDinner,
+    MealTime,
+    DeliveredFeast,
+    BackstageSacrifice,
+    TornMask,
+    CrackedConscience,
+    LastSupper,
+    EndlessJoy,
+    Volley,
+    FormLine,
+    SpecialManeuver,
     Jeans,
     Ward,
     Gun,
@@ -28,8 +51,67 @@ pub enum CardKind {
     SacredDomain,
 }
 impl CardKind {
+    pub fn affiliation(self) -> CardAffiliation {
+        match self {
+            Self::Stimpack => CardAffiliation::Squad("vanguard"),
+            Self::MassCrash => CardAffiliation::Squad("vanguard"),
+            Self::InfantrySupport => CardAffiliation::Squad("vanguard"),
+            Self::Sacrifice => CardAffiliation::Squad("vanguard"),
+            Self::LastStand => CardAffiliation::Squad("vanguard"),
+            Self::ExcitedSteps => CardAffiliation::Squad("heretic"),
+            Self::BloodyInvitation => CardAffiliation::Squad("heretic"),
+            Self::TableManners => CardAffiliation::Squad("heretic"),
+            Self::Masquerade => CardAffiliation::Squad("heretic"),
+            Self::PullTablecloth => CardAffiliation::Squad("heretic"),
+            Self::InterludeWaltz => CardAffiliation::Squad("heretic"),
+            Self::LateDinner => CardAffiliation::Squad("heretic"),
+            Self::MealTime => CardAffiliation::Squad("heretic"),
+            Self::DeliveredFeast => CardAffiliation::Squad("heretic"),
+            Self::BackstageSacrifice => CardAffiliation::Squad("heretic"),
+            Self::TornMask => CardAffiliation::Squad("heretic"),
+            Self::CrackedConscience => CardAffiliation::Squad("heretic"),
+            Self::LastSupper => CardAffiliation::Squad("heretic"),
+            Self::EndlessJoy => CardAffiliation::Squad("heretic"),
+            Self::Volley => CardAffiliation::Squad("artillery"),
+            Self::FormLine => CardAffiliation::Squad("artillery"),
+            Self::SpecialManeuver => CardAffiliation::Squad("special"),
+            Self::Jeans
+            | Self::Ward
+            | Self::Gun
+            | Self::FleetingWard
+            | Self::PawnStorm
+            | Self::ReverseJeans
+            | Self::LimiterRelease
+            | Self::TemporaryUpgrade
+            | Self::SacredDomain => CardAffiliation::Squad("guardian"),
+        }
+    }
+
     pub fn definition(self) -> CardDefinition {
         match self {
+            Self::Stimpack => tactical::definition(self),
+            Self::MassCrash => tactical::definition(self),
+            Self::InfantrySupport => tactical::definition(self),
+            Self::Sacrifice => tactical::definition(self),
+            Self::LastStand => tactical::definition(self),
+            Self::ExcitedSteps => tactical::definition(self),
+            Self::BloodyInvitation => tactical::definition(self),
+            Self::TableManners => tactical::definition(self),
+            Self::Masquerade => tactical::definition(self),
+            Self::PullTablecloth => tactical::definition(self),
+            Self::InterludeWaltz => tactical::definition(self),
+            Self::LateDinner => tactical::definition(self),
+            Self::MealTime => tactical::definition(self),
+            Self::DeliveredFeast => tactical::definition(self),
+            Self::BackstageSacrifice => tactical::definition(self),
+            Self::TornMask => tactical::definition(self),
+            Self::CrackedConscience => tactical::definition(self),
+            Self::LastSupper => tactical::definition(self),
+            Self::EndlessJoy => tactical::definition(self),
+            Self::Volley => tactical::definition(self),
+            Self::FormLine => tactical::definition(self),
+            Self::SpecialManeuver => tactical::definition(self),
+
             Self::Jeans => jeans::definition(),
             Self::Ward => ward::definition(),
             Self::Gun => gun::definition(),
@@ -39,6 +121,21 @@ impl CardKind {
             Self::LimiterRelease => limiter_release::definition(),
             Self::TemporaryUpgrade => temporary_upgrade::definition(),
             Self::SacredDomain => sacred_domain::definition(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(tag = "scope", content = "squad", rename_all = "snake_case")]
+pub enum CardAffiliation {
+    Squad(&'static str),
+    Shared,
+}
+impl CardAffiliation {
+    pub fn available_to(self, squad_id: &str) -> bool {
+        match self {
+            Self::Squad(owner) => owner == squad_id,
+            Self::Shared => true,
         }
     }
 }
@@ -55,6 +152,8 @@ pub enum SelectionMode {
     Single,
     Multiple,
     Upgrade,
+    Square,
+    Placement,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -76,6 +175,7 @@ impl CardSelection {
 #[derive(Clone, Serialize)]
 pub struct CardDefinition {
     pub kind: CardKind,
+    pub affiliation: CardAffiliation,
     pub name: &'static str,
     pub cost: u32,
     pub description: &'static str,
@@ -104,6 +204,7 @@ impl CardDefinition {
     ) -> Self {
         Self {
             kind,
+            affiliation: kind.affiliation(),
             name,
             cost,
             description,
@@ -152,18 +253,5 @@ impl CardDefinition {
     }
 }
 
-/// Card candidates for the seeded, mixed combat reward selection.
-pub const REWARD_POOL: &[CardKind] = &[
-    CardKind::Ward,
-    CardKind::Jeans,
-    CardKind::Gun,
-    CardKind::PawnStorm,
-    CardKind::ReverseJeans,
-    CardKind::LimiterRelease,
-    CardKind::TemporaryUpgrade,
-    CardKind::SacredDomain,
-];
-
-pub fn starter_deck() -> Vec<Card> {
-    vec![]
-}
+/// No shared cards exist yet. Future shared cards must be listed here explicitly.
+pub const SHARED_REWARD_POOL: &[CardKind] = &[];

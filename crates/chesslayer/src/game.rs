@@ -1,3 +1,5 @@
+#[path = "squad_rules.rs"]
+mod squad_rules;
 use crate::{battle::GeneratedAction, cards::*, content::*, map::*, *};
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
@@ -9,6 +11,7 @@ pub enum RunPhase {
     Combat,
     Reward,
     Treasure,
+    Restaurant,
     Rest,
     Victory,
     Defeat,
@@ -37,6 +40,31 @@ pub enum Command {
         targets: Vec<u32>,
         #[serde(default)]
         upgrades: Vec<CardUpgradeChoice>,
+    },
+    TacticalCard {
+        id: u32,
+        targets: Vec<u32>,
+        cells: Vec<usize>,
+    },
+    Ability {
+        id: u32,
+        target: u32,
+    },
+    ResolveEffect {
+        target: Option<u32>,
+        cell: Option<usize>,
+    },
+    Aftermath {
+        target: u32,
+    },
+    Confess {
+        id: u32,
+    },
+    WarehouseUpgrade {
+        id: u32,
+    },
+    Dine {
+        eat: bool,
     },
     EndTurn,
     EnemyStep,
@@ -85,7 +113,9 @@ pub struct Game {
     pub completed: Vec<usize>,
     pub seed: u32,
     pub floor: u8,
-    pub character: String,
+    pub aftermath: Vec<ChoiceView>,
+    pub squad: String,
+    squad_definition: Squad,
     pub log: Vec<String>,
     pub round: u32,
     rng: Rng,
@@ -109,31 +139,49 @@ fn cell(p: Position) -> usize {
     (p.rank * 8 + p.file) as usize
 }
 impl Game {
-    pub fn new(character: &str, seed: u32) -> Result<Self, String> {
-        let choice = characters()
+    pub fn new(squad: &str, seed: u32) -> Result<Self, String> {
+        Self::new_on_floor(squad, seed, 1)
+    }
+    pub fn new_on_floor(squad: &str, seed: u32, floor: u8) -> Result<Self, String> {
+        if !(1..=4).contains(&floor) {
+            return Err("층은 1~4 중 선택하세요.".into());
+        }
+        let choice = squads()
             .into_iter()
-            .find(|c| c.id == character)
-            .ok_or("캐릭터를 선택하세요.")?;
-        let deck = starter_deck();
+            .find(|c| c.id == squad)
+            .ok_or("부대를 선택하세요.")?;
+        let roster = (choice.starting_roster)();
+        choice.validate(&roster)?;
+        let deck: Vec<Card> = choice
+            .starting_deck
+            .iter()
+            .enumerate()
+            .map(|(i, &kind)| Card {
+                id: i as u32 + 1,
+                kind,
+            })
+            .collect();
         let next_card_id = deck.iter().map(|card| card.id).max().unwrap_or(0) + 1;
         let battle = Battle::new(BattleStart {
-            players: Battle::standard_roster(),
+            players: roster,
             encounter: encounter(0),
         })
         .map_err(engine_error)?;
-        let game = Self {
+        let mut game = Self {
             battle,
             cards: CardCombat::default(),
             deck,
             relics: vec![choice.relic],
             phase: RunPhase::Map,
-            map: ActMap::generate(seed),
+            map: ActMap::generate_for_floor(seed, floor),
             current_node: None,
             path: vec![],
             completed: vec![],
             seed,
-            floor: 1,
-            character: choice.name.into(),
+            floor,
+            aftermath: vec![],
+            squad: choice.name.into(),
+            squad_definition: choice,
             log: vec![],
             round: 1,
             rng: Rng::new(seed),
@@ -144,7 +192,28 @@ impl Game {
             upgrade_claimed: false,
             last_cleared_node: None,
         };
+        game.configure_map();
+        if choice.id == "artillery" {
+            game.battle.mechanics.ammo_mode = true;
+            game.battle.mechanics.ammo = 400;
+        }
         Ok(game)
+    }
+    fn configure_map(&mut self) {
+        if self.squad_definition.id == "guardian" {
+            return;
+        }
+        let pool = self.squad_definition.reward_relics;
+        let mut rng = Rng::new(self.seed ^ u32::from(self.floor));
+        for node in &mut self.map.nodes {
+            if node.relic.is_some() {
+                node.relic = if pool.is_empty() {
+                    None
+                } else {
+                    Some(pool[rng.index(pool.len())])
+                };
+            }
+        }
     }
     fn log(&mut self, message: impl Into<String>) {
         self.log.push(message.into());
@@ -153,6 +222,7 @@ impl Game {
         }
     }
     fn events(&mut self) {
+        self.flush_mechanics();
         for e in std::mem::take(&mut self.battle.events) {
             self.log(e);
         }
@@ -200,32 +270,6 @@ impl Game {
         }
         Ok(roster)
     }
-    fn revive_for_next_floor(&mut self) -> Result<usize, String> {
-        let mut roster = self.battle.outcome();
-        let mut occupied: HashSet<_> = roster.iter().filter_map(|p| p.position).collect();
-        let mut revived = 0;
-        for piece in roster.iter_mut().filter(|p| p.position.is_none()) {
-            let position = if !occupied.contains(&piece.origin) {
-                piece.origin
-            } else {
-                (0..8)
-                    .rev()
-                    .flat_map(|rank| (0..8).map(move |file| Position::new(file, rank)))
-                    .find(|position| !occupied.contains(position))
-                    .ok_or("아군을 부활시킬 빈 칸이 없습니다.")?
-            };
-            occupied.insert(position);
-            piece.position = Some(position);
-            piece.moved = false;
-            revived += 1;
-        }
-        if revived > 0 {
-            self.battle
-                .replace_roster_at_rest(roster)
-                .map_err(engine_error)?;
-        }
-        Ok(revived)
-    }
     fn start_battle(&mut self) -> Result<(), String> {
         let index = self
             .current_node
@@ -242,6 +286,7 @@ impl Game {
             }
             self.log("소용돌이: 적의 시작 위치를 섞었습니다.");
         }
+        let ammo = self.battle.mechanics.ammo;
         let players = self.starting_roster()?;
         if let Some(relic) = self.latest_formation() {
             self.log(format!("{}: 시작 진형을 적용했습니다.", relic.name()));
@@ -264,15 +309,23 @@ impl Game {
                 "가속: 양 진영이 턴마다 최대 {HASTE_ACTIONS}회 이동합니다."
             ));
         }
+        self.battle.configure_mechanics(
+            &self.relics,
+            (self.squad_definition.id == "artillery").then_some(ammo),
+            self.seed ^ (self.current_node.unwrap_or(0) as u32).wrapping_mul(0x9821),
+        );
         self.phase = RunPhase::Combat;
         self.round = 1;
         self.cards = CardCombat::start(&self.deck, &mut self.rng);
+        if self.squad_definition.id == "artillery" {
+            self.cards.mana = self.battle.mechanics.ammo;
+        }
         self.events();
         self.check_finish()?;
         Ok(())
     }
     pub fn available_nodes(&self) -> Vec<usize> {
-        if self.phase != RunPhase::Map {
+        if self.phase != RunPhase::Map || !self.aftermath.is_empty() {
             return vec![];
         }
         match self.current_node {
@@ -328,6 +381,9 @@ impl Game {
             .position(|p| p.id == id && p.position.is_some())
             .ok_or("살아 있는 아군 기물을 선택하세요.")?;
         let previous_kind = roster[index].kind;
+        if !self.squad_definition.allows_upgrade(previous_kind, target) {
+            return Err("이 부대에서 사용할 수 없는 강화 경로입니다.".into());
+        }
         let upgrade = content::pieces::definition(previous_kind)
             .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
             .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
@@ -356,8 +412,8 @@ impl Game {
         Ok(())
     }
     fn continue_reward(&mut self) -> Result<(), String> {
-        if self.phase != RunPhase::Reward {
-            return Err("지금은 다음으로 진행할 수 없습니다.".into());
+        if self.phase != RunPhase::Reward || !self.aftermath.is_empty() {
+            return Err("남은 전투 후 효과를 먼저 선택하세요.".into());
         }
         let id = self.current_node.expect("reward requires a selected node");
         if self.completed.contains(&id) {
@@ -374,30 +430,24 @@ impl Game {
         Ok(())
     }
     fn finish_boss(&mut self) -> Result<(), String> {
-        if self.floor == 1 {
-            let revived = self.revive_for_next_floor()?;
-            self.floor = 2;
-            self.map = ActMap::generate_for_floor(self.seed, 2);
-            self.current_node = None;
-            self.path.clear();
-            self.completed.clear();
-            self.reward_node = None;
-            self.rewards.clear();
-            self.reward_choice = None;
-            self.last_cleared_node = None;
-            self.log(format!(
-                "2층에 도착했습니다. 아군 전원이 회복되었습니다. 부활한 기물 {revived}기."
-            ));
-        } else {
-            self.phase = RunPhase::Victory;
+        self.phase = RunPhase::Victory;
+        if self.squad_definition.id == "artillery" {
+            self.battle.mechanics.ammo = self.battle.ammo_capacity();
         }
+        self.log(format!(
+            "{}층 수복! {} 해금. 새 원정을 시작하세요.",
+            self.floor,
+            squads()[self.floor as usize].name
+        ));
         Ok(())
     }
     fn grant_node_relic(&mut self) {
-        let relic = self.map.nodes[self.current_node.unwrap()]
-            .relic
-            .expect("reward node has relic");
-        self.grant_relic(relic);
+        if let Some(relic) = self.map.nodes[self.current_node.unwrap()].relic {
+            self.grant_relic(relic);
+        } else {
+            self.add_card(self.squad_definition.duplicate_relic_card);
+            self.log("보물: 부대 카드 1장을 얻었습니다.");
+        }
     }
     fn add_card(&mut self, kind: CardKind) {
         self.deck.push(Card {
@@ -408,10 +458,11 @@ impl Game {
     }
     fn grant_relic(&mut self, relic: Relic) {
         if self.relics.contains(&relic) {
-            self.add_card(CardKind::Ward);
+            self.add_card(self.squad_definition.duplicate_relic_card);
             self.log(format!(
-                "{}은 이미 보유 중입니다. 대신 가호 카드 1장을 얻었습니다.",
-                relic.name()
+                "{}은 이미 보유 중입니다. 대신 {} 카드 1장을 얻었습니다.",
+                relic.name(),
+                self.squad_definition.duplicate_relic_card.definition().name
             ));
         } else {
             self.relics.push(relic);
@@ -423,7 +474,11 @@ impl Game {
         }
     }
     fn generate_rewards(&mut self) {
-        let mut cards = content::cards::REWARD_POOL.to_vec();
+        let mut cards = self.squad_definition.reward_cards.to_vec();
+        cards.extend_from_slice(content::cards::SHARED_REWARD_POOL);
+        while cards.len() < 3 {
+            cards.push(self.squad_definition.duplicate_relic_card);
+        }
         if self
             .current_node
             .is_some_and(|id| matches!(self.map.nodes[id].kind, NodeKind::Elite | NodeKind::Boss))
@@ -435,7 +490,9 @@ impl Game {
             self.rewards = rewards;
             return;
         }
-        let mut relics: Vec<_> = RELIC_REWARD_POOL
+        let mut relics: Vec<_> = self
+            .squad_definition
+            .reward_relics
             .iter()
             .copied()
             .filter(|r| !self.relics.contains(r))
@@ -453,7 +510,11 @@ impl Game {
             .collect();
         // Registered card kinds fill every slot when relics run out.
         while rewards.len() < 3 {
-            rewards.push(remaining.swap_remove(self.rng.index(remaining.len())));
+            if remaining.is_empty() {
+                rewards.push(Reward::Card(self.squad_definition.duplicate_relic_card));
+            } else {
+                rewards.push(remaining.swap_remove(self.rng.index(remaining.len())));
+            }
         }
         self.rng.shuffle(&mut rewards);
         self.rewards = rewards;
@@ -514,7 +575,95 @@ impl Game {
         Ok(())
     }
     pub fn dispatch(&mut self, command: Command) -> Result<(), String> {
+        if !self.battle.mechanics.choices.is_empty()
+            && self.phase == RunPhase::Combat
+            && !matches!(command, Command::ResolveEffect { .. })
+        {
+            return Err("발동한 효과의 대상을 먼저 선택하세요.".into());
+        }
         match command {
+            Command::TacticalCard { id, targets, cells } => {
+                self.play_tactical(id, &targets, &cells)?
+            }
+            Command::Ability { id, target } => {
+                self.require_player()?;
+                let turn = self.battle.turn;
+                self.battle.use_ability(id, target).map_err(engine_error)?;
+                self.events();
+                self.check_finish()?;
+                if self.phase == RunPhase::Combat && self.battle.turn != turn {
+                    self.cards.end_turn();
+                }
+            }
+            Command::ResolveEffect { target, cell } => {
+                self.require_player()?;
+                let turn = self.battle.turn;
+                self.battle
+                    .choose_effect(target, cell)
+                    .map_err(engine_error)?;
+                self.events();
+                self.check_finish()?;
+                if self.phase == RunPhase::Combat && self.battle.turn != turn {
+                    self.cards.end_turn();
+                }
+            }
+            Command::Aftermath { target } => self.resolve_aftermath(target)?,
+            Command::Confess { id } => {
+                if self.phase != RunPhase::Rest {
+                    return Err("휴식에서 고해성사할 수 있습니다.".into());
+                }
+                let mut roster = self.battle.outcome();
+                let p = roster
+                    .iter_mut()
+                    .find(|p| p.id == id && p.persistent.get("disabled") == Some(&1))
+                    .ok_or("전투불능 기물을 선택하세요.")?;
+                p.persistent.insert("disabled".into(), 0);
+                self.battle
+                    .replace_roster_at_rest(roster)
+                    .map_err(engine_error)?;
+                self.complete_node();
+            }
+            Command::WarehouseUpgrade { id } => {
+                if self.squad_definition.id != "artillery"
+                    || !(self.phase == RunPhase::Rest
+                        || (self.phase == RunPhase::Reward
+                            && !self.upgrade_claimed
+                            && self.current_node.is_some_and(|id| {
+                                matches!(self.map.nodes[id].kind, NodeKind::Elite | NodeKind::Boss)
+                            })))
+                {
+                    return Err("지금 창고를 강화할 수 없습니다.".into());
+                }
+                if !self.battle.outcome().iter().any(|p| {
+                    p.id == id && p.kind == content::pieces::WAREHOUSE && p.position.is_some()
+                }) {
+                    return Err("살아 있는 창고를 선택하세요.".into());
+                }
+                let gain = self.battle.mechanics.ammo / 10;
+                self.battle.mechanics.ammo =
+                    (self.battle.mechanics.ammo + gain).min(self.battle.ammo_capacity());
+                if self.phase == RunPhase::Rest {
+                    self.complete_node();
+                } else {
+                    self.upgrade_claimed = true;
+                }
+                self.log(format!("창고 강화: 탄약 {gain} 보충 (한계치 적용)"));
+            }
+            Command::Dine { eat } => {
+                if self.phase != RunPhase::Restaurant {
+                    return Err("식당에서만 식사할 수 있습니다.".into());
+                }
+                if eat {
+                    let mut roster = self.battle.outcome();
+                    for p in &mut roster {
+                        p.persistent.insert("hunger".into(), 0);
+                    }
+                    self.battle
+                        .replace_roster_at_rest(roster)
+                        .map_err(engine_error)?;
+                }
+                self.complete_node();
+            }
             Command::Move {
                 from,
                 to,
@@ -525,6 +674,9 @@ impl Game {
                 let to = pos(to)?;
                 let promotion_key = promotion
                     .map(|kind| {
+                        if !self.squad_definition.allows_piece(kind) {
+                            return Err("이 부대에서 사용할 수 없는 기물입니다.");
+                        }
                         content::pieces::definition(kind)
                             .map(|d| d.key)
                             .ok_or("등록되지 않은 승격 대상입니다.")
@@ -606,6 +758,9 @@ impl Game {
                 self.path.push(id);
                 match self.map.nodes[id].kind {
                     NodeKind::Combat | NodeKind::Elite | NodeKind::Boss => self.start_battle()?,
+                    NodeKind::Restaurant => {
+                        self.phase = RunPhase::Restaurant;
+                    }
                     NodeKind::Rest => {
                         self.phase = RunPhase::Rest;
                         self.log("작은 쉼터 · 강화 또는 부활을 한 번 선택하세요.");
@@ -645,7 +800,12 @@ impl Game {
                 }
                 let p = roster
                     .iter_mut()
-                    .find(|p| p.id == id && p.position.is_none() && p.kind != KING)
+                    .find(|p| {
+                        p.id == id
+                            && p.position.is_none()
+                            && !content::pieces::is_player_royal(p.kind)
+                            && p.persistent.get("defected") != Some(&1)
+                    })
                     .ok_or("사망한 아군 기물을 선택하세요.")?;
                 p.position = Some(origin);
                 p.moved = false;
@@ -690,7 +850,7 @@ impl Game {
             square(action.first.from),
             square(destination),
             if still_at {
-                " (가호로 저지)".to_string()
+                " (제자리에서 처리)".to_string()
             } else {
                 captured
                     .map(|p| format!(" · {} 포획", piece_name(p.kind)))
@@ -720,6 +880,7 @@ impl Game {
             return Ok(());
         }
         if let GameResult::Win { winner, reason } = self.battle.result {
+            self.prepare_aftermath(winner == PLAYER)?;
             self.battle.reset_after_battle().map_err(engine_error)?;
             self.cards = CardCombat::default();
             if winner == PLAYER {
@@ -733,6 +894,12 @@ impl Game {
                     _ => "승리! 적 로얄을 직접 포획했습니다.",
                 });
                 self.log("생존 기물이 시작 칸으로 복귀합니다.");
+                if self
+                    .current_node
+                    .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Boss)
+                {
+                    self.finish_boss()?;
+                }
             } else {
                 self.phase = RunPhase::Defeat;
                 self.log(match reason {
@@ -747,6 +914,9 @@ impl Game {
         self.round = self.round.saturating_add(1);
         self.cards
             .begin_turn(&mut self.rng, self.relics.contains(&Relic::IceCream));
+        if self.squad_definition.id == "artillery" {
+            self.cards.mana = self.battle.mechanics.ammo;
+        }
     }
     fn play_card(
         &mut self,
@@ -761,6 +931,30 @@ impl Game {
             .position(|c| c.id == id)
             .ok_or("손패에 없는 카드입니다.")?;
         let d = self.cards.hand[index].kind.definition();
+        if self.squad_definition.id != "guardian" {
+            let targets = selection
+                .target
+                .map(|id| vec![id])
+                .unwrap_or_else(|| selection.targets.clone());
+            return self.play_tactical(id, &targets, &[]);
+        }
+        if !d.affiliation.available_to(self.squad_definition.id) {
+            return Err("이 부대에서 사용할 수 없는 카드입니다.".into());
+        }
+        for &(id, target) in &selection.upgrades {
+            let from = self
+                .battle
+                .board
+                .cells()
+                .iter()
+                .flatten()
+                .find(|p| p.id == id && p.owner == PLAYER)
+                .map(|p| p.kind)
+                .ok_or("잘못된 기물입니다.")?;
+            if !self.squad_definition.allows_upgrade(from, target) {
+                return Err("이 부대에서 사용할 수 없는 강화 경로입니다.".into());
+            }
+        }
         self.resolve_selection(index, &selection, d)
     }
     #[cfg(test)]
@@ -832,6 +1026,23 @@ impl Game {
         if self.phase != RunPhase::Combat || self.battle.turn != ENEMY {
             return Err("적의 턴이 아닙니다.".into());
         }
+        let ability = self
+            .battle
+            .living(ENEMY)
+            .into_iter()
+            .flat_map(|id| self.battle.abilities(id))
+            .find(|a| !a.targets.is_empty());
+        if let Some(a) = ability {
+            self.battle
+                .use_ability(a.id, a.targets[0])
+                .map_err(engine_error)?;
+            self.events();
+            self.check_finish()?;
+            if self.phase == RunPhase::Combat && self.battle.turn == PLAYER {
+                self.begin_player_turn();
+            }
+            return Ok(());
+        }
         let mut rng = self.rng.clone();
         let acted = self.perform_action(|battle| {
             let mut best = vec![];
@@ -843,27 +1054,27 @@ impl Game {
                 for action in
                     battle.generated_legal_actions(pos(i).map_err(|_| Error::IllegalAction)?)?
                 {
-                    let mut score = action
-                        .action()
-                        .steps()
-                        .filter_map(|s| {
-                            battle
-                                .board
-                                .piece_at(s.take)
-                                .ok()
-                                .flatten()
-                                .filter(|p| p.owner == PLAYER)
-                        })
-                        .map(|p| {
-                            if battle.has_ward(p.id) {
-                                1
-                            } else if p.id == battle.king_id {
-                                100_000
-                            } else {
-                                content::pieces::definition(p.kind).map_or(10, |d| d.value)
-                            }
-                        })
-                        .sum();
+                    let mut score =
+                        action
+                            .action()
+                            .steps()
+                            .filter_map(|s| {
+                                battle.board.piece_at(s.take).ok().flatten().filter(|p| {
+                                    p.owner == PLAYER || p.kind == content::pieces::CORPSE
+                                })
+                            })
+                            .map(|p| {
+                                if p.kind == content::pieces::CORPSE {
+                                    40
+                                } else if battle.has_ward(p.id) {
+                                    1
+                                } else if p.id == battle.king_id {
+                                    100_000
+                                } else {
+                                    content::pieces::definition(p.kind).map_or(10, |d| d.value)
+                                }
+                            })
+                            .sum();
                     if let Some(key) = action
                         .action()
                         .steps()
@@ -914,7 +1125,7 @@ impl Game {
     pub fn snapshot(&self) -> Snapshot {
         let resting = matches!(
             self.phase,
-            RunPhase::Rest | RunPhase::Map | RunPhase::Treasure
+            RunPhase::Rest | RunPhase::Map | RunPhase::Treasure | RunPhase::Restaurant
         );
         let pieces: Vec<_> = self
             .battle
@@ -925,6 +1136,12 @@ impl Game {
             .filter_map(|(i, p)| {
                 p.filter(|p| !resting || p.owner == PLAYER)
                     .map(|p| PieceView {
+                        status: if p.kind == content::pieces::CORPSE {
+                            Status::default()
+                        } else {
+                            self.battle.status(p.id)
+                        },
+                        bell_target: self.battle.mechanics.bell_target == Some(p.id),
                         id: p.id,
                         kind: p.kind,
                         name: piece_name(p.kind),
@@ -933,7 +1150,10 @@ impl Game {
                         owner: p.owner,
                         cell: i,
                         square: square(pos(i).unwrap()),
-                        royal: self.battle.is_enemy_royal(p.id) || p.id == self.battle.king_id,
+                        royal: p.kind == content::pieces::WAREHOUSE
+                            || (p.kind != content::pieces::CORPSE
+                                && (self.battle.is_enemy_royal(p.id)
+                                    || p.id == self.battle.king_id)),
                         ward: self.battle.has_ward(p.id),
                         self_defense: self.battle.has_self_defense(p.id),
                         temporary_upgrade: self.battle.has_temporary_upgrade(p.id),
@@ -959,6 +1179,18 @@ impl Game {
                         .legal_actions(pos(p.cell).unwrap())
                         .unwrap_or_default()
                         .into_iter()
+                        .filter(|a| {
+                            a.steps()
+                                .last()
+                                .unwrap()
+                                .transition
+                                .as_ref()
+                                .is_none_or(|key| {
+                                    content::pieces::ALL.iter().any(|d| {
+                                        d.key == key && self.squad_definition.allows_piece(d.kind)
+                                    })
+                                })
+                        })
                         .map(move |a| MoveView {
                             from: p.cell,
                             to: cell(a.steps().last().unwrap().move_to),
@@ -989,7 +1221,20 @@ impl Game {
                 let targets = if d.targeted {
                     (d.target_candidates)(&self.battle)
                         .into_iter()
-                        .filter(|id| pieces.iter().any(|p| p.id == *id))
+                        .filter(|id| {
+                            pieces.iter().any(|p| {
+                                p.id == *id
+                                    && (d.selection_mode != content::cards::SelectionMode::Upgrade
+                                        || content::pieces::definition(p.kind).is_some_and(
+                                            |definition| {
+                                                definition.upgrades.iter().any(|path| {
+                                                    self.squad_definition
+                                                        .allows_upgrade(p.kind, path.target)
+                                                })
+                                            },
+                                        ))
+                            })
+                        })
                         .collect::<Vec<_>>()
                 } else {
                     vec![]
@@ -1026,6 +1271,8 @@ impl Game {
                             p.position.map(|position| {
                                 let definition = content::pieces::definition(p.kind).unwrap();
                                 PieceView {
+                                    status: Status::load(&p.persistent),
+                                    bell_target: false,
                                     id: p.id,
                                     kind: p.kind,
                                     name: definition.name,
@@ -1034,7 +1281,8 @@ impl Game {
                                     owner: PLAYER,
                                     cell: cell(position),
                                     square: square(position),
-                                    royal: p.id == self.battle.king_id,
+                                    royal: p.kind == content::pieces::WAREHOUSE
+                                        || p.id == self.battle.king_id,
                                     ward: false,
                                     self_defense: false,
                                     temporary_upgrade: false,
@@ -1076,22 +1324,45 @@ impl Game {
                             .upgrades
                             .iter()
                             .any(|u| {
-                                content::pieces::required_owned(u.target)
-                                    .iter()
-                                    .all(|&kind| roster.iter().any(|owned| owned.kind == kind))
+                                self.squad_definition.allows_upgrade(p.kind, u.target)
+                                    && content::pieces::required_owned(u.target)
+                                        .iter()
+                                        .all(|&kind| roster.iter().any(|owned| owned.kind == kind))
                             }),
                     can_revive: self.phase == RunPhase::Rest
                         && origin.is_some()
                         && p.position.is_none()
-                        && p.kind != KING
+                        && !content::pieces::is_player_royal(p.kind)
+                        && p.persistent.get("defected") != Some(&1)
                         && !roster
                             .iter()
                             .any(|other| other.position.is_some() && other.position == origin),
+                    disabled: p.persistent.get("disabled") == Some(&1),
+                    hunger: *p.persistent.get("hunger").unwrap_or(&0),
                     dead: p.position.is_none(),
                 }
             })
             .collect();
         Snapshot {
+            abilities: if self.phase == RunPhase::Combat && self.battle.turn == PLAYER {
+                self.battle
+                    .living(PLAYER)
+                    .into_iter()
+                    .flat_map(|id| self.battle.abilities(id))
+                    .collect()
+            } else {
+                vec![]
+            },
+            effect_choice: if self.phase == RunPhase::Combat {
+                self.battle.mechanics.choices.first().cloned()
+            } else {
+                None
+            },
+            aftermath: self.aftermath.first().cloned(),
+            ammo: (self.squad_definition.id == "artillery").then_some(self.battle.mechanics.ammo),
+            ammo_capacity: self.battle.ammo_capacity(),
+            unlocked_squad: (self.phase == RunPhase::Victory)
+                .then(|| squads()[self.floor as usize].name),
             phase: self.phase,
             map: self.map_view(),
             encounter: self
@@ -1112,12 +1383,14 @@ impl Game {
                     name: r.name(),
                     description: r.description(),
                 }),
-            character: self.character.clone(),
+            squad: self.squad.clone(),
             turn: self.battle.turn,
             round: self.round,
             actions_left: self.battle.actions_left,
             mana: self.cards.mana,
-            mana_rule: if self.relics.contains(&Relic::IceCream) {
+            mana_rule: if self.squad_definition.id == "artillery" {
+                "탄약은 턴·전투 사이 유지됩니다. 창고당 한계 200."
+            } else if self.relics.contains(&Relic::IceCream) {
                 "아이스크림: 내 턴 시작마다 남은 코스트에 3을 더합니다."
             } else {
                 "내 턴 시작 시 코스트가 3으로 회복됩니다."
@@ -1188,29 +1461,33 @@ impl Game {
             rest_options,
             upgrade_paths: content::pieces::ALL
                 .iter()
+                .filter(|d| self.squad_definition.allows_piece(d.kind))
                 .flat_map(|d| {
-                    d.upgrades.iter().map(|u| UpgradeView {
-                        key: u.key,
-                        from: d.kind,
-                        from_key: d.key,
-                        from_name: d.name,
-                        to: u.target,
-                        to_key: content::pieces::definition(u.target).unwrap().key,
-                        to_name: piece_name(u.target),
-                        effect: u.effect,
-                        requirement: u.requirement,
-                        required_pieces: content::pieces::required_owned(u.target)
-                            .iter()
-                            .map(|&kind| RequiredPieceView {
-                                kind,
-                                name: piece_name(kind),
-                                owned: roster.iter().any(|p| p.kind == kind),
-                            })
-                            .collect(),
-                        unlocked: content::pieces::required_owned(u.target)
-                            .iter()
-                            .all(|&kind| roster.iter().any(|p| p.kind == kind)),
-                    })
+                    d.upgrades
+                        .iter()
+                        .filter(|u| self.squad_definition.allows_upgrade(d.kind, u.target))
+                        .map(|u| UpgradeView {
+                            key: u.key,
+                            from: d.kind,
+                            from_key: d.key,
+                            from_name: d.name,
+                            to: u.target,
+                            to_key: content::pieces::definition(u.target).unwrap().key,
+                            to_name: piece_name(u.target),
+                            effect: u.effect,
+                            requirement: u.requirement,
+                            required_pieces: content::pieces::required_owned(u.target)
+                                .iter()
+                                .map(|&kind| RequiredPieceView {
+                                    kind,
+                                    name: piece_name(kind),
+                                    owned: roster.iter().any(|p| p.kind == kind),
+                                })
+                                .collect(),
+                            unlocked: content::pieces::required_owned(u.target)
+                                .iter()
+                                .all(|&kind| roster.iter().any(|p| p.kind == kind)),
+                        })
                 })
                 .collect(),
             royal_name: self
@@ -1293,12 +1570,18 @@ pub struct EnemyMoveView {
 }
 #[derive(Serialize)]
 pub struct Snapshot {
+    pub abilities: Vec<AbilityView>,
+    pub effect_choice: Option<ChoiceView>,
+    pub aftermath: Option<ChoiceView>,
+    pub ammo: Option<u32>,
+    pub ammo_capacity: u32,
+    pub unlocked_squad: Option<&'static str>,
     pub phase: RunPhase,
     pub map: MapView,
     pub node_kind: Option<NodeKind>,
     pub node_reward: Option<RelicView>,
     pub encounter: &'static str,
-    pub character: String,
+    pub squad: String,
     pub turn: u16,
     pub round: u32,
     pub actions_left: u8,
@@ -1334,6 +1617,8 @@ pub enum RewardView {
 }
 #[derive(Serialize)]
 pub struct PieceView {
+    pub status: Status,
+    pub bell_target: bool,
     pub id: u32,
     pub kind: u16,
     pub name: &'static str,
@@ -1383,6 +1668,8 @@ pub struct RelicView {
 }
 #[derive(Serialize)]
 pub struct RestOption {
+    pub disabled: bool,
+    pub hunger: i32,
     pub id: u32,
     pub kind: PieceType,
     pub key: &'static str,
@@ -1426,7 +1713,7 @@ mod relic_resource_tests {
 
     #[test]
     fn six_cost_card_uses_the_same_resolution_and_payment_path() {
-        let mut game = Game::new("vanguard", 2026).unwrap();
+        let mut game = Game::new("guardian", 2026).unwrap();
         game.dispatch(Command::SelectNode {
             id: game.available_nodes()[0],
         })

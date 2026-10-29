@@ -41,8 +41,17 @@ fn action(b: &Battle, from: Position, to: Position) -> DefaultAction {
         .find(|a| a.steps().last().unwrap().move_to == to)
         .unwrap()
 }
-fn started(character: &str, seed: u32) -> Game {
-    let mut game = Game::new(character, seed).unwrap();
+fn scenario(squad: &str, seed: u32) -> Game {
+    let mut game = Game::new("guardian", seed).unwrap();
+    match squad {
+        "haste" => game.relics = vec![Relic::Haste],
+        "whirlwind" => game.relics = vec![Relic::Whirlwind],
+        _ => {}
+    }
+    game
+}
+fn started(squad: &str, seed: u32) -> Game {
+    let mut game = scenario(squad, seed);
     let id = game
         .map
         .nodes
@@ -53,8 +62,8 @@ fn started(character: &str, seed: u32) -> Game {
     game.dispatch(Command::SelectNode { id }).unwrap();
     game
 }
-fn start_before(character: &str, kind: NodeKind) -> Game {
-    let mut game = Game::new(character, 2026).unwrap();
+fn start_before(squad: &str, kind: NodeKind) -> Game {
+    let mut game = scenario(squad, 2026);
     let id = game
         .map
         .starts()
@@ -78,7 +87,7 @@ fn select_kind(game: &mut Game, kind: NodeKind) {
     game.dispatch(Command::SelectNode { id }).unwrap();
 }
 fn fixture_game() -> Game {
-    let mut g = started("vanguard", 2026);
+    let mut g = started("haste", 2026);
     g.cards.hand = (0..5)
         .map(|i| Card {
             id: 100 + i,
@@ -90,7 +99,7 @@ fn fixture_game() -> Game {
 
 #[test]
 fn initial_position_moves_ai_and_seed_replay() {
-    let mut a = started("vanguard", 2026);
+    let mut a = started("haste", 2026);
     let mut b = a.clone();
     assert!(a.deck.is_empty());
     assert!(a.cards.hand.is_empty() && a.cards.draw.is_empty());
@@ -398,7 +407,7 @@ fn reward_persistence_counterattack_and_relics() {
     assert_eq!(b.board.piece_at(p(0, 0)).unwrap().unwrap().id, 101);
     assert!(b.events.iter().any(|s| s.starts_with("호신용품")));
     let mut a = (42..100)
-        .map(|seed| Game::new("wanderer", seed).unwrap())
+        .map(|seed| scenario("whirlwind", seed))
         .find(|g| {
             g.map.nodes.iter().any(|n| {
                 n.kind == NodeKind::Elite && encounter(n.encounter.unwrap()).enemies.len() > 1
@@ -435,7 +444,7 @@ fn reward_persistence_counterattack_and_relics() {
 }
 #[test]
 fn rest_upgrade_revive_and_reset_origin() {
-    let mut g = start_before("vanguard", NodeKind::Rest);
+    let mut g = start_before("haste", NodeKind::Rest);
     let mut players = Battle::standard_roster();
     players[0].position = None;
     players[1].position = Some(p(0, 7));
@@ -517,7 +526,7 @@ fn king_death_ends_run_and_no_moves_does_not_win() {
 
 #[test]
 fn seeded_route_reaches_rest_with_rewards_and_upgrade() {
-    let mut game = Game::new("vanguard", 2026).unwrap();
+    let mut game = scenario("haste", 2026);
     let commands: Vec<serde_json::Value> =
         serde_json::from_str(include_str!("fixtures/winning-run.json")).unwrap();
     let mut wins = 0;
@@ -609,7 +618,7 @@ fn revived_upgrade_keeps_identity_and_growth_without_combat_state() {
         (TEMPEST_QUEEN, "tempest"),
         (BOUNCING_QUEEN, "bouncing"),
     ] {
-        let mut g = start_before("vanguard", NodeKind::Rest);
+        let mut g = start_before("haste", NodeKind::Rest);
         let mut players = Battle::standard_roster();
         players[8].kind = kind;
         players[8].upgrades.push(family.into());

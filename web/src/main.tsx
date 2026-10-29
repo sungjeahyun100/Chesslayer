@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 import init, { WebGame, catalog } from "./wasm/chesslayer_web";
 import type {
   Card,
-  Character,
+  Squad,
   Command,
   EnemyInspection,
   Piece,
@@ -24,10 +24,30 @@ import { ExpeditionStatus } from "./ExpeditionStatus";
 import { version } from "../package.json";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
+const META_KEY = "chesslayer.progress.v1";
 const SAVE_KEY = "chesslayer.run.v1";
-const starterRelicNames: Record<Character["relic"], string> = {
+const starterRelicNames: Record<Squad["relic"], string> = {
+  agility: "민첩성",
+  reinforcements: "충원",
+  carnival_flare: "카니발의 신호탄",
+  silver_cutlery: "은제 식기",
+  empty_goblet: "빈 술잔",
+  torn_menu: "찢어진 메뉴판",
+  last_plate: "마지막 접시",
+  golden_tray: "금박 쟁반",
+  laughing_mask: "웃는 가면",
+  eternal_bell: "영원한 향연의 종",
+  supply_marker: "보급 표식",
+  special_insignia: "특수부대 표식",
   haste: "가속", whirlwind: "소용돌이", self_defense: "호신용품",
+  kings_indian: "인디언 킹의 전략책", queens_indian: "인디언 퀸의 전략책",
+  hedgehog: "고슴도치의 지혜", initiative: "선공권", ice_cream: "아이스크림",
 };
+
+function statusText(piece:Piece) {
+  const s=piece.status;
+  return [s.agile && `민첩 ${s.agile}`,s.weak && `약화 ${s.weak}`,s.hunger && ["정상","공복","굶주림","기아"][s.hunger],s.madness && `광기 ${s.madness}`,s.guilt && `죄책감 ${s.guilt}`,s.blessed && "황충의 축복",s.ingredient && "식재료",s.disabled && "영구 전투불능",s.etiquette && "식사의 예법",piece.bell_target && "종소리 대상 · 다음 수 허기 악화"].filter(Boolean).join(" · ");
+}
 
 function BoardPiece({
   piece,
@@ -50,6 +70,8 @@ function BoardPiece({
       aria-hidden="true"
     >
       <PieceImage pieceKey={previewKey || piece.key} owner={piece.owner} />
+      {piece.status.disabled ? <span className="status-badge danger">불능</span> : piece.status.agile>0 ? <span className="status-badge">+{piece.status.agile}</span> : piece.status.hunger>0 ? <span className="status-badge hunger">{["","공복","굶주림","기아"][piece.status.hunger]}</span> : null}
+      {piece.bell_target && <span className="bell-mark">♧</span>}
       {piece.royal && <span className="royal-mark">★</span>}
       {piece.ward && <span className="ward-mark" title="가호">✦</span>}
       {piece.temporary_upgrade && <span className="temporary-mark" title="일시 강화 · 이번 전투 한정">↑</span>}
@@ -61,14 +83,18 @@ function BoardPiece({
 function App() {
   const engine = useRef<WebGame | null>(null);
   const [ready, setReady] = useState(false);
-  const [choices, setChoices] = useState<Character[]>([]);
+  const [choices, setChoices] = useState<Squad[]>([]);
   const [screen, setScreen] = useState<"home" | "choose" | "game">("home");
-  const [character, setCharacter] = useState("vanguard");
+  const [cleared,setCleared]=useState(0);
+  const [floor,setFloor]=useState(1);
+  const [abilityId,setAbilityId]=useState<number|null>(null);
+  const [placementPick,setPlacementPick]=useState<number|null>(null);
+  const [placement,setPlacement]=useState<{id:number;cell:number}[]>([]);
+  const [squad, setSquad] = useState("guardian");
   const [state, setState] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [enemyInspection, setEnemyInspection] = useState<EnemyInspection | null>(null);
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
-  const [restCompleted, setRestCompleted] = useState(false);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const [upgradeHistory, setUpgradeHistory] = useState<Extract<Command, { type: "rest_upgrade" }>[]>([]);
   const [rewardUpgradeHistory, setRewardUpgradeHistory] = useState<{ id: number; target: number }[]>([]);
@@ -101,6 +127,8 @@ function App() {
           setReady(true);
           try {
             setHasSave(!!localStorage.getItem(SAVE_KEY));
+            const meta=JSON.parse(localStorage.getItem(META_KEY)||"{}");
+            setCleared(Number.isInteger(meta.cleared)?meta.cleared & 15:0);
           } catch {
             setSaveNotice(
               "브라우저 저장소를 사용할 수 없어 이번 원정은 저장되지 않습니다.",
@@ -116,7 +144,7 @@ function App() {
   // A new run frees the previous engine in start(); avoid freeing live state during Vite hot reload.
   // The browser releases the WASM instance when this document closes.
   useEffect(() => {
-    if (state?.phase && state.phase !== previousPhase.current && !restCompleted) {
+    if (state?.phase && state.phase !== previousPhase.current) {
       if (state.phase !== "combat" && state.phase !== "rest")
         outcomeRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -129,7 +157,7 @@ function App() {
         });
     }
     previousPhase.current = state?.phase;
-  }, [state?.phase, restCompleted]);
+  }, [state?.phase]);
   useEffect(() => {
     if (targetCard)
       boardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -145,14 +173,9 @@ function App() {
         setState(next);
       }
       persist(engine.current);
-      if (command.type === "rest_upgrade") {
-        setRestCompleted(true);
-        setRestChoice((choice) => choice && { ...choice, target: command.target });
-      } else {
-        setRestChoice(null);
-        setRestCompleted(false);
-      }
+      setRestChoice(null);
       if (command.type === "claim_upgrade") setRewardUpgradeOpen(false);
+      setAbilityId(null);setPlacementPick(null);setPlacement([]);
       setPromotion(null);
       setSelected(null);
       setEnemyInspection(null);
@@ -212,7 +235,6 @@ function App() {
         setSelected(null);
         setEnemyInspection(null);
         setRestChoice(null);
-        setRestCompleted(false);
         setPromotion(null);
         setTargetCard(null);
         setCardTargets([]);
@@ -233,6 +255,12 @@ function App() {
     setRewardUpgradeHistory(commands.filter((c): c is Extract<Command, { type: "rest_upgrade" | "claim_upgrade" }> => c.type === "rest_upgrade" || c.type === "claim_upgrade").map(({ id, target }) => ({ id, target })));
     try {
       localStorage.setItem(SAVE_KEY, saved);
+      const snapshot:Snapshot=JSON.parse(game.snapshot());
+      if(snapshot.phase==="victory") {
+        const old=JSON.parse(localStorage.getItem(META_KEY)||"{}");
+        const progress=((Number.isInteger(old.cleared)?old.cleared:0)|(1<<(snapshot.floor-1))) & 15;
+        localStorage.setItem(META_KEY,JSON.stringify({version:1,cleared:progress}));setCleared(progress);
+      }
       setHasSave(true);
       setSaveNotice("");
     } catch {
@@ -252,8 +280,8 @@ function App() {
       setFloorTransition(null);
       persist(next);
       setRestChoice(null);
-      setRestCompleted(false);
       setRewardUpgradeOpen(false);
+      setAbilityId(null);setPlacementPick(null);setPlacement([]);
       setPromotion(null);
       setSelected(null);
       setEnemyInspection(null);
@@ -268,11 +296,20 @@ function App() {
       setError(String(e));
     }
   }
+  function unlockAll() {
+    setCleared(15);
+    try {
+      localStorage.setItem(META_KEY, JSON.stringify({ version: 1, cleared: 15 }));
+      setSaveNotice("");
+    } catch {
+      setSaveNotice("모든 부대와 층을 열었습니다. 브라우저 저장소를 사용할 수 없어 새로고침 후에는 다시 눌러 주세요.");
+    }
+  }
   function start() {
     try {
       // Entropy only comes from the browser; the seeded Rust engine generates the entire Act.
       const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-      const next = new WebGame(character, seed);
+      const next = WebGame.start(squad, seed, floor, cleared);
       engine.current?.free();
       engine.current = next;
       const snapshot: Snapshot = JSON.parse(next.snapshot());
@@ -285,8 +322,8 @@ function App() {
       }
       persist(next);
       setRestChoice(null);
-      setRestCompleted(false);
       setRewardUpgradeOpen(false);
+      setAbilityId(null);setPlacementPick(null);setPlacement([]);
       setPromotion(null);
       setSelected(null);
       setEnemyInspection(null);
@@ -301,7 +338,8 @@ function App() {
     }
   }
   function chooseCard(card: Card) {
-    if (promotion) return;
+    if (promotion || state?.effect_choice) return;
+    setAbilityId(null);setPlacementPick(null);setPlacement([]);
     if (card.disabled_reason) {
       setError(card.disabled_reason);
       return;
@@ -312,7 +350,7 @@ function App() {
     setCardTargets([]);
     setCardUpgrades([]);
     setUpgradeFocus(null);
-    if (card.definition.targeted) setTargetCard(card);
+    if (card.definition.targeted || card.definition.selection_mode==="square") setTargetCard(card);
     else send({ type: "play_card", id: card.id });
   }
   function clickSquare(cell: number) {
@@ -335,7 +373,27 @@ function App() {
     }
     if (state.phase !== "combat") return;
     const piece = state.pieces.find((p) => p.cell === cell);
+    if (state.effect_choice) {
+      if(state.effect_choice.kind==="move_corpse" && state.effect_choice.cells.includes(cell)) send({type:"resolve_effect",cell});
+      else if(piece && state.effect_choice.targets.includes(piece.id))send({type:"resolve_effect",target:piece.id});
+      return;
+    }
+    if(abilityId!==null){
+      if(piece && state.abilities.find(a=>a.id===abilityId)?.targets.includes(piece.id))send({type:"ability",id:abilityId,target:piece.id});
+      return;
+    }
     if (targetCard) {
+      if(targetCard.definition.selection_mode==="square"){
+        if(!piece && cell>=48)send({type:"tactical_card",id:targetCard.id,targets:[],cells:[cell]});
+        return;
+      }
+      if(targetCard.definition.selection_mode==="placement"){
+        if(placementPick!==null){
+          if(piece?.owner===1)return;
+          setPlacement(old=>[...old.filter(p=>p.id!==placementPick),{id:placementPick,cell}]);setPlacementPick(null);
+        }else if(piece && targetCard.targets.includes(piece.id)){setPlacementPick(piece.id);}
+        return;
+      }
       if (piece && targetCard.targets.includes(piece.id)) {
         if (targetCard.definition.selection_mode === "upgrade") {
           if (!cardUpgrades.some((u) => u.id === piece.id) && cardUpgrades.length >= state.mana) {
@@ -386,14 +444,13 @@ function App() {
   }
   const turn = state?.turn === 0;
   const rewardRevisit = state?.phase === "reward" && state.map.nodes.some((node) => node.current && node.visited);
-  const showMap = (state?.phase === "map" || rewardRevisit) && !restCompleted && !rewardUpgradeOpen;
+  const showMap = (state?.phase === "map" || rewardRevisit) && !rewardUpgradeOpen;
   const restPiece = state?.rest_options.find((p) => p.id === restChoice?.id);
-  const restView = state?.phase === "rest" || restCompleted || rewardUpgradeOpen;
+  const restView = state?.phase === "rest" || rewardUpgradeOpen;
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
   const boardPieces = rewardUpgradeOpen ? state?.next_battle_pieces ?? [] : state?.pieces ?? [];
   function closeRest() {
     setRestChoice(null);
-    setRestCompleted(false);
   }
   function closeRewardUpgrade() {
     setRewardUpgradeOpen(false);
@@ -414,6 +471,7 @@ function App() {
   const stagedCount = targetCard?.definition.selection_mode === "upgrade" ? cardUpgrades.length : cardTargets.length;
   const stagedCost = targetCard?.definition.cost_per_target ? stagedCount : targetCard?.definition.cost ?? 0;
   function cancelCard() {
+    setAbilityId(null);setPlacementPick(null);setPlacement([]);
     setTargetCard(null);
     setCardTargets([]);
     setCardUpgrades([]);
@@ -421,6 +479,10 @@ function App() {
     setError("");
   }
   function confirmCard() {
+    if(targetCard?.definition.selection_mode==="placement"){
+      if(placement.length)send({type:"tactical_card",id:targetCard.id,targets:placement.map(p=>p.id),cells:placement.map(p=>p.cell)});
+      return;
+    }
     if (!targetCard || stagedCount < 1 || !state || stagedCost > state.mana) return;
     if (targetCard.definition.selection_mode === "multiple" || targetCard.definition.selection_mode === "upgrade") {
       send({ type: "play_card_selection", id: targetCard.id,
@@ -447,7 +509,7 @@ function App() {
   return (
     <>
       {floorTransition && <div className={`floor-transition stage-${floorTransition.stage} act-${floorTransition.next.floor}`} role="status" aria-label={`제${floorTransition.next.floor}층 진입`}>
-        <div className="floor-transition-title"><small>CHESSLAYER · {floorTransition.next.floor === 1 ? "EXPEDITION BEGINS" : "NEXT ACT"}</small><strong>ACT {floorTransition.next.floor === 1 ? "I" : "II"}</strong><span>{floorTransition.next.floor === 1 ? "제1막 · 갈림길의 숲" : "제2층에 도착했습니다"}</span><small>{floorTransition.next.floor === 1 ? "원정 시작" : "아군 전원 회복"}</small></div>
+        <div className="floor-transition-title"><small>CHESSLAYER · {floorTransition.next.floor === 1 ? "EXPEDITION BEGINS" : "NEXT ACT"}</small><strong>ACT {["I","II","III","IV"][floorTransition.next.floor-1]}</strong><span>{`제${floorTransition.next.floor}층 원정`}</span><small>{"새로운 원정 시작"}</small></div>
         <button onClick={skipFloorTransition} aria-label="층 전환 연출 건너뛰기">건너뛰기 ↗</button>
       </div>}
       <header className="topbar">
@@ -462,7 +524,7 @@ function App() {
           <PieceImage pieceKey="knight" owner={1} /> CHESSLAYER
         </a>
         <div className="top-right">
-          <span className="edition">FIRST EXPEDITION / {screen === "game" && state?.floor === 2 ? "ACT II" : "ACT I"}</span>
+          <span className="edition">FIRST EXPEDITION / {`ACT ${["I","II","III","IV"][(state?.floor ?? 1)-1]}`}</span>
           <button
             className="text-button"
             onClick={() => setHelp(!help)}
@@ -563,33 +625,42 @@ function App() {
           <button className="text-button" onClick={() => setScreen("home")}>
             ← 처음으로
           </button>
-          <p className="eyebrow">CHOOSE YOUR EXPEDITION</p>
-          <h1>어떤 수를 두시겠어요?</h1>
+          <p className="eyebrow">CHOOSE YOUR SQUAD</p>
+          <h1>부대를 선택하세요</h1>
           <p className="muted">
-            모두 같은 16기의 백 진형으로 시작합니다. 시작 유물이 플레이를
-            바꿉니다.
+            각 부대의 편성과 카드, 능력을 살펴보고 원정을 시작하세요.
           </p>
-          <div className="characters">
+          <div className="developer-access">
+            <button className="developer-unlock" onClick={unlockAll} disabled={!ready || cleared === 15}>
+              개발자 모드 · 전체 해금
+            </button>
+            <span role="status">{cleared === 15 ? "모든 부대와 층이 개방되어 있습니다." : "플레이 확인용 · 모든 부대와 층을 바로 개방합니다."}</span>
+          </div>
+          <div className="squads">
             {choices.map((c) => (
               <button
-                className={`character ${character === c.id ? "chosen" : ""}`}
+                className={`squad ${squad === c.id ? "chosen" : ""}`}
                 key={c.id}
-                onClick={() => setCharacter(c.id)}
-                aria-pressed={character === c.id}
+                onClick={() => setSquad(c.id)}
+                disabled={c.unlock_floor>0 && !(cleared & (1 << (c.unlock_floor-1)))}
+                aria-pressed={squad === c.id}
               >
-                <RelicIcon id={c.relic} name={starterRelicNames[c.relic]} className="character-icon" />
+                <RelicIcon id={c.relic} name={starterRelicNames[c.relic]} className="squad-icon" />
                 <span className="eyebrow">{c.title}</span>
                 <h2>{c.name}</h2>
                 <p>{c.description}</p>
-                <span className="character-radio">
-                  {character === c.id ? "● 선택됨" : "○ 선택"}
+                <span className="squad-radio">
+                  {c.unlock_floor>0 && !(cleared & (1 << (c.unlock_floor-1))) ? `잠김 · ${c.unlock_floor}층 보스 격파` : squad === c.id ? "● 선택됨" : "○ 선택"}
                 </span>
               </button>
             ))}
           </div>
+          <div className="floor-select" role="group" aria-label="시작 층 선택">
+            {[1,2,3,4].map(f=><button key={f} aria-pressed={floor===f} disabled={f>1 && !(cleared & (1<<(f-2)))} onClick={()=>setFloor(f)}>{f}층 {f>1 && !(cleared & (1<<(f-2))) ? `· ${f-1}층 격파 필요` : ""}</button>)}
+          </div>
           <div className="launch">
             <span className="muted">
-              빈 시작 덱 · 턴마다 1장 드로우 · 기본 마나 3
+              선택한 부대의 시작 편성과 유물로 원정을 시작합니다.
             </span>
             <button className="primary large" onClick={start} disabled={!ready}>
               런 시작 <span>→</span>
@@ -608,14 +679,14 @@ function App() {
               · {state.node_kind && nodeTypes[state.node_kind].label}
             </span>
           </nav>
-          {state.phase !== "treasure" && (
+          {state.phase !== "treasure" && state.phase !== "restaurant" && (
             <>
               <div className="battle-column">
               <section className="battle-area">
                 <div className="battle-heading">
                   <div>
                     <p className="eyebrow">
-                      FIRST EXPEDITION / {state.character}
+                      FIRST EXPEDITION / {state.squad}
                     </p>
                     <h1>{state.encounter}</h1>
                   </div>
@@ -630,7 +701,7 @@ function App() {
                         <small>{state.actions_left}회 행동</small>
                       </>
                     ) : restView ? (
-                      rewardUpgradeOpen ? "전투 보상 · 기물 강화" : restCompleted ? "쉼터 · 강화 완료" : "쉼터 · 행동 1회"
+                      rewardUpgradeOpen ? "전투 보상 · 기물 강화" : "쉼터 · 행동 1회"
                     ) : (
                       "진형 계승"
                     )}
@@ -652,8 +723,9 @@ function App() {
                         );
                       const enemyCapture = !!inspectedEnemy && enemyCaptures.has(i);
                       const enemyMove = !!inspectedEnemy && !piece && enemyMoves.has(i);
-                      const target =
-                        piece && targetCard?.targets.includes(piece.id);
+                      const activeAbility=state.abilities.find(a=>a.id===abilityId);
+                      const target = (piece && (targetCard?.targets.includes(piece.id) || activeAbility?.targets.includes(piece.id) || state.effect_choice?.targets.includes(piece.id))) || state.effect_choice?.cells.includes(i) || (targetCard?.definition.selection_mode==="square" && !piece && i>=48);
+
                       const staged = piece && (cardTargets.includes(piece.id) || cardUpgrades.some((u) => u.id === piece.id));
                       const square = `${"abcdefgh"[i % 8]}${8 - Math.floor(i / 8)}`;
                       return (
@@ -664,13 +736,13 @@ function App() {
                           data-enemy-move={enemyMove || undefined}
                           data-enemy-capture={enemyCapture || undefined}
                           className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""}`}
-                          title={piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined}
+                          title={piece ? `${piece.name} · ${statusText(piece)}${piece.self_defense ? " · 호신용품: 직접 포획되면 포획한 적도 사망" : ""}` : undefined}
                           onClick={() => clickSquare(i)}
                           disabled={
                             !restView &&
                             (state.phase !== "combat" || !!promotion || (!turn && piece?.owner !== 1 && !(!piece && inspectedEnemy)))
                           }
-                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 효과 종료 후 사망` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
+                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${statusText(piece) ? ` ${statusText(piece)}` : ""}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 효과 종료 후 사망` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
                           aria-pressed={
                             (restView
                               ? restChoice?.cell
@@ -743,6 +815,8 @@ function App() {
                 {state.phase === "combat" && <div className="board-caption">
                   <span>★ 적 로얄: {state.royal_name}{state.enemy_initiative_turns_left > 0 && ` · 선공권 ${state.enemy_initiative_turns_left}턴`}</span>
                 </div>}
+                {state.phase==="combat" && state.effect_choice && <div className="action-hint target-hint" role="status"><strong>{state.effect_choice.prompt}</strong><span>강조한 기물 또는 칸을 선택하세요.</span></div>}
+                {state.phase==="combat" && abilityId!==null && <div className="action-hint target-hint"><strong>{state.abilities.find(a=>a.id===abilityId)?.name} 대상 선택</strong><span>강조된 기물을 선택하세요.</span><button onClick={()=>setAbilityId(null)}>취소</button></div>}
                 {state.phase === "combat" && (targetCard || inspectedEnemy || !turn) && (
                   <div
                     className={`action-hint ${targetCard ? "target-hint" : ""}`}
@@ -751,6 +825,9 @@ function App() {
                     {targetCard ? (
                       <>
                         <strong>{targetCard.definition.name}</strong>
+                        {targetCard.definition.selection_mode==="square" && <span>1~2랭크의 빈 칸을 선택하세요.</span>}
+                        {targetCard.definition.selection_mode==="placement" && <><span>{placementPick!==null ? "새 배치 칸 선택" : "재배치할 아군 선택"} · {placement.length}기 지정</span><button className="primary" disabled={!placement.length} onClick={confirmCard}>배치 완료</button></>}
+
                         {targetCard.definition.kind === "limiter_release" && <span>효과 종료 후 대상 사망</span>}
                         <span>선택 {stagedCount}기 · 현재 코스트 {stagedCost} / 마나 {state.mana}</span>
                         {targetCard.definition.selection_mode === "upgrade" && cardUpgrades.length > 0 && <span className="staged-upgrades">{cardUpgrades.map((choice) => <button key={choice.id} onClick={() => setCardUpgrades((old) => old.filter((u) => u.id !== choice.id))}>{state.pieces.find((p) => p.id === choice.id)?.name} ×</button>)}</span>}
@@ -797,7 +874,7 @@ function App() {
                     className={`playing-card ${targetCard?.id === card.id ? "active-card" : ""}`}
                     key={card.id}
                     onClick={() => chooseCard(card)}
-                    disabled={!!card.disabled_reason || !!promotion}
+                    disabled={!!card.disabled_reason || !!promotion || !!state.effect_choice}
                     title={card.disabled_reason || card.definition.description}
                   >
                     <CardFace card={card.definition} selectedCount={targetCard?.id === card.id ? stagedCount : 0} />
@@ -821,7 +898,6 @@ function App() {
                     onCancel={rewardUpgradeOpen ? closeRewardUpgrade : closeRest}
                     send={send}
                     history={rewardUpgradeOpen ? rewardUpgradeHistory : upgradeHistory}
-                    completed={restCompleted}
                     onContinue={rewardUpgradeOpen ? closeRewardUpgrade : closeRest}
                     reward={rewardUpgradeOpen}
                   />
@@ -846,9 +922,11 @@ function App() {
                           <strong>
                             {selectedPiece.name} · {selectedPiece.square}
                           </strong>
-                          {selectedPiece.royal && <span className="royal-info">★ 로얄 · {inspectedEnemy ? "이 기물은 승리 목표입니다." : "이 기물을 잃으면 원정이 끝납니다."}</span>}
+                          {selectedPiece.royal && <span className="royal-info">★ {selectedPiece.key==="warehouse" ? "창고 · 모든 창고가 파괴되면 패배합니다." : <>로얄 · {inspectedEnemy ? "이 기물은 승리 목표입니다." : "이 기물을 잃으면 원정이 끝납니다."}</>}</span>}
                           <small className="piece-info-heading">행마법 · 특수 능력</small>
                           <p>{selectedPiece.description}</p>
+                          {statusText(selectedPiece) && <p className="status-list">{statusText(selectedPiece)}</p>}
+                          {state.abilities.filter(a=>a.id===selectedPiece.id && a.targets.length>0).map(a=><div className="ability-control" key={a.name}><button className="primary" disabled={!!state.effect_choice} onClick={()=>{setTargetCard(null);setAbilityId(a.id);}}>{a.name} · 행동 1회{state.ammo!==null && a.name==="사격"?" · 탄약 1":""}</button><small>{a.targets.map((id,i)=>`${state.pieces.find(p=>p.id===id)?.square} ${a.chances[i]}%`).join(" / ")}</small></div>)}
                           <small className="piece-info-heading">현재 적용 효과</small>
                           {!selectedPiece.temporary_upgrade && !selectedPiece.ward && !selectedPiece.limiter && !selectedPiece.self_defense && selectedPiece.absorbed_moves.length === 0 && initiativeRemaining === 0 && <small className="effect-note">없음</small>}
                           {initiativeRemaining > 0 && <small className="effect-note">선공권 보호 · 상대의 포획 제한 · 남은 상대 턴 {initiativeRemaining}회</small>}
@@ -863,19 +941,19 @@ function App() {
                     <section className="turn-panel">
                       <div className="section-label">
                         TURN {state.round.toString().padStart(2, "0")}
-                        <span>기본 마나 3</span>
+                        <span>{state.ammo!==null ? `한계 ${state.ammo_capacity}` : "기본 마나 3"}</span>
                       </div>
                       <div className="mana">
                         <span className="mana-orb">{state.mana}</span>
                         <div>
-                          <strong>사용 가능한 마나</strong>
+                          <strong>{state.ammo!==null ? `탄약 / ${state.ammo_capacity}` : "사용 가능한 마나"}</strong>
                           <small>{state.mana_rule}</small>
                         </div>
                       </div>
                       <button
                         className="primary end-turn"
                         onClick={() => send({ type: "end_turn" })}
-                        disabled={!turn || state.phase !== "combat" || !!promotion}
+                        disabled={!turn || state.phase !== "combat" || !!promotion || !!state.effect_choice}
                       >
                         턴 종료 <span>→</span>
                       </button>
@@ -936,14 +1014,15 @@ function App() {
               </aside>
             </>
           )}
-          {state.phase !== "combat" && state.phase !== "rest" && state.phase !== "reward" && !restCompleted && (
+          {state.phase !== "combat" && state.phase !== "rest" && state.phase !== "reward" && (
             <section className="outcome" ref={outcomeRef} aria-live="polite">
+              {state.phase === "restaurant" && <><h2>식당</h2><p>주인은 말없이 따뜻한 음식을 내놓았습니다.</p><button className="primary" onClick={()=>send({type:"dine",eat:true})}>식사하기 · 전체 허기 해소</button><button onClick={()=>send({type:"dine",eat:false})}>떠나기</button></>}
               {state.phase === "treasure" && (
                 <>
                   <p className="eyebrow">A GIFT ALONG THE WAY</p>
                   <h2>남겨진 보물</h2>
                   {state.node_reward && <div className="treasure-relic"><RelicIcon id={state.node_reward.id} name={state.node_reward.name} /></div>}
-                  <h3>{state.node_reward?.name}</h3>
+                  <h3>{state.node_reward?.name || "부대 카드 1장"}</h3>
                   <p>{state.node_reward?.description}</p>
                   <button
                     className="primary large"
@@ -975,6 +1054,7 @@ function App() {
                       ? `${state.encounter} 보스를 쓰러뜨렸습니다. 2층 원정을 완수했습니다.`
                       : "진형은 여기에서 멈추지만, 다음 원정의 한 수는 달라질 수 있습니다."}
                   </p>
+                  {state.phase==="victory" && <p className="unlock-notice">{state.unlocked_squad} 해금{state.floor<4 ? ` · ${state.floor+1}층 개방` : " · 네 부대의 영토를 수복했습니다"}</p>}
                   <button
                     className="primary large"
                     onClick={() => {
@@ -991,7 +1071,8 @@ function App() {
         </main>
       )}
       {screen === "game" && state && statusOpen && <ExpeditionStatus state={state} onClose={closeStatus} />}
-      {screen === "game" && state?.phase === "reward" && !floorTransition && !rewardUpgradeOpen && (
+      {screen==="game" && state?.aftermath && createPortal(<div className="reward-overlay"><section className="battle-rewards" role="dialog" aria-modal="true" aria-label={state.aftermath.prompt}><h2>{state.aftermath.prompt}</h2><div className="aftermath-options">{state.aftermath.targets.map(id=>{const p=state.rest_options.find(p=>p.id===id);return <button key={id} onClick={()=>send({type:"aftermath",target:id})}>{p?.name} · {p?.square}</button>;})}</div></section></div>,document.body)}
+      {screen === "game" && state?.phase === "reward" && !state.aftermath && !floorTransition && !rewardUpgradeOpen && (
         <BattleRewards state={state} send={send} revisit={!!rewardRevisit} onUpgrade={() => { setRestChoice(null); setRewardUpgradeOpen(true); }} />
       )}
       <footer>
