@@ -119,125 +119,56 @@ fn elite_reward_can_be_skipped_reopened_and_claimed_once() {
 }
 
 #[test]
-fn boss_upgrade_can_be_revisited_before_advancing_floor() {
+fn boss_upgrade_reward_ends_the_run_and_unlocks_a_new_floor() {
     let mut game = Game::new("vanguard", 2026).unwrap();
-    let boss = game
-        .map
-        .nodes
-        .iter()
-        .find(|n| n.kind == NodeKind::Boss)
-        .unwrap()
-        .id;
+    let boss = game.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().id;
     game.current_node = Some(boss);
     win(&mut game);
-    assert!(game
-        .snapshot()
-        .rewards
-        .iter()
-        .all(|r| matches!(r, RewardView::Card(_))));
+    assert!(game.snapshot().rewards.iter().all(|r| matches!(r, RewardView::Card(_))));
+    let piece = game.snapshot().rest_options.into_iter().find(|p| p.can_upgrade).unwrap();
+    let target = game.snapshot().upgrade_paths.iter().find(|p| p.from == piece.kind && p.unlocked).unwrap().to;
+    game.dispatch(Command::ClaimUpgrade { id: piece.id, target }).unwrap();
+    assert!(game.dispatch(Command::ClaimUpgrade { id: piece.id, target }).is_err());
     game.dispatch(Command::ContinueReward).unwrap();
-    assert_eq!(game.phase, RunPhase::Map);
     assert_eq!(game.floor, 1);
-    assert!(game.snapshot().map.nodes[boss].unclaimed_reward);
-    game.dispatch(Command::SelectNode { id: boss }).unwrap();
-    let piece = game
-        .snapshot()
-        .rest_options
-        .into_iter()
-        .find(|p| p.can_upgrade)
-        .unwrap();
-    let target = game
-        .snapshot()
-        .upgrade_paths
-        .iter()
-        .find(|p| p.from == piece.kind && p.unlocked)
-        .unwrap()
-        .to;
-    game.dispatch(Command::ClaimUpgrade {
-        id: piece.id,
-        target,
-    })
-    .unwrap();
-    assert!(game
-        .dispatch(Command::ClaimUpgrade {
-            id: piece.id,
-            target
-        })
-        .is_err());
-    game.dispatch(Command::ContinueReward).unwrap();
-    assert_eq!(game.floor, 2);
-    assert_eq!(game.phase, RunPhase::Map);
-    assert_eq!(
-        game.battle
-            .outcome()
-            .iter()
-            .find(|p| p.id == piece.id)
-            .unwrap()
-            .kind,
-        target
-    );
+    assert_eq!(game.phase, RunPhase::Victory);
+    assert_eq!(game.battle.outcome().iter().find(|p| p.id == piece.id).unwrap().kind, target);
+    // Higher floors are newly selected runs, never carried-over mutable rosters.
+    let next = Game::new_at_floor("vanguard", 2026, 2).unwrap();
+    assert_eq!(next.floor, 2);
+    assert_eq!(next.phase, RunPhase::Map);
+    assert_eq!(next.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().encounter, Some(encounters::HERETIC_BOSS));
 }
-
 #[test]
-fn ascending_after_boss_revives_every_piece_without_losing_growth() {
+fn boss_victory_keeps_run_state_but_new_floor_starts_fresh() {
     let mut game = Game::new("guardian", 2026).unwrap();
-    game.current_node = Some(
-        game.map
-            .nodes
-            .iter()
-            .find(|node| node.kind == NodeKind::Boss)
-            .unwrap()
-            .id,
-    );
+    game.current_node = Some(game.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().id);
     let mut players = Battle::standard_roster();
     players[0].position = None;
     players[1].position = None;
     players[1].kind = TEMPEST_KNIGHT;
     players[1].upgrades.push("tempest".into());
     players[1].persistent.insert("growth".into(), 3);
-    players[2].position = Some(Position::new(0, 7)); // Blocks the dead rook's home.
-    players[3].position = Some(Position::new(4, 1)); // Captures the royal on e8.
-    game.battle = Battle::new(BattleStart {
-        players,
-        encounter: encounter(0),
-    })
-    .unwrap();
+    players[2].position = Some(Position::new(0, 7));
+    players[3].position = Some(Position::new(4, 1));
+    game.battle = Battle::new(BattleStart { players, encounter: encounter(0) }).unwrap();
     game.phase = RunPhase::Combat;
-    game.dispatch(Command::Move {
-        from: 12,
-        to: 4,
-        promotion: None,
-    })
-    .unwrap();
-    assert_eq!(game.phase, RunPhase::Reward);
-    assert_eq!(
-        game.battle
-            .outcome()
-            .iter()
-            .filter(|piece| piece.position.is_none())
-            .count(),
-        2
-    );
+    game.dispatch(Command::Move { from: 12, to: 4, promotion: None }).unwrap();
     let mut replay = game.clone();
     game.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     replay.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     assert_eq!(snapshot(&game), snapshot(&replay));
-    assert_eq!(game.floor, 2);
-    assert_eq!(game.phase, RunPhase::Map);
+    assert_eq!(game.floor, 1);
+    assert_eq!(game.phase, RunPhase::Victory);
     let roster = game.battle.outcome();
-    assert!(roster.iter().all(|piece| piece.position.is_some()));
-    assert_eq!(roster[0].position, Some(Position::new(0, 7)));
-    assert_eq!(roster[1].position, Some(Position::new(1, 7)));
-    assert_eq!(roster[2].position, Some(Position::new(2, 7)));
+    assert_eq!(roster.iter().filter(|p| p.position.is_none()).count(), 2);
     assert_eq!(roster[1].kind, TEMPEST_KNIGHT);
-    assert_eq!(roster[1].upgrades, ["tempest"]);
     assert_eq!(roster[1].persistent.get("growth"), Some(&3));
-    assert_eq!(game.snapshot().next_battle_pieces.len(), roster.len());
-    let after = snapshot(&game);
-    assert!(game.dispatch(Command::ChooseReward { index: 0 }).is_err());
-    assert_eq!(snapshot(&game), after);
+    let next = Game::new_at_floor("guardian", 2026, 2).unwrap();
+    assert!(next.battle.outcome().iter().all(|p| p.position.is_some()));
+    assert!(next.battle.outcome().iter().all(|p| p.persistent.is_empty()));
+    assert_eq!(next.floor, 2);
 }
-
 #[test]
 fn mixed_slots_are_stable_seeded_and_grant_exactly_the_displayed_reward() {
     let mut offers = std::collections::HashSet::new();
@@ -362,30 +293,21 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
     win(&mut g);
     assert_eq!(g.snapshot().rewards.len(), 3);
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    assert_eq!(g.phase, RunPhase::Map);
-    assert_eq!(g.floor, 2);
-    assert_eq!(g.available_nodes().len(), 3);
-    assert!(g
-        .map
-        .nodes
-        .iter()
-        .filter(|n| n.kind == NodeKind::Boss)
-        .all(|n| encounters::FLOOR_TWO_BOSSES.contains(&n.encounter.unwrap())));
-    g.current_node = Some(
-        g.map
-            .nodes
-            .iter()
-            .find(|n| n.kind == NodeKind::Boss)
-            .unwrap()
-            .id,
-    );
-    win(&mut g);
-    g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     assert_eq!(g.phase, RunPhase::Victory);
+    assert_eq!(g.floor, 1);
+    // After unlocking floor 2, its boss is the Heretic squad rather than the old random boss.
+    let mut next = Game::new_at_floor("vanguard", 2026, 2).unwrap();
+    assert_eq!(next.available_nodes().len(), 3);
     assert_eq!(
-        g.deck.iter().map(|c| c.id).collect::<Vec<_>>(),
-        (1..=9).collect::<Vec<_>>()
+        next.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().encounter,
+        Some(encounters::HERETIC_BOSS)
     );
+    next.current_node = Some(next.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().id);
+    win(&mut next);
+    next.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    assert_eq!(next.phase, RunPhase::Victory);
+    assert_eq!(next.floor, 2);
+    assert_eq!(next.deck.len(), 1);
 
     // Elite offers contain no relic even when its old node relic is unowned.
     let mut g = Game::new("vanguard", 2026).unwrap();
