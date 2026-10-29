@@ -25,9 +25,26 @@ import { version } from "../package.json";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
 const SAVE_KEY = "chesslayer.run.v1";
+const PROGRESS_KEY = "chesslayer.progress.v0.3";
+type Progress = { highestFloor: number };
+const squadUnlockFloor: Record<string, number> = {
+  guardian: 1, vanguard: 2, heretic: 3, artillery: 4, special_ops: 5,
+};
 const starterRelicNames: Record<Character["relic"], string> = {
   haste: "가속", whirlwind: "소용돌이", self_defense: "호신용품",
+  initiative: "선공권", ice_cream: "아이스크림",
 };
+function readProgress(): Progress {
+  try {
+    const value = JSON.parse(localStorage.getItem(PROGRESS_KEY) || "null");
+    if (Number.isInteger(value?.highestFloor) && value.highestFloor >= 1 && value.highestFloor <= 5)
+      return { highestFloor: value.highestFloor };
+  } catch { /* Storage is optional; the game can still run without it. */ }
+  return { highestFloor: 1 };
+}
+function actLabel(floor: number): string {
+  return floor === 5 ? "FINAL" : ["", "I", "II", "III", "IV"][floor] || "I";
+}
 
 function BoardPiece({
   piece,
@@ -63,7 +80,9 @@ function App() {
   const [ready, setReady] = useState(false);
   const [choices, setChoices] = useState<Character[]>([]);
   const [screen, setScreen] = useState<"home" | "choose" | "game">("home");
-  const [character, setCharacter] = useState("vanguard");
+  const [character, setCharacter] = useState("guardian");
+  const [selectedFloor, setSelectedFloor] = useState(1);
+  const [progress, setProgress] = useState<Progress>(readProgress);
   const [state, setState] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [enemyInspection, setEnemyInspection] = useState<EnemyInspection | null>(null);
@@ -139,10 +158,16 @@ function App() {
     try {
       const before: Snapshot = JSON.parse(engine.current.snapshot());
       const next: Snapshot = JSON.parse(engine.current.dispatch(JSON.stringify(command)));
-      if ((command.type === "choose_reward" || command.type === "continue_reward" || command.type === "advance_floor") && before.floor === 1 && next.floor === 2 && next.phase === "map" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        setFloorTransition({ next, stage: "out" });
-      } else {
-        setState(next);
+      setState(next);
+      if (next.phase === "victory" && before.phase !== "victory" && next.floor < 5) {
+        const highestFloor = Math.max(progress.highestFloor, next.floor + 1);
+        const updated = { highestFloor };
+        setProgress(updated);
+        try {
+          localStorage.setItem(PROGRESS_KEY, JSON.stringify(updated));
+        } catch {
+          setSaveNotice("해금 진행도를 저장하지 못했습니다. 브라우저 저장소를 확인하세요.");
+        }
       }
       persist(engine.current);
       if (command.type === "rest_upgrade") {
@@ -164,7 +189,7 @@ function App() {
     } catch (e) {
       setError(String(e));
     }
-  }, []);
+  }, [progress.highestFloor]);
   useEffect(() => {
     if (!floorTransition) return;
     const timer = window.setTimeout(() => {
@@ -272,7 +297,11 @@ function App() {
     try {
       // Entropy only comes from the browser; the seeded Rust engine generates the entire Act.
       const seed = crypto.getRandomValues(new Uint32Array(1))[0];
-      const next = new WebGame(character, seed);
+      if (selectedFloor > progress.highestFloor ||
+          (squadUnlockFloor[character] ?? 99) > progress.highestFloor) {
+        throw new Error("아직 해금되지 않은 부대 또는 구간입니다.");
+      }
+      const next = WebGame.new_at_floor(character, seed, selectedFloor);
       engine.current?.free();
       engine.current = next;
       const snapshot: Snapshot = JSON.parse(next.snapshot());
@@ -447,7 +476,7 @@ function App() {
   return (
     <>
       {floorTransition && <div className={`floor-transition stage-${floorTransition.stage} act-${floorTransition.next.floor}`} role="status" aria-label={`제${floorTransition.next.floor}층 진입`}>
-        <div className="floor-transition-title"><small>CHESSLAYER · {floorTransition.next.floor === 1 ? "EXPEDITION BEGINS" : "NEXT ACT"}</small><strong>ACT {floorTransition.next.floor === 1 ? "I" : "II"}</strong><span>{floorTransition.next.floor === 1 ? "제1막 · 갈림길의 숲" : "제2층에 도착했습니다"}</span><small>{floorTransition.next.floor === 1 ? "원정 시작" : "아군 전원 회복"}</small></div>
+        <div className="floor-transition-title"><small>CHESSLAYER · EXPEDITION BEGINS</small><strong>ACT {actLabel(floorTransition.next.floor)}</strong><span>{floorTransition.next.floor === 5 ? "최종 결전 · 부족의 독재자" : `${floorTransition.next.floor}층 원정 시작`}</span><small>새로운 원정</small></div>
         <button onClick={skipFloorTransition} aria-label="층 전환 연출 건너뛰기">건너뛰기 ↗</button>
       </div>}
       <header className="topbar">
@@ -462,7 +491,7 @@ function App() {
           <PieceImage pieceKey="knight" owner={1} /> CHESSLAYER
         </a>
         <div className="top-right">
-          <span className="edition">FIRST EXPEDITION / {screen === "game" && state?.floor === 2 ? "ACT II" : "ACT I"}</span>
+          <span className="edition">v0.3 PROTOTYPE / ACT {actLabel(screen === "game" && state ? state.floor : selectedFloor)}</span>
           <button
             className="text-button"
             onClick={() => setHelp(!help)}
@@ -566,9 +595,19 @@ function App() {
           <p className="eyebrow">CHOOSE YOUR EXPEDITION</p>
           <h1>어떤 수를 두시겠어요?</h1>
           <p className="muted">
-            모두 같은 16기의 백 진형으로 시작합니다. 시작 유물이 플레이를
-            바꿉니다.
+            보스를 격파할 때마다 다음 구간과 보스의 부대가 해금됩니다.
+            현재는 부대별 고유 기물·카드가 제작되기 전의 임시 진형입니다.
           </p>
+          <div className="floor-picker" aria-label="시작 구간 선택">
+            {Array.from({ length: progress.highestFloor }, (_, i) => i + 1).map((floor) => (
+              <button type="button" key={floor}
+                className={selectedFloor === floor ? "chosen" : ""}
+                onClick={() => setSelectedFloor(floor)}
+                aria-pressed={selectedFloor === floor}>
+                {floor === 5 ? "최종 결전" : `${floor}층`}
+              </button>
+            ))}
+          </div>
           <div className="characters">
             {choices.map((c) => (
               <button
@@ -576,20 +615,23 @@ function App() {
                 key={c.id}
                 onClick={() => setCharacter(c.id)}
                 aria-pressed={character === c.id}
+                disabled={(squadUnlockFloor[c.id] ?? 99) > progress.highestFloor}
               >
                 <RelicIcon id={c.relic} name={starterRelicNames[c.relic]} className="character-icon" />
                 <span className="eyebrow">{c.title}</span>
                 <h2>{c.name}</h2>
                 <p>{c.description}</p>
                 <span className="character-radio">
-                  {character === c.id ? "● 선택됨" : "○ 선택"}
+                  {(squadUnlockFloor[c.id] ?? 99) > progress.highestFloor
+                    ? `${(squadUnlockFloor[c.id] ?? 99) - 1}층 보스 격파 후 해금`
+                    : character === c.id ? "● 선택됨" : "○ 선택"}
                 </span>
               </button>
             ))}
           </div>
           <div className="launch">
             <span className="muted">
-              빈 시작 덱 · 턴마다 1장 드로우 · 기본 마나 3
+              시작 카드 및 부대 전용 효과는 임시 구현 · 기본 마나 3
             </span>
             <button className="primary large" onClick={start} disabled={!ready}>
               런 시작 <span>→</span>
@@ -972,7 +1014,9 @@ function App() {
                   </h2>
                   <p>
                     {state.phase === "victory"
-                      ? `${state.encounter} 보스를 쓰러뜨렸습니다. 2층 원정을 완수했습니다.`
+                      ? state.floor === 5
+                        ? "부족의 독재자를 쓰러뜨렸습니다. 모든 원정을 완수했습니다."
+                        : `${state.floor}층 보스를 쓰러뜨렸습니다. 다음 층과 새로운 부대를 해금했습니다.`
                       : "진형은 여기에서 멈추지만, 다음 원정의 한 수는 달라질 수 있습니다."}
                   </p>
                   <button
