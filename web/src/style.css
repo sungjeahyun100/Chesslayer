@@ -2451,3 +2451,28 @@ body:has(.reward-overlay) .skill-node-popup { z-index: 140; }
 @media (prefers-reduced-motion: reduce) {
   .reward-overlay, .battle-rewards { animation: none; }
 }
+
+/* v0.3 prototype: compact start-floor selector next to the squad cards. */
+.floor-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+  margin: 1.25rem 0;
+}
+.floor-picker button {
+  padding: 0.65rem 1rem;
+  border-radius: 0.4rem;
+  border: 1px solid var(--line, #777);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+.floor-picker button.chosen {
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-weight: 700;
+}
+.character:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
