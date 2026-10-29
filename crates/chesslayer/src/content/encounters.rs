@@ -126,27 +126,32 @@ pub const ENCOUNTERS: [EncounterDefinition; 23] = [
     EncounterDefinition {
         id: "1F-B-VANGUARD",
         name: "선봉대",
-        description: "v0.3 임시 보스: 표준 체스 진형에 가까운 선봉대 16기. e8의 지휘관이 로얄입니다.",
+        description:
+            "v0.3 임시 보스: 표준 체스 진형에 가까운 선봉대 16기. e8의 지휘관이 로얄입니다.",
     },
     EncounterDefinition {
         id: "2F-B-HERETIC",
         name: "이단 부대",
-        description: "v0.3 임시 보스: 연회를 준비하는 16기. 시체·허기 판정은 후속 전투 구현 대상입니다.",
+        description:
+            "v0.3 임시 보스: 연회를 준비하는 16기. 시체·허기 판정은 후속 전투 구현 대상입니다.",
     },
     EncounterDefinition {
         id: "3F-B-ARTILLERY",
         name: "포병대대",
-        description: "v0.3 임시 보스: 룩 중심 포격 진형 16기. 사격 판정은 후속 구현 대상입니다.",
+        description:
+            "v0.3 임시 보스: 룩 중심 포격 진형 16기. 사격 판정은 후속 구현 대상입니다.",
     },
     EncounterDefinition {
         id: "4F-B-SPECIAL",
         name: "특수부대",
-        description: "v0.3 임시 보스: 기동 기물 중심 16기. 특수 사격은 후속 구현 대상입니다.",
+        description:
+            "v0.3 임시 보스: 기동 기물 중심 16기. 특수 사격은 후속 구현 대상입니다.",
     },
     EncounterDefinition {
         id: "FINAL-DICTATOR",
         name: "부족의 독재자",
-        description: "v0.3 임시 최종 보스: 로얄 아마존과 호위 기물. 격파해도 플레이어블로 해금되지 않습니다.",
+        description:
+            "v0.3 임시 최종 보스: 로얄 아마존과 호위 기물. 격파해도 플레이어블로 해금되지 않습니다.",
     },
 ];
 
