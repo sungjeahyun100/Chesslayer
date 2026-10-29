@@ -1,8 +1,8 @@
 //! One immutable, seeded Act graph. Run traversal is kept separately by Game.
 use crate::content::{
     encounters::{
-        ELITES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS, VANGUARD_BOSS,
-        HERETIC_BOSS, ARTILLERY_BOSS, SPECIAL_BOSS, DICTATOR_BOSS,
+        ARTILLERY_BOSS, DICTATOR_BOSS, ELITES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS, HERETIC_BOSS,
+        SPECIAL_BOSS, VANGUARD_BOSS,
     },
     Relic, Rng, ENCOUNTERS, RELIC_REWARD_POOL,
 };
