@@ -28,8 +28,7 @@ impl WebGame {
     }
     pub fn new_at_floor(character: &str, seed: u32, floor: u8) -> Result<WebGame, JsValue> {
         Ok(Self {
-            game: Game::new_at_floor(character, seed, floor)
-                .map_err(|e| JsValue::from_str(&e))?,
+            game: Game::new_at_floor(character, seed, floor).map_err(|e| JsValue::from_str(&e))?,
             save: SavedRun {
                 version: SAVE_VERSION,
                 character: character.into(),
@@ -70,7 +69,8 @@ impl WebGame {
         }
         let save: SavedRun = serde_json::from_str(saved)
             .map_err(|_| JsValue::from_str("저장된 원정을 읽을 수 없습니다."))?;
-        let mut game = Game::new_at_floor(&save.character, save.seed, save.floor).map_err(|e| JsValue::from_str(&e))?;
+        let mut game = Game::new_at_floor(&save.character, save.seed, save.floor)
+            .map_err(|e| JsValue::from_str(&e))?;
         for command in &save.commands {
             game.dispatch(command.clone())
                 .map_err(|_| JsValue::from_str("저장된 원정의 진행 기록이 올바르지 않습니다."))?;
