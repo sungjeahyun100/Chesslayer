@@ -8,10 +8,11 @@ struct SavedRun {
     version: u32,
     character: String,
     seed: u32,
+    floor: u8,
     commands: Vec<Command>,
 }
 
-const SAVE_VERSION: u32 = 13;
+const SAVE_VERSION: u32 = 14;
 
 /// The only browser state owner. JavaScript sends intentions and renders snapshots.
 #[wasm_bindgen]
@@ -23,12 +24,17 @@ pub struct WebGame {
 impl WebGame {
     #[wasm_bindgen(constructor)]
     pub fn new(character: &str, seed: u32) -> Result<WebGame, JsValue> {
+        Self::new_at_floor(character, seed, 1)
+    }
+    pub fn new_at_floor(character: &str, seed: u32, floor: u8) -> Result<WebGame, JsValue> {
         Ok(Self {
-            game: Game::new(character, seed).map_err(|e| JsValue::from_str(&e))?,
+            game: Game::new_at_floor(character, seed, floor)
+                .map_err(|e| JsValue::from_str(&e))?,
             save: SavedRun {
                 version: SAVE_VERSION,
                 character: character.into(),
                 seed,
+                floor,
                 commands: vec![],
             },
         })
@@ -64,7 +70,7 @@ impl WebGame {
         }
         let save: SavedRun = serde_json::from_str(saved)
             .map_err(|_| JsValue::from_str("저장된 원정을 읽을 수 없습니다."))?;
-        let mut game = Game::new(&save.character, save.seed).map_err(|e| JsValue::from_str(&e))?;
+        let mut game = Game::new_at_floor(&save.character, save.seed, save.floor).map_err(|e| JsValue::from_str(&e))?;
         for command in &save.commands {
             game.dispatch(command.clone())
                 .map_err(|_| JsValue::from_str("저장된 원정의 진행 기록이 올바르지 않습니다."))?;
