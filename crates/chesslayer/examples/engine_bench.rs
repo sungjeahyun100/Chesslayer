@@ -101,7 +101,7 @@ fn main() {
             promotion: None,
         };
         let selected = measure_stateful(&game, repeats, |g| {
-            black_box(g.dispatch(move_command.clone()).unwrap());
+            g.dispatch(move_command.clone()).unwrap();
         });
         game.battle.turn = ENEMY;
         let legal = measure(
@@ -117,10 +117,10 @@ fn main() {
             repeats,
         );
         let apply = measure_stateful(&board, repeats, |b| {
-            black_box(b.apply_piece_action(&action).unwrap());
+            b.apply_piece_action(&action).unwrap();
         });
         let enemy = measure_stateful(&game, repeats, |g| {
-            black_box(g.dispatch(Command::EnemyStep).unwrap());
+            g.dispatch(Command::EnemyStep).unwrap();
         });
         println!("{} repeats={} legal_us={legal:.3} public_apply_us={apply:.3} selected_move_us={selected:.3} preview_us={preview:.3} enemy_us={enemy:.3}",
             if complex { "complex" } else { "standard" }, repeats);
