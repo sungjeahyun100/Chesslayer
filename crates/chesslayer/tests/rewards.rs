@@ -121,28 +121,81 @@ fn elite_reward_can_be_skipped_reopened_and_claimed_once() {
 #[test]
 fn boss_upgrade_reward_ends_the_run_and_unlocks_a_new_floor() {
     let mut game = Game::new("vanguard", 2026).unwrap();
-    let boss = game.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().id;
+    let boss = game
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.kind == NodeKind::Boss)
+        .unwrap()
+        .id;
     game.current_node = Some(boss);
     win(&mut game);
-    assert!(game.snapshot().rewards.iter().all(|r| matches!(r, RewardView::Card(_))));
-    let piece = game.snapshot().rest_options.into_iter().find(|p| p.can_upgrade).unwrap();
-    let target = game.snapshot().upgrade_paths.iter().find(|p| p.from == piece.kind && p.unlocked).unwrap().to;
-    game.dispatch(Command::ClaimUpgrade { id: piece.id, target }).unwrap();
-    assert!(game.dispatch(Command::ClaimUpgrade { id: piece.id, target }).is_err());
+    assert!(game
+        .snapshot()
+        .rewards
+        .iter()
+        .all(|r| matches!(r, RewardView::Card(_))));
+    let piece = game
+        .snapshot()
+        .rest_options
+        .into_iter()
+        .find(|p| p.can_upgrade)
+        .unwrap();
+    let target = game
+        .snapshot()
+        .upgrade_paths
+        .iter()
+        .find(|p| p.from == piece.kind && p.unlocked)
+        .unwrap()
+        .to;
+    game.dispatch(Command::ClaimUpgrade {
+        id: piece.id,
+        target,
+    })
+    .unwrap();
+    assert!(game
+        .dispatch(Command::ClaimUpgrade {
+            id: piece.id,
+            target
+        })
+        .is_err());
     game.dispatch(Command::ContinueReward).unwrap();
     assert_eq!(game.floor, 1);
     assert_eq!(game.phase, RunPhase::Victory);
-    assert_eq!(game.battle.outcome().iter().find(|p| p.id == piece.id).unwrap().kind, target);
+    assert_eq!(
+        game.battle
+            .outcome()
+            .iter()
+            .find(|p| p.id == piece.id)
+            .unwrap()
+            .kind,
+        target
+    );
     // Higher floors are newly selected runs, never carried-over mutable rosters.
     let next = Game::new_at_floor("vanguard", 2026, 2).unwrap();
     assert_eq!(next.floor, 2);
     assert_eq!(next.phase, RunPhase::Map);
-    assert_eq!(next.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().encounter, Some(encounters::HERETIC_BOSS));
+    assert_eq!(
+        next.map
+            .nodes
+            .iter()
+            .find(|n| n.kind == NodeKind::Boss)
+            .unwrap()
+            .encounter,
+        Some(encounters::HERETIC_BOSS)
+    );
 }
 #[test]
 fn boss_victory_keeps_run_state_but_new_floor_starts_fresh() {
     let mut game = Game::new("guardian", 2026).unwrap();
-    game.current_node = Some(game.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().id);
+    game.current_node = Some(
+        game.map
+            .nodes
+            .iter()
+            .find(|n| n.kind == NodeKind::Boss)
+            .unwrap()
+            .id,
+    );
     let mut players = Battle::standard_roster();
     players[0].position = None;
     players[1].position = None;
@@ -151,9 +204,18 @@ fn boss_victory_keeps_run_state_but_new_floor_starts_fresh() {
     players[1].persistent.insert("growth".into(), 3);
     players[2].position = Some(Position::new(0, 7));
     players[3].position = Some(Position::new(4, 1));
-    game.battle = Battle::new(BattleStart { players, encounter: encounter(0) }).unwrap();
+    game.battle = Battle::new(BattleStart {
+        players,
+        encounter: encounter(0),
+    })
+    .unwrap();
     game.phase = RunPhase::Combat;
-    game.dispatch(Command::Move { from: 12, to: 4, promotion: None }).unwrap();
+    game.dispatch(Command::Move {
+        from: 12,
+        to: 4,
+        promotion: None,
+    })
+    .unwrap();
     let mut replay = game.clone();
     game.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     replay.dispatch(Command::ChooseReward { index: 0 }).unwrap();
@@ -166,7 +228,11 @@ fn boss_victory_keeps_run_state_but_new_floor_starts_fresh() {
     assert_eq!(roster[1].persistent.get("growth"), Some(&3));
     let next = Game::new_at_floor("guardian", 2026, 2).unwrap();
     assert!(next.battle.outcome().iter().all(|p| p.position.is_some()));
-    assert!(next.battle.outcome().iter().all(|p| p.persistent.is_empty()));
+    assert!(next
+        .battle
+        .outcome()
+        .iter()
+        .all(|p| p.persistent.is_empty()));
     assert_eq!(next.floor, 2);
 }
 #[test]
@@ -299,10 +365,22 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
     let mut next = Game::new_at_floor("vanguard", 2026, 2).unwrap();
     assert_eq!(next.available_nodes().len(), 3);
     assert_eq!(
-        next.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().encounter,
+        next.map
+            .nodes
+            .iter()
+            .find(|n| n.kind == NodeKind::Boss)
+            .unwrap()
+            .encounter,
         Some(encounters::HERETIC_BOSS)
     );
-    next.current_node = Some(next.map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap().id);
+    next.current_node = Some(
+        next.map
+            .nodes
+            .iter()
+            .find(|n| n.kind == NodeKind::Boss)
+            .unwrap()
+            .id,
+    );
     win(&mut next);
     next.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     assert_eq!(next.phase, RunPhase::Victory);
