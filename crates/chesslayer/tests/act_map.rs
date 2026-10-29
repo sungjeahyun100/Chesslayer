@@ -44,7 +44,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
                     assert!(n.relic.is_some());
                     assert!(n.description().contains("기물 강화 기회 1회"));
                 }
-                NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::HOOK_BOSS)),
+                NodeKind::Boss => assert_eq!(n.encounter, Some(encounters::VANGUARD_BOSS)),
                 NodeKind::Combat => assert!(n.encounter.unwrap() < 4),
                 _ => (),
             }
@@ -118,7 +118,7 @@ fn second_floor_nodes_draw_only_registered_encounters() {
                 }
                 NodeKind::Boss => {
                     let id = node.encounter.unwrap();
-                    assert!(encounters::FLOOR_TWO_BOSSES.contains(&id));
+                    assert_eq!(id, encounters::HERETIC_BOSS);
                     boss.insert(id);
                 }
                 _ => {}
@@ -127,7 +127,7 @@ fn second_floor_nodes_draw_only_registered_encounters() {
     }
     assert_eq!(normal, encounters::FLOOR_TWO_NORMALS.into());
     assert_eq!(elite, encounters::FLOOR_TWO_ELITES.into());
-    assert_eq!(boss, encounters::FLOOR_TWO_BOSSES.into());
+    assert_eq!(boss, HashSet::from([encounters::HERETIC_BOSS]));
 }
 
 #[test]
