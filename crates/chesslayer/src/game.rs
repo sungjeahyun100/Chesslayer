@@ -211,32 +211,6 @@ impl Game {
         }
         Ok(roster)
     }
-    fn revive_for_next_floor(&mut self) -> Result<usize, String> {
-        let mut roster = self.battle.outcome();
-        let mut occupied: HashSet<_> = roster.iter().filter_map(|p| p.position).collect();
-        let mut revived = 0;
-        for piece in roster.iter_mut().filter(|p| p.position.is_none()) {
-            let position = if !occupied.contains(&piece.origin) {
-                piece.origin
-            } else {
-                (0..8)
-                    .rev()
-                    .flat_map(|rank| (0..8).map(move |file| Position::new(file, rank)))
-                    .find(|position| !occupied.contains(position))
-                    .ok_or("아군을 부활시킬 빈 칸이 없습니다.")?
-            };
-            occupied.insert(position);
-            piece.position = Some(position);
-            piece.moved = false;
-            revived += 1;
-        }
-        if revived > 0 {
-            self.battle
-                .replace_roster_at_rest(roster)
-                .map_err(engine_error)?;
-        }
-        Ok(revived)
-    }
     fn start_battle(&mut self) -> Result<(), String> {
         let index = self
             .current_node
