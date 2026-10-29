@@ -138,14 +138,12 @@ pub const ENCOUNTERS: [EncounterDefinition; 23] = [
     EncounterDefinition {
         id: "3F-B-ARTILLERY",
         name: "포병대대",
-        description:
-            "v0.3 임시 보스: 룩 중심 포격 진형 16기. 사격 판정은 후속 구현 대상입니다.",
+        description: "v0.3 임시 보스: 룩 중심 포격 진형 16기. 사격 판정은 후속 구현 대상입니다.",
     },
     EncounterDefinition {
         id: "4F-B-SPECIAL",
         name: "특수부대",
-        description:
-            "v0.3 임시 보스: 기동 기물 중심 16기. 특수 사격은 후속 구현 대상입니다.",
+        description: "v0.3 임시 보스: 기동 기물 중심 16기. 특수 사격은 후속 구현 대상입니다.",
     },
     EncounterDefinition {
         id: "FINAL-DICTATOR",
