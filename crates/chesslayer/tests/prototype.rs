@@ -398,7 +398,7 @@ fn reward_persistence_counterattack_and_relics() {
     assert_eq!(b.board.piece_at(p(0, 0)).unwrap().unwrap().id, 101);
     assert!(b.events.iter().any(|s| s.starts_with("호신용품")));
     let mut a = (42..100)
-        .map(|seed| Game::new("wanderer", seed).unwrap())
+        .map(|seed| Game::new("heretic", seed).unwrap())
         .find(|g| {
             g.map.nodes.iter().any(|n| {
                 n.kind == NodeKind::Elite && encounter(n.encounter.unwrap()).enemies.len() > 1
