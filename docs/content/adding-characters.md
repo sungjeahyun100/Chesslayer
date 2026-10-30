@@ -57,7 +57,6 @@ tactician::DEFINITION,
 | 유물 | 실제 효과 | 구현 위치 |
 | --- | --- | --- |
 | `Relic::Haste` | 양 진영이 턴마다 최대 2행동 | `content/mod.rs::HASTE_ACTIONS`, `game.rs::start_battle()` → `BattleOptions.actions_per_turn` |
-| `Relic::Whirlwind` | 전투 시작 시 적들끼리 시작 위치 교환 | `game.rs::start_battle()`, 공통 시드 RNG |
 | `Relic::SelfDefense` | 역습으로 아군이 제거되면 겹친 적도 제거하되 적 로얄 제외 | `game.rs::start_battle()` → `BattleOptions.self_defense`, `battle.rs::with_options()` |
 
 유물의 이름·설명은 `content/mod.rs`의 `Relic`에 있다. 유물은 보물·엘리트 보상에서도 획득하므로 캐릭터 정의에 실행 코드를 복제하지 않는다. UI의 캐릭터 아이콘은 기존 유물 종류에서 결정된다.

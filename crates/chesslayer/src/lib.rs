@@ -1,9 +1,11 @@
 //! The authoritative Chesslayer game: battle, cards, content and run progression.
+mod ai;
 mod battle;
 pub mod cards;
 pub mod content;
 pub mod game;
 pub mod map;
+pub mod sandbox;
 pub use battle::*;
 pub use chessembly::{
     apply_default_action, ActionError, ActionStep, Board, BoardError, DefaultAction, Effect, Piece,

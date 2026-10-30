@@ -124,8 +124,6 @@ export function ActMap({
         <div className="map-progress">
           <strong>{map.nodes.filter((n) => n.visited).length}</strong>
           <span> / {map.rows}개 지점 완료</span>
-          {state.phase === "map" && map.nodes.some((node) => node.current && node.visited && node.kind === "boss") &&
-            <button className="primary" onClick={() => send({ type: "advance_floor" })}>원정 마치기 →</button>}
           {overlay && onClose && (
             <button className="primary" onClick={onClose}>
               {ended ? "원정 결과로 돌아가기" : "진행 중인 노드로 돌아가기"} →

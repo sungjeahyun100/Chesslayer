@@ -119,7 +119,7 @@ fn elite_reward_can_be_skipped_reopened_and_claimed_once() {
 }
 
 #[test]
-fn boss_upgrade_can_be_claimed_before_finishing_the_run() {
+fn boss_upgrade_is_kept_on_the_next_floor() {
     let mut game = Game::new("guardian", 2026).unwrap();
     let boss = game
         .map
@@ -135,7 +135,7 @@ fn boss_upgrade_can_be_claimed_before_finishing_the_run() {
         .rewards
         .iter()
         .all(|r| matches!(r, RewardView::Card(_))));
-    assert_eq!(game.progress.highest_floor, 2);
+    assert_eq!(game.progress.highest_floor, 1);
     assert!(game
         .progress
         .unlocked_squads
@@ -166,8 +166,8 @@ fn boss_upgrade_can_be_claimed_before_finishing_the_run() {
         })
         .is_err());
     game.dispatch(Command::ContinueReward).unwrap();
-    assert_eq!(game.floor, 1);
-    assert_eq!(game.phase, RunPhase::Victory);
+    assert_eq!(game.floor, 2);
+    assert_eq!(game.phase, RunPhase::Map);
     assert_eq!(
         game.battle
             .outcome()
@@ -185,7 +185,7 @@ fn boss_upgrade_can_be_claimed_before_finishing_the_run() {
 }
 
 #[test]
-fn a_new_run_after_boss_restores_the_troop_without_carrying_old_growth() {
+fn boss_transition_revives_the_troop_and_a_new_run_resets_growth() {
     let mut game = Game::new("guardian", 2026).unwrap();
     game.current_node = Some(
         game.map
@@ -196,12 +196,16 @@ fn a_new_run_after_boss_restores_the_troop_without_carrying_old_growth() {
             .id,
     );
     let mut players = Battle::standard_roster();
+    game.ammo = Some(5);
+    players[0].kind = content::pieces::WAREHOUSE;
     players[0].position = None;
     players[1].position = None;
     players[1].kind = TEMPEST_KNIGHT;
     players[1].upgrades.push("tempest".into());
     players[1].persistent.insert("growth".into(), 3);
-    players[2].position = Some(Position::new(0, 7)); // Blocks the dead rook's home.
+    players[1].persistent.insert("incapacitated".into(), 1);
+    players[2].kind = content::pieces::WAREHOUSE;
+    players[2].position = Some(Position::new(0, 7)); // Occupies the dead warehouse's home during combat.
     players[3].position = Some(Position::new(4, 1)); // Captures the royal on e8.
     game.battle = Battle::new(BattleStart {
         players,
@@ -225,17 +229,29 @@ fn a_new_run_after_boss_restores_the_troop_without_carrying_old_growth() {
         2
     );
     let mut replay = game.clone();
+    let mut skipped = game.clone();
     game.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     replay.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    skipped.dispatch(Command::ContinueReward).unwrap();
     assert_eq!(snapshot(&game), snapshot(&replay));
-    assert_eq!(game.floor, 1);
-    assert_eq!(game.phase, RunPhase::Victory);
-    assert_eq!(game.progress.highest_floor, 2);
+    assert!(skipped
+        .battle
+        .outcome()
+        .iter()
+        .all(|piece| piece.position.is_some()));
+    assert_eq!(game.floor, 2);
+    assert_eq!(game.phase, RunPhase::Map);
+    assert_eq!(game.progress.highest_floor, 1);
     let old_roster = game.battle.outcome();
     assert_eq!(old_roster[1].kind, TEMPEST_KNIGHT);
     assert_eq!(old_roster[1].upgrades, ["tempest"]);
     assert_eq!(old_roster[1].persistent.get("growth"), Some(&3));
-    assert!(old_roster[0].position.is_none());
+    assert_eq!(old_roster[1].persistent.get("incapacitated"), Some(&1));
+    assert_eq!(old_roster[0].position, Some(old_roster[0].origin));
+    assert_eq!(old_roster[1].position, Some(old_roster[1].origin));
+    assert!(old_roster.iter().all(|piece| piece.position.is_some()));
+    assert_eq!(game.snapshot().next_battle_pieces.len(), old_roster.len());
+    assert_eq!(game.ammo, Some(400));
     let next = Game::new_run("guardian", 2027, 2, game.progress.clone()).unwrap();
     let roster = next.battle.outcome();
     assert_eq!(roster, Battle::standard_roster());
@@ -371,9 +387,9 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
     win(&mut g);
     assert_eq!(g.snapshot().rewards.len(), 3);
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    assert_eq!(g.phase, RunPhase::Victory);
-    assert_eq!(g.floor, 1);
-    assert_eq!(g.progress.highest_floor, 2);
+    assert_eq!(g.phase, RunPhase::Map);
+    assert_eq!(g.floor, 2);
+    assert_eq!(g.progress.highest_floor, 1);
     assert_eq!(
         g.deck.iter().map(|c| c.id).collect::<Vec<_>>(),
         (1..=8).collect::<Vec<_>>()
@@ -396,8 +412,9 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
     );
     win(&mut next);
     next.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    assert_eq!(next.phase, RunPhase::Victory);
-    assert_eq!(next.progress.highest_floor, 3);
+    assert_eq!(next.phase, RunPhase::Map);
+    assert_eq!(next.floor, 3);
+    assert_eq!(next.progress.highest_floor, 1);
     assert!(next
         .progress
         .unlocked_squads

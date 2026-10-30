@@ -6,7 +6,11 @@ use crate::{
 use chessembly::{Error as DslError, Program};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
+use std::sync::Arc;
+mod boss;
 mod mechanics;
+pub use boss::BossState;
+pub(crate) use mechanics::shot_preview;
 pub use mechanics::{EffectChoice, PieceStatus};
 pub const PLAYER: PlayerId = 0;
 pub const ENEMY: PlayerId = 1;
@@ -138,11 +142,14 @@ pub struct Battle {
     initiative_turns_left: u8,
     enemy_initiative_turns_left: u8,
     absorbed: HashMap<PieceId, HashSet<PieceType>>,
+    boss: Option<BossState>,
     players: Vec<PlayerPiece>,
-    programs: BTreeMap<PieceType, Program>,
-    initial_double_step: Program,
+    dead_at_start: HashSet<PieceId>,
+    programs: Arc<BTreeMap<PieceType, Program>>,
+    initial_double_step: Arc<Program>,
     moved_ids: HashSet<PieceId>,
     mechanics: mechanics::Mechanics,
+    sandbox: bool,
 }
 #[derive(Clone, Copy)]
 struct LimiterState {
@@ -150,6 +157,53 @@ struct LimiterState {
     moves_left: u8,
 }
 impl Battle {
+    pub(crate) fn force_search_shot(&mut self, hit: bool) {
+        self.mechanics.force_search_shot(hit);
+    }
+    pub(crate) fn force_search_random(&mut self, index: usize) {
+        self.mechanics.force_search_random(index);
+    }
+    pub(crate) fn take_search_random_arity(&mut self) -> Option<usize> {
+        self.mechanics.take_search_random_arity()
+    }
+    pub(crate) fn search_hash(&self) -> u64 {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        self.board.cells().hash(&mut h);
+        self.turn.hash(&mut h);
+        self.actions_left.hash(&mut h);
+        self.normal_actions_used.hash(&mut h);
+        self.limiter_turn.hash(&mut h);
+        self.initiative_turns_left.hash(&mut h);
+        self.enemy_initiative_turns_left.hash(&mut h);
+        self.self_defense_target.hash(&mut h);
+        if let Some(boss) = &self.boss {
+            boss.hp.hash(&mut h);
+            boss.ammo.hash(&mut h);
+            boss.hook.hash(&mut h);
+        }
+        for set in [&self.wards, &self.temporary_upgrades, &self.moved_ids] {
+            let mut ids: Vec<_> = set.iter().collect();
+            ids.sort();
+            ids.hash(&mut h);
+        }
+        let mut limiter: Vec<_> = self.limiter.iter().collect();
+        limiter.sort_by_key(|(id, _)| **id);
+        for (id, state) in limiter {
+            id.hash(&mut h);
+            state.owner.hash(&mut h);
+            state.moves_left.hash(&mut h);
+        }
+        let mut absorbed: Vec<_> = self.absorbed.iter().collect();
+        absorbed.sort_by_key(|(id, _)| **id);
+        for (id, kinds) in absorbed {
+            id.hash(&mut h);
+            let mut kinds: Vec<_> = kinds.iter().collect();
+            kinds.sort();
+            kinds.hash(&mut h);
+        }
+        self.mechanics.search_hash(&mut h);
+        h.finish()
+    }
     pub fn standard_roster() -> Vec<PlayerPiece> {
         let back = [ROOK, KNIGHT, BISHOP, QUEEN, KING, BISHOP, KNIGHT, ROOK];
         (0..16)
@@ -171,6 +225,14 @@ impl Battle {
         start: BattleStart,
         options: BattleOptions,
         rng: &mut Rng,
+    ) -> Result<Self, Error> {
+        Self::build(start, options, rng, false)
+    }
+    fn build(
+        start: BattleStart,
+        options: BattleOptions,
+        rng: &mut Rng,
+        sandbox: bool,
     ) -> Result<Self, Error> {
         if options.actions_per_turn == 0 {
             return Err(Error::InvalidSetup);
@@ -218,6 +280,7 @@ impl Battle {
                     .find(|p| pieces::definition(p.kind).is_some_and(|d| d.key == "warehouse"))
                     .map(|p| p.id)
             })
+            .or(if sandbox { Some(0) } else { None })
             .ok_or(Error::InvalidSetup)?;
         let mut players = start.players;
         for p in &mut players {
@@ -265,7 +328,7 @@ impl Battle {
                 }),
             )?
         }
-        if found_royals.len() != required_royals.len() {
+        if !sandbox && found_royals.len() != required_royals.len() {
             return Err(Error::InvalidSetup);
         }
         let programs = pieces::ALL
@@ -274,6 +337,11 @@ impl Battle {
             .collect::<Result<_, _>>()?;
         let initial_double_step = Program::parse(pieces::movement::INITIAL_DOUBLE_STEP)?;
         let moved_ids = players.iter().filter(|p| p.moved).map(|p| p.id).collect();
+        let dead_at_start = players
+            .iter()
+            .filter(|p| p.position.is_none())
+            .map(|p| p.id)
+            .collect();
         let mut battle = Self {
             events,
             wards: HashSet::new(),
@@ -291,6 +359,16 @@ impl Battle {
                 0
             },
             absorbed: HashMap::new(),
+            boss: start
+                .encounter
+                .enemies
+                .iter()
+                .any(|p| p.id == start.encounter.royal_id && p.kind == pieces::TRIBAL_DICTATOR)
+                .then_some(BossState {
+                    hp: 5,
+                    ammo: 2,
+                    hook: None,
+                }),
             actions_left: options.actions_per_turn,
             normal_actions_used: 0,
             limiter_turn: false,
@@ -303,10 +381,12 @@ impl Battle {
             additional_royal_ids: start.encounter.additional_royal_ids,
             king_id,
             players,
-            programs,
-            initial_double_step,
+            dead_at_start,
+            programs: Arc::new(programs),
+            initial_double_step: Arc::new(initial_double_step),
             moved_ids,
             mechanics: mechanics::Mechanics::new(rng.clone()),
+            sandbox,
         };
         battle.initialize_statuses();
         battle.mechanics.enemy_actions = options.actions_per_turn;
@@ -327,6 +407,151 @@ impl Battle {
             ));
         }
         Ok(battle)
+    }
+    /// Isolated board using the normal movement and mechanics pipeline.
+    pub fn sandbox() -> Result<Self, Error> {
+        Self::build(
+            BattleStart {
+                players: vec![],
+                encounter: Encounter {
+                    enemies: vec![],
+                    royal_id: 0,
+                    additional_royal_ids: vec![],
+                },
+            },
+            BattleOptions::default(),
+            &mut Rng::new(0),
+            true,
+        )
+    }
+    pub fn sandbox_place(
+        &mut self,
+        id: PieceId,
+        kind: PieceType,
+        owner: PlayerId,
+        at: Position,
+    ) -> Result<(), Error> {
+        if !self.sandbox
+            || owner > ENEMY
+            || !valid_kind(kind)
+            || self.board.piece_at(at)?.is_some()
+            || self.board.cells().iter().flatten().any(|p| p.id == id)
+        {
+            return Err(Error::InvalidSetup);
+        }
+        self.board.set_piece(at, Some(Piece { id, kind, owner }))?;
+        if owner == PLAYER {
+            self.players.push(PlayerPiece {
+                id,
+                kind,
+                origin: at,
+                position: Some(at),
+                moved: false,
+                upgrades: vec![],
+                persistent: BTreeMap::new(),
+            });
+            self.sandbox_ally_added();
+        }
+        self.mechanics.statuses.insert(id, PieceStatus::default());
+        Ok(())
+    }
+    pub fn sandbox_remove(&mut self, at: Position) -> Result<(), Error> {
+        if !self.sandbox {
+            return Err(Error::IllegalAction);
+        }
+        let piece = self.board.piece_at(at)?.ok_or(Error::IllegalAction)?;
+        self.board.set_piece(at, None)?;
+        self.players.retain(|p| p.id != piece.id);
+        self.mechanics.statuses.remove(&piece.id);
+        self.moved_ids.remove(&piece.id);
+        self.wards.remove(&piece.id);
+        self.limiter.remove(&piece.id);
+        Ok(())
+    }
+    pub fn sandbox_change_kind(&mut self, at: Position, kind: PieceType) -> Result<(), Error> {
+        if !self.sandbox || !valid_kind(kind) {
+            return Err(Error::IllegalAction);
+        }
+        let mut piece = self.board.piece_at(at)?.ok_or(Error::IllegalAction)?;
+        piece.kind = kind;
+        self.board.set_piece(at, Some(piece))?;
+        if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
+            p.kind = kind;
+        }
+        self.mechanics
+            .statuses
+            .insert(piece.id, PieceStatus::default());
+        Ok(())
+    }
+    pub fn sandbox_actions(&self, from: Position) -> Result<Vec<DefaultAction>, Error> {
+        if !self.sandbox {
+            return Err(Error::IllegalAction);
+        }
+        self.actions_from(from, false)
+    }
+    pub fn sandbox_apply_action(&mut self, action: &DefaultAction) -> Result<(), Error> {
+        if !self.sandbox || self.pending_choice().is_some() {
+            return Err(Error::IllegalAction);
+        }
+        let piece = self
+            .board
+            .piece_at(action.first.from)?
+            .ok_or(Error::IllegalAction)?;
+        if !self.sandbox_actions(action.first.from)?.contains(action) {
+            return Err(Error::IllegalAction);
+        }
+        let mut next = self.clone();
+        next.turn = piece.owner;
+        next.normal_actions_used = 0;
+        next.actions_left = u8::MAX;
+        next.apply_piece_action_unchecked(action)?;
+        next.turn = PLAYER;
+        next.reset_turn_budget();
+        *self = next;
+        Ok(())
+    }
+    pub fn sandbox_progress_effects(&mut self) -> Result<(), Error> {
+        if !self.sandbox || self.pending_choice().is_some() {
+            return Err(Error::IllegalAction);
+        }
+        self.turn = PLAYER;
+        self.end_turn()?;
+        self.end_turn()?;
+        Ok(())
+    }
+    pub fn sandbox_drone_ability(&mut self, from: Position) -> Result<(), Error> {
+        if !self.sandbox || self.pending_choice().is_some() {
+            return Err(Error::IllegalAction);
+        }
+        let piece = self.board.piece_at(from)?.ok_or(Error::IllegalAction)?;
+        let mut next = self.clone();
+        next.turn = piece.owner;
+        next.normal_actions_used = 0;
+        next.actions_left = u8::MAX;
+        next.use_drone_ability(from)?;
+        next.turn = PLAYER;
+        next.reset_turn_budget();
+        *self = next;
+        Ok(())
+    }
+    fn reset_turn_budget(&mut self) {
+        self.normal_actions_used = 0;
+        self.actions_left = self.side_actions(self.turn);
+        let bonus = self
+            .board
+            .cells()
+            .iter()
+            .flatten()
+            .filter(|p| p.owner == self.turn)
+            .fold(0u8, |n, p| n.saturating_add(self.agility(p.id)));
+        self.actions_left = self.actions_left.saturating_add(bonus);
+        let remaining_moves = self
+            .limiter
+            .values()
+            .filter(|s| s.owner == self.turn)
+            .fold(0u8, |total, s| total.saturating_add(s.moves_left));
+        self.limiter_turn = remaining_moves > 0;
+        self.actions_left = self.actions_left.saturating_add(remaining_moves);
     }
     /// Run boundary: keep identities, deaths and permanent growth; discard combat state.
     pub(crate) fn reset_after_battle(&mut self) -> Result<(), Error> {
@@ -372,6 +597,7 @@ impl Battle {
         self.moved_ids = roster.iter().filter(|p| p.moved).map(|p| p.id).collect();
         self.board = next;
         self.players = roster;
+        self.clear_fallout();
         self.initialize_statuses();
         Ok(())
     }
@@ -522,12 +748,53 @@ impl Battle {
         }
         let mut actions = self.piece_actions(piece.kind, from)?;
         actions.extend(self.special_actions(from));
-        if piece.kind == pieces::EMPEROR {
+        if piece.owner == PLAYER
+            && self.turn == PLAYER
+            && self.mechanics.reckless.contains(&piece.id)
+        {
+            let extra: Vec<_> = actions
+                .iter()
+                .filter_map(|a| {
+                    if !a.continuation.is_empty() || a.first.effect != crate::Effect::Move {
+                        return None;
+                    }
+                    let one = a.first.move_to;
+                    let dx = one.file - from.file;
+                    let dy = one.rank - from.rank;
+                    if dx.abs().max(dy.abs()) != 1 {
+                        return None;
+                    }
+                    let to = Position::new(one.file + dx, one.rank + dy);
+                    if !self.board.contains(to)
+                        || self.board.piece_at(to).ok().flatten().is_some()
+                        || self.board.piece_at(one).ok().flatten().is_some()
+                    {
+                        return None;
+                    }
+                    Some(DefaultAction::one(crate::ActionStep::new(
+                        from,
+                        to,
+                        to,
+                        crate::Effect::Move,
+                    )))
+                })
+                .collect();
+            actions.extend(extra);
+        }
+        if piece.kind == pieces::EMPEROR || piece.kind == pieces::TRIBAL_DICTATOR {
             if let Some(absorbed) = self.absorbed.get(&piece.id) {
                 let mut kinds: Vec<_> = absorbed.iter().copied().collect();
                 kinds.sort_unstable();
                 for kind in kinds {
-                    actions.extend(self.piece_actions(kind, from)?);
+                    if piece.kind == pieces::TRIBAL_DICTATOR {
+                        for mut action in self.boss_copied_movement_actions(kind, from)? {
+                            let original = action.first.transition.take().unwrap_or_default();
+                            action.first.transition = Some(format!("boss_copy:{kind}:{original}"));
+                            actions.push(action);
+                        }
+                    } else {
+                        actions.extend(self.piece_actions(kind, from)?);
+                    }
                 }
             }
         }
@@ -539,6 +806,9 @@ impl Battle {
             if let Some(second) = double.get(1) {
                 actions.push(second.clone())
             }
+        }
+        if self.mechanics.suppressed.contains(&piece.id) {
+            actions.retain(|a| a.steps().last().is_some_and(|s| s.move_to == from));
         }
         let definition = pieces::definition(piece.kind).ok_or(Error::InvalidSetup)?;
         let last_rank = if piece.owner == PLAYER { 0 } else { 7 };
@@ -634,7 +904,10 @@ impl Battle {
         }
         self.apply_piece_action_unchecked(action)
     }
-    fn apply_piece_action_unchecked(&mut self, action: &DefaultAction) -> Result<(), Error> {
+    pub(crate) fn apply_piece_action_unchecked(
+        &mut self,
+        action: &DefaultAction,
+    ) -> Result<(), Error> {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
         }
@@ -649,9 +922,20 @@ impl Battle {
         // Shooting spends ammunition and rolls accuracy before a ward can absorb a hit.
         let shooting = action.continuation.is_empty()
             && action.first.effect == crate::Effect::Catch
-            && self
+            && (self
                 .hit_chance(action.first.from, action.first.take)
-                .is_some();
+                .is_some()
+                || action
+                    .first
+                    .transition
+                    .as_deref()
+                    .and_then(|tag| tag.strip_prefix("boss_copy:"))
+                    .and_then(|tag| tag.split_once(':'))
+                    .and_then(|(kind, _)| kind.parse::<PieceType>().ok())
+                    .and_then(|kind| {
+                        self.boss_copied_hit_chance(kind, action.first.from, action.first.take)
+                    })
+                    .is_some());
         let victim = if shooting {
             None
         } else {
@@ -666,6 +950,9 @@ impl Battle {
         } else {
             self.apply_effect(action, ActionSource::PieceMove)?;
         }
+        self.complete_piece_action(piece)
+    }
+    pub(super) fn complete_piece_action(&mut self, piece: Piece) -> Result<(), Error> {
         self.mechanics.statuses.entry(piece.id).or_default().dining = false;
         self.moved_ids.insert(piece.id);
         let limiter_expired = if let Some(state) = self.limiter.get_mut(&piece.id) {
@@ -761,25 +1048,7 @@ impl Battle {
         if self.phase != Phase::Active {
             return Ok(());
         }
-        self.actions_left = self.side_actions(self.turn);
-        let bonus: u8 = self
-            .board
-            .cells()
-            .iter()
-            .flatten()
-            .filter(|p| p.owner == self.turn)
-            .fold(0u8, |n, p| n.saturating_add(self.agility(p.id)));
-        self.actions_left = self.actions_left.saturating_add(bonus);
-        self.normal_actions_used = 0;
-        let remaining_moves = self
-            .limiter
-            .values()
-            .filter(|s| s.owner == self.turn)
-            .fold(0u8, |total, s| total.saturating_add(s.moves_left));
-        self.limiter_turn = remaining_moves > 0;
-        if self.limiter_turn {
-            self.actions_left = self.actions_left.saturating_add(remaining_moves);
-        }
+        self.reset_turn_budget();
         Ok(())
     }
     pub fn limiter_status(&self, id: PieceId) -> Option<(bool, u8)> {
@@ -920,7 +1189,10 @@ impl Battle {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
         }
-        self.apply_effect(action, ActionSource::ResolvedCardEffect)
+        let mut next = self.clone();
+        next.apply_effect(action, ActionSource::ResolvedCardEffect)?;
+        *self = next;
+        Ok(())
     }
     pub fn has_ward(&self, id: PieceId) -> bool {
         self.wards.contains(&id)
@@ -967,9 +1239,14 @@ impl Battle {
                 if let Some(piece) = self.board.piece_at(pos)? {
                     if ids.contains(&piece.id)
                         && (include_royals
-                            || (piece.id != self.king_id && !self.is_enemy_royal(piece.id)))
+                            || (piece.id != self.king_id && !self.is_enemy_royal(piece.id))
+                            || (self.boss.is_some() && piece.id == self.royal_id))
                     {
+                        if !self.boss_hit(piece, None) {
+                            continue;
+                        }
                         self.board.set_piece(pos, None)?;
+                        self.boss_on_death(piece, pos);
                         self.wards.remove(&piece.id);
                         self.limiter.remove(&piece.id);
                         removed += 1;
@@ -978,9 +1255,22 @@ impl Battle {
             }
         }
         self.sync_players();
+        if self.boss.is_some() {
+            self.update_result(ResultReason::RoyalCaptured);
+        }
         Ok(removed)
     }
     fn apply_effect(&mut self, action: &DefaultAction, source: ActionSource) -> Result<(), Error> {
+        if source == ActionSource::PieceMove
+            && action
+                .steps()
+                .last()
+                .is_some_and(|s| s.move_to != action.first.from)
+        {
+            if let Some(p) = self.board.piece_at(action.first.from)? {
+                self.mechanics.turn_moved.insert(p.id);
+            }
+        }
         if source == ActionSource::PieceMove && self.apply_mechanics_action(action)? {
             return Ok(());
         }
@@ -988,22 +1278,62 @@ impl Battle {
         // while rule effects inspect each intermediate position. A single piece step can
         // use chessembly's changed-square rollback directly on the live board.
         let mut staged = (source == ActionSource::ResolvedCardEffect
-            || !action.continuation.is_empty())
+            || !action.continuation.is_empty()
+            || self.boss.is_some())
         .then(|| self.board.clone());
         let next = staged.as_mut().unwrap_or(&mut self.board);
         let mut retaliation = None;
         let mut player_captured = false;
         let mut enemy_captured = false;
         let mut absorbed = vec![];
+        let mut captures = vec![];
         let self_defense_target = self.self_defense_target;
         if source == ActionSource::ResolvedCardEffect {
-            apply_default_action(next, action)?;
-            for id in std::iter::once(self.king_id)
-                .chain(std::iter::once(self.royal_id))
-                .chain(self.additional_royal_ids.iter().copied())
-            {
-                if !next.cells().iter().flatten().any(|p| p.id == id) {
-                    return Err(Error::ProtectedRoyal);
+            for step in action.steps() {
+                let victim = next.piece_at(step.take)?;
+                let attacker = next
+                    .piece_at(step.from)?
+                    .filter(|p| p.owner == PLAYER)
+                    .map(|p| p.id);
+                if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                    && victim.is_some_and(|p| p.kind == pieces::TRIBAL_DICTATOR)
+                    && !boss::hit_boss(
+                        &mut self.boss,
+                        &mut self.events,
+                        next,
+                        victim.unwrap(),
+                        attacker,
+                    )
+                {
+                    continue;
+                }
+                apply_default_action(next, &DefaultAction::one(step.clone()))?;
+                if let Some(victim) = victim {
+                    if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                        && next.cells().iter().flatten().all(|p| p.id != victim.id)
+                    {
+                        boss::death_near_boss(
+                            &mut self.boss,
+                            &mut self.absorbed,
+                            &mut self.events,
+                            self.royal_id,
+                            next,
+                            victim,
+                            step.take,
+                        );
+                    }
+                }
+            }
+            if !self.sandbox {
+                for id in std::iter::once(self.king_id)
+                    .chain(std::iter::once(self.royal_id))
+                    .chain(self.additional_royal_ids.iter().copied())
+                {
+                    if !next.cells().iter().flatten().any(|p| p.id == id)
+                        && !(id == self.royal_id && self.boss.as_ref().is_some_and(|b| b.hp <= 0))
+                    {
+                        return Err(Error::ProtectedRoyal);
+                    }
                 }
             }
         } else {
@@ -1021,7 +1351,34 @@ impl Battle {
                     && captor.is_some_and(|p| p.owner == ENEMY)
                     && victim
                         .is_some_and(|p| p.owner == PLAYER && self_defense_target == Some(p.id));
+                if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                    && victim.is_some_and(|p| p.kind == pieces::TRIBAL_DICTATOR)
+                    && !boss::hit_boss(
+                        &mut self.boss,
+                        &mut self.events,
+                        next,
+                        victim.unwrap(),
+                        captor.map(|p| p.id),
+                    )
+                {
+                    continue;
+                }
                 apply_default_action(next, &DefaultAction::one(step.clone()))?;
+                if let Some(victim) = victim {
+                    if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                        && next.cells().iter().flatten().all(|p| p.id != victim.id)
+                    {
+                        boss::death_near_boss(
+                            &mut self.boss,
+                            &mut self.absorbed,
+                            &mut self.events,
+                            self.royal_id,
+                            next,
+                            victim,
+                            step.take,
+                        );
+                    }
+                }
                 player_captured |=
                     !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                         && captor.is_some_and(|p| p.owner == PLAYER)
@@ -1030,6 +1387,13 @@ impl Battle {
                     !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                         && captor.is_some_and(|p| p.owner == ENEMY)
                         && victim.is_some_and(|p| p.owner == PLAYER);
+                if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift) {
+                    if let (Some(captor), Some(victim)) = (captor, victim) {
+                        if captor.owner < 2 && victim.owner < 2 && captor.owner != victim.owner {
+                            captures.push((captor, victim));
+                        }
+                    }
+                }
                 if retaliates {
                     let captor = captor.unwrap();
                     if let Some(index) = next
@@ -1071,6 +1435,9 @@ impl Battle {
             self.events
                 .push("선공권: 적의 포획이 성공해 보호가 끝났습니다.".into());
         }
+        for (captor, victim) in captures {
+            self.record_kill(captor, victim);
+        }
         self.wards
             .retain(|id| self.board.cells().iter().flatten().any(|p| p.id == *id));
         self.limiter
@@ -1082,7 +1449,7 @@ impl Battle {
                 piece_name(captor.kind)
             ));
         }
-        if source == ActionSource::PieceMove {
+        if source == ActionSource::PieceMove || self.boss.is_some() {
             self.update_result(if retaliation.is_some() {
                 ResultReason::SelfDefense
             } else {
@@ -1109,10 +1476,16 @@ impl Battle {
             if piece.position != before && piece.position.is_some() {
                 piece.moved = true;
                 self.moved_ids.insert(piece.id);
+                if before.is_some() {
+                    self.mechanics.turn_moved.insert(piece.id);
+                }
             }
         }
     }
     fn update_result(&mut self, reason: ResultReason) {
+        if self.sandbox {
+            return;
+        }
         let king_alive = if self.mechanics.player_artillery {
             self.board
                 .cells()

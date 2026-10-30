@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { createPortal } from "react-dom";
-import init, { WebGame, catalog } from "./wasm/chesslayer_web";
+import init, { WebGame, catalog, compendium } from "./wasm/chesslayer_web";
 import type {
   Card,
   Ability,
@@ -27,10 +27,49 @@ import { version } from "../package.json";
 import { SquadSelection } from "./SquadSelection";
 import { PieceStatuses } from "./PieceStatuses";
 import { LocationPanel } from "./LocationPanel";
-import { PROGRESS_KEY, initialProgress, readProgress, mergeProgress, floorLabel, floorNames } from "./progress";
+import { Compendium, type CompendiumSquad } from "./Compendium";
+import { PieceSandbox } from "./PieceSandbox";
+import { PROGRESS_KEY, DEVELOPER_MODE_KEY, DEVELOPER_RUN_KEY, initialProgress, readProgress, mergeProgress, developerProgress, floorLabel, floorNames } from "./progress";
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
 const SAVE_KEY = "chesslayer.run.v1";
+
+const movementNotes: Record<string, [string, string]> = {
+  amazon: ["퀸의 직선·대각선 이동", "나이트 도약"],
+  unicorn: ["나이트 도약과 포획", "임의의 빈칸으로 순간이동 (포획 불가)"],
+  emperor: ["킹의 한 칸 이동·포획", "직접 포획한 기물의 행마를 전투 중 흡수"],
+  hook: ["직교 직선 이동·포획", "빈 경유 칸에서 한 번 직각으로 꺾기"],
+  movement_god: ["직교·대각 경로 이동", "구행·텐쿠의 꺾기 행마"],
+  tempest_pawn: ["앞 한 칸 이동, 앞 대각 한 칸 포획", "좌우 빈칸 이동과 전방 두 칸 포획"],
+  drone: ["나이트 도약", "상하좌우 한 칸 이동·포획과 사격"],
+  tank: ["킹의 한 칸 행마", "직선 두 칸 이동·포획과 사격"],
+  centaur: ["킹의 한 칸 행마", "나이트 도약"],
+  rifleman: ["상하좌우 한 칸 이동·포획", "전방 세 방향 제자리 사격"],
+  mortar: ["상하좌우 한 칸 이동·포획", "장애물을 넘는 2~5칸 포격"],
+  marksman: ["킹의 한 칸 행마", "여덟 방향 일곱 칸 사격"],
+  special_commander: ["킹의 한 칸 행마", "여덟 방향 다섯 칸 사격"],
+  shadow_commander: ["킹·나이트 행마", "여덟 방향 다섯 칸 사격"],
+  tempest_rook: ["대각선 한 칸 이동·포획", "경유 칸부터 가로·세로로 계속 이동"],
+  tempest_bishop: ["직교 한 칸 이동·포획", "경유 칸부터 전진 대각선으로 계속 이동"],
+  tempest_queen: ["템페스트 룩 행마", "템페스트 비숍 행마"],
+  tempest_knight: ["대각선 한 칸 이동·포획", "같은 방향 추가 도약 또는 직교 세 칸 도약"],
+  bouncing_rook: ["직교 이동·포획", "경계·아군 바운싱 폰 앞에서 직각 반사"],
+  bouncing_bishop: ["대각 이동·포획", "경계·아군 바운싱 폰 앞에서 방향 성분 반사"],
+  bouncing_queen: ["바운싱 룩 행마", "바운싱 비숍 행마"],
+  bouncing_pawn: ["폰의 전진·대각 포획", "바운싱 기물과의 반사·포획 상호작용"],
+};
+function movementInfo(piece: Piece): [string, string, string] {
+  const sentences = piece.description.split(/(?<=\.)\s+/).filter((sentence) => sentence && sentence !== "로얄.");
+  const [basic, extra] = movementNotes[piece.key] ?? [sentences[0] || piece.description, sentences.slice(1).filter((sentence) => /행마|이동|포획|도약|사격|전진|뜁니다/.test(sentence)).join(" ") || "추가 행마가 있다면 아래 전체 설명에 포함됩니다."];
+  return [basic, extra, piece.description];
+}
+function cellName(cell: number): string {
+  return `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
+}
+function squareSummary(cells: number[]): string {
+  const squares = [...new Set(cells)].sort((a, b) => a - b);
+  return squares.length ? `${squares.length}칸 · ${squares.slice(0, 8).map(cellName).join(", ")}${squares.length > 8 ? ` 외 ${squares.length - 8}칸` : ""}` : "없음";
+}
 
 function cardSelectionHint(kind: string): string {
   const hints: Record<string, string> = {
@@ -43,6 +82,10 @@ function cardSelectionHint(kind: string): string {
     frontline: "재배치할 아군과 목적지 빈 칸을 차례로 선택하세요.",
     infiltration: "이동할 아군과 목적지 빈 칸을 선택하세요.",
     extraction: "구출할 아군과 목적지 빈 칸을 선택하세요.",
+    emergency_conscription: "사망한 폰을 아래에서 고르고 아군 진영의 빈칸을 선택하세요.",
+    assault_order: "전방 빈칸으로 이동할 아군 1~3기를 순서대로 선택하세요.",
+    rapid_reload: "사수와 사격할 적을 선택하세요.",
+    focus_fire: "사수 두 기와 같은 적 하나를 선택하세요.",
   };
   return hints[kind] ?? "대상을 선택한 뒤 확인을 누르세요. 다시 누르면 선택이 해제됩니다.";
 }
@@ -81,16 +124,21 @@ function BoardPiece({
 }
 function App() {
   const engine = useRef<WebGame | null>(null);
+  const enemyWorker = useRef<Worker | null>(null);
   const [ready, setReady] = useState(false);
   const [choices, setChoices] = useState<Character[]>([]);
-  const [screen, setScreen] = useState<"home" | "choose" | "game">("home");
+  const [screen, setScreen] = useState<"home" | "choose" | "game" | "compendium" | "sandbox">("home");
+  const [compendiumEntries, setCompendiumEntries] = useState<CompendiumSquad[]>([]);
   const [character, setCharacter] = useState("guardian");
   const [startFloor, setStartFloor] = useState(1);
   const [progress, setProgress] = useState<Progress>(initialProgress);
+  const [developerMode, setDeveloperMode] = useState(false);
+  const developerRun = useRef(false);
   const [state, setState] = useState<Snapshot | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [enemyInspection, setEnemyInspection] = useState<EnemyInspection | null>(null);
   const [activeAbility, setActiveAbility] = useState<Ability | null>(null);
+  const [hoveredAbilityTarget, setHoveredAbilityTarget] = useState<number | null>(null);
   const [restChoice, setRestChoice] = useState<RestChoice | null>(null);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const [upgradeHistory, setUpgradeHistory] = useState<Extract<Command, { type: "rest_upgrade" }>[]>([]);
@@ -120,11 +168,14 @@ function App() {
     init()
       .then(() => {
         if (active) {
-          setChoices(JSON.parse(catalog()));
+          const availableChoices: Character[] = JSON.parse(catalog());
+          setChoices(availableChoices);
+          setCompendiumEntries(JSON.parse(compendium()));
           setReady(true);
           try {
             setHasSave(!!localStorage.getItem(SAVE_KEY));
             setProgress(readProgress());
+            setDeveloperMode(localStorage.getItem(DEVELOPER_MODE_KEY) === "true");
           } catch {
             setSaveNotice(
               "브라우저 저장소를 사용할 수 없어 이번 원정은 저장되지 않습니다.",
@@ -163,7 +214,8 @@ function App() {
     try {
       const before: Snapshot = JSON.parse(engine.current.snapshot());
       const next: Snapshot = JSON.parse(engine.current.dispatch(JSON.stringify(command)));
-      if ((command.type === "choose_reward" || command.type === "continue_reward" || command.type === "advance_floor") && before.floor === 1 && next.floor === 2 && next.phase === "map" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      if ((command.type === "choose_reward" || command.type === "continue_reward" || command.type === "advance_floor") &&
+        (before.floor !== next.floor || before.final_battle !== next.final_battle) && next.phase === "map" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         setFloorTransition({ next, stage: "out" });
       } else {
         setState(next);
@@ -210,8 +262,30 @@ function App() {
   useEffect(() => {
     if (screen !== "game" || state?.phase !== "combat" || state.turn !== 1 || state.effect_choice)
       return;
-    const timer = setTimeout(() => send({ type: "enemy_step" }), 650);
-    return () => clearTimeout(timer);
+    const timer = setTimeout(() => {
+      const saved = engine.current?.save();
+      if (!saved) return;
+      const worker = new Worker(new URL("./enemyWorker.ts", import.meta.url), { type: "module" });
+      enemyWorker.current = worker;
+      worker.onmessage = (event: MessageEvent<{ choice?: [number, number] | null; error?: string }>) => {
+        if (enemyWorker.current !== worker || engine.current?.save() !== saved) return;
+        enemyWorker.current = null;
+        worker.terminate();
+        if (event.data.error) { setError(`적 AI 오류: ${event.data.error}`); return; }
+        const [from, index] = event.data.choice ?? [null, null];
+        send({ type: "enemy_step_selected", from, index });
+      };
+      worker.onerror = (event) => {
+        if (enemyWorker.current === worker) { enemyWorker.current = null; setError(`적 AI 오류: ${event.message}`); }
+        worker.terminate();
+      };
+      worker.postMessage(saved);
+    }, 650);
+    return () => {
+      clearTimeout(timer);
+      enemyWorker.current?.terminate();
+      enemyWorker.current = null;
+    };
   }, [screen, state, send]);
   useEffect(() => {
     logRef.current?.scrollTo({
@@ -246,7 +320,8 @@ function App() {
   function persist(game: WebGame) {
     const saved = game.save();
     const snapshot: Snapshot = JSON.parse(game.snapshot());
-    setProgress((previous) => mergeProgress(previous, snapshot.progress ?? initialProgress));
+    if (!developerRun.current)
+      setProgress((previous) => mergeProgress(previous, snapshot.progress ?? initialProgress));
     // Read the existing command history for presentation only. Promotions are
     // not rest upgrades and must not illuminate an unrelated upgrade edge.
     const commands: Command[] = JSON.parse(saved).commands;
@@ -254,9 +329,12 @@ function App() {
     setRewardUpgradeHistory(commands.filter((c): c is Extract<Command, { type: "rest_upgrade" | "claim_upgrade" }> => c.type === "rest_upgrade" || c.type === "claim_upgrade").map(({ id, target }) => ({ id, target })));
     try {
       localStorage.setItem(SAVE_KEY, saved);
-      const nextProgress = mergeProgress(readProgress(), snapshot.progress ?? initialProgress);
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify(nextProgress));
-      setProgress(nextProgress);
+      localStorage.setItem(DEVELOPER_RUN_KEY, String(developerRun.current));
+      if (!developerRun.current) {
+        const nextProgress = mergeProgress(readProgress(), snapshot.progress ?? initialProgress);
+        localStorage.setItem(PROGRESS_KEY, JSON.stringify(nextProgress));
+        setProgress(nextProgress);
+      }
       setHasSave(true);
       setSaveNotice("");
     } catch {
@@ -265,25 +343,25 @@ function App() {
       );
     }
   }
-  function unlockAll() {
-    const nextProgress = mergeProgress(progress, {
-      highest_floor: 4,
-      unlocked_squads: choices.map((choice) => choice.id),
-      final_unlocked: true,
-      final_defeated: false,
-    });
-    setProgress(nextProgress);
+  function toggleDeveloperMode() {
+    const nextMode = !developerMode;
+    setDeveloperMode(nextMode);
+    if (!nextMode) {
+      if (!progress.unlocked_squads.includes(character)) setCharacter("guardian");
+      setStartFloor(1);
+    }
     try {
-      localStorage.setItem(PROGRESS_KEY, JSON.stringify(nextProgress));
+      localStorage.setItem(DEVELOPER_MODE_KEY, String(nextMode));
       setSaveNotice("");
     } catch {
-      setSaveNotice("모든 부대와 층을 열었습니다. 브라우저 저장소를 사용할 수 없어 새로고침 후에는 다시 눌러 주세요.");
+      setSaveNotice("개발자 모드 상태를 저장하지 못했습니다. 새로고침 후에는 다시 설정해 주세요.");
     }
   }
   function resume() {
     try {
       const saved = localStorage.getItem(SAVE_KEY);
       if (!saved) return;
+      developerRun.current = localStorage.getItem(DEVELOPER_RUN_KEY) === "true";
       const next = WebGame.restore(saved);
       engine.current?.free();
       engine.current = next;
@@ -309,10 +387,12 @@ function App() {
   }
   function start() {
     try {
+      const effectiveProgress = developerMode ? developerProgress(progress, choices.map((choice) => choice.id)) : progress;
       // Entropy only comes from the browser; the seeded Rust engine generates the entire Act.
       const seed = crypto.getRandomValues(new Uint32Array(1))[0];
       const next = (WebGame as typeof WebGame & { start_run(character: string, seed: number, floor: number, progress: string): WebGame })
-        .start_run(character, seed, startFloor, JSON.stringify(progress));
+        .start_run(character, seed, startFloor, JSON.stringify(effectiveProgress));
+      developerRun.current = developerMode;
       engine.current?.free();
       engine.current = next;
       const snapshot: Snapshot = JSON.parse(next.snapshot());
@@ -460,10 +540,19 @@ function App() {
   const previewKey = restPath?.to_key;
   const inspectedEnemy = state?.phase === "combat" ? state.pieces.find((p) => p.id === enemyInspection?.piece_id && p.cell === enemyInspection?.cell) : undefined;
   const selectedPiece = inspectedEnemy || state?.pieces.find((p) => p.cell === selected);
+  const bossPiece = state?.boss ? state.pieces.find((p) => p.key === "tribal_dictator") : undefined;
+  const bossRisk = new Set(state?.boss?.plan?.area ?? []);
+  const bossTargets = new Set(state?.boss?.plan?.targets.map((target) => target.cell) ?? []);
   const initiativeRemaining = selectedPiece?.owner === 1 ? state?.enemy_initiative_turns_left ?? 0 : state?.initiative_turns_left ?? 0;
   const enemyCaptures = new Set(enemyInspection?.moves.flatMap((m) => m.captures) ?? []);
   const enemyMoves = new Set(enemyInspection?.moves.map((m) => m.to) ?? []);
   const enemyRoutes = [...new Map((enemyInspection?.moves ?? []).filter((m) => m.route).map((m) => [m.route!.join(","), m.route!])).values()];
+  const latestBattleStart = state?.log.map((line, index) => line.includes("전투 시작") ? index : -1).filter((index) => index >= 0).pop() ?? -1;
+  const recentEnemyAction = state?.phase === "combat" ? state.log.slice(latestBattleStart + 1).reverse().find((line) => line.startsWith("흑 ")) : undefined;
+  const recentBossEvent = state?.boss ? state.log.slice(latestBattleStart + 1).reverse().find((line) => /부족의 독재자 HP|찢고 죽여라|제왕학|갈고리 반격|샷건/.test(line)) : undefined;
+  const enemyMoveCells = (enemyInspection?.moves ?? []).filter((move) => move.captures.length === 0).map((move) => move.to);
+  const enemyCaptureCells = (enemyInspection?.moves ?? []).flatMap((move) => move.captures);
+  const selectedMovement = selectedPiece ? movementInfo(selectedPiece) : null;
   const selectedAbilities = state?.abilities?.filter((ability) => ability.piece_id === selectedPiece?.id) ?? [];
   const focusedUpgrade = state?.pieces.find((p) => p.id === upgradeFocus);
   const stagedCount = targetCard?.definition.selection_mode === "upgrade" ? cardUpgrades.length : cardTargets.length;
@@ -517,18 +606,18 @@ function App() {
           <PieceImage pieceKey="knight" owner={1} /> CHESSLAYER
         </a>
         <div className="top-right">
-          <span className="edition">v{version} / {screen === "game" && state ? floorLabel(state.floor, state.final_battle) : "EXPEDITION"}</span>
-          <button
+          <span className="edition">v{version} / {screen === "sandbox" ? "SANDBOX" : screen === "game" && state ? floorLabel(state.floor, state.final_battle) : "EXPEDITION"}</span>
+          {screen !== "sandbox" && <button
             className="text-button"
             onClick={() => setHelp(!help)}
             aria-expanded={help}
           >
             플레이 안내 {help ? "−" : "+"}
-          </button>
+          </button>}
         </div>
       </header>
       {screen === "game" && state && !floorTransition && createPortal(<button className="primary expedition-status-trigger" onClick={() => setStatusOpen(true)} aria-haspopup="dialog" aria-expanded={statusOpen}>원정 현황</button>, document.body)}
-      {help && (
+      {help && screen !== "sandbox" && (
         <section className="guide">
           <strong>체크메이트 대신, 로얄을 포획하세요.</strong>
           <p>
@@ -586,6 +675,8 @@ function App() {
                 저장된 원정 이어하기 →
               </button>
             )}
+            <button className="resume-button" disabled={!ready} onClick={() => setScreen("compendium")}>도감 보기 →</button>
+            <button className="resume-button" disabled={!ready} onClick={() => setScreen("sandbox")}>기물 테스트장 →</button>
             <div className="home-facts">
               <span>갈라지는 경로</span>
               <span>선택하는 보상</span>
@@ -615,7 +706,10 @@ function App() {
         </main>
       )}
       {screen === "choose" && <SquadSelection choices={choices} character={character} onCharacter={setCharacter}
-        floor={startFloor} onFloor={setStartFloor} progress={progress} onBack={() => setScreen("home")} onStart={start} onUnlockAll={unlockAll} ready={ready} />}
+        floor={startFloor} onFloor={setStartFloor} progress={developerMode ? developerProgress(progress, choices.map((choice) => choice.id)) : progress} developerMode={developerMode}
+        onBack={() => setScreen("home")} onStart={start} onToggleDeveloperMode={toggleDeveloperMode} ready={ready} />}
+      {screen === "compendium" && <Compendium choices={choices} entries={compendiumEntries} onBack={() => setScreen("home")} />}
+      {screen === "sandbox" && <PieceSandbox choices={choices} entries={compendiumEntries} onBack={() => setScreen("home")} />}
       {screen === "game" && state && showMap && (
         <ActMap state={state} send={send} coveredByReward={rewardRevisit} />
       )}
@@ -673,6 +767,9 @@ function App() {
                       const enemyCapture = !!inspectedEnemy && enemyCaptures.has(i);
                       const enemyMove = !!inspectedEnemy && !piece && enemyMoves.has(i);
                       const abilityTarget = activeAbility?.targets.find((target) => target.cell === i);
+                      const preview = activeAbility?.targets.find((target) => target.cell === hoveredAbilityTarget) ?? (activeAbility?.targets.length === 1 ? activeAbility.targets[0] : undefined);
+                      const fallout = state.fallout.find((effect) => effect.cell === i);
+                      const pathIndex = preview?.paths.findIndex((path) => path.includes(i)) ?? -1;
                       const targetId = piece?.id ?? 10000 + i;
                       const effectTarget = state.effect_choice?.targets.includes(targetId);
                       const target = targetCard?.targets.includes(targetId) || !!abilityTarget || effectTarget;
@@ -685,14 +782,16 @@ function App() {
                           data-legal={legal || undefined}
                           data-enemy-move={enemyMove || undefined}
                           data-enemy-capture={enemyCapture || undefined}
-                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""}`}
-                          title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : piece?.statuses?.join(" · ") || (piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined)}
+                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
+                          title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : fallout ? `방사성 낙진 · 남은 ${fallout.remaining}라운드 · 턴 종료 시 제거` : piece?.statuses?.join(" · ") || (piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined)}
+                          onMouseEnter={() => { if (abilityTarget) setHoveredAbilityTarget(i); }}
+                          onMouseLeave={() => { if (hoveredAbilityTarget === i) setHoveredAbilityTarget(null); }}
                           onClick={() => clickSquare(i)}
                           disabled={
                             !restView &&
                             (state.phase !== "combat" || !!promotion || (!!state.effect_choice && !effectTarget) || (!state.effect_choice && !turn && piece?.owner !== 1 && !(!piece && inspectedEnemy)))
                           }
-                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 0회가 되면 사망하고 턴 종료` : ""}` : " 빈 칸"}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
+                          aria-label={`${square}${piece ? ` ${piece.owner === 0 ? "백" : piece.owner === 1 ? "흑" : "중립"} ${piece.name}${piece.royal ? " 로얄" : ""}${piece.ward ? " 가호" : ""}${piece.self_defense ? " 호신용품 보호 대상" : ""}${piece.limiter ? ` 리미터 해제 남은 이동 ${piece.limiter.moves_left}회 0회가 되면 사망하고 턴 종료` : ""}` : " 빈 칸"}${fallout ? ` 방사성 낙진 ${fallout.remaining}라운드` : ""}${bossRisk.has(i) ? " 보스 예고 위험 범위" : ""}${state.boss?.hook_target === i ? " 갈고리 반격 대상" : ""}${legal ? " 이동 가능" : ""}${enemyMove ? " 적 이동 가능" : ""}${enemyCapture ? " 적 포획 가능" : ""}${staged ? " 카드 선택됨" : ""}`}
                           aria-pressed={
                             (restView
                               ? restChoice?.cell
@@ -706,13 +805,20 @@ function App() {
                           )}
                           {enemyMove && <span className="enemy-move-dot" />}
                           {enemyCapture && <span className="enemy-capture-ring" />}
+                          {bossTargets.has(i) && <span className="boss-target-mark" title="예고된 행동의 현재 대상">!</span>}
+                          {state.boss?.hook_target === i && <span className="boss-hook-mark" title="갈고리 반격 대상">⚓</span>}
                           {abilityTarget && <span className="aim-target">{abilityTarget.chance === null ? "✦" : `${abilityTarget.chance}%`}</span>}
+                          {fallout && <span className="fallout-badge" title={`방사성 낙진 · 남은 ${fallout.remaining}라운드`}>{fallout.remaining}</span>}
                           {staged && <span className="selection-number">{cardTargets.indexOf(targetId) + 1 || "✓"}</span>}
                         </button>
                       );
                     })}
                     {inspectedEnemy && enemyRoutes.length > 0 && <svg className="enemy-routes" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
                       {enemyRoutes.map((route) => <polyline key={route.join(",")} points={route.map((cell) => `${cell % 8 + 0.5},${Math.floor(cell / 8) + 0.5}`).join(" ")} />)}
+                    </svg>}
+                    {bossPiece && state.boss?.hook_target !== null && state.boss?.hook_target !== undefined && <svg className="boss-hook-line" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
+                      <line x1={bossPiece.cell % 8 + .5} y1={Math.floor(bossPiece.cell / 8) + .5} x2={state.boss.hook_target % 8 + .5} y2={Math.floor(state.boss.hook_target / 8) + .5} />
+                      <circle cx={state.boss.hook_target % 8 + .5} cy={Math.floor(state.boss.hook_target / 8) + .5} r=".17" />
                     </svg>}
                     <div className="piece-layer">
                       {boardPieces.map((p) => (
@@ -765,9 +871,18 @@ function App() {
                   </div>
                 </div>
                 {state.phase === "combat" && <div className="board-caption">
-                  <span>★ 적 로얄: {state.royal_name}{state.enemy_initiative_turns_left > 0 && ` · 선공권 ${state.enemy_initiative_turns_left}턴`}</span>
+                  <span>★ 남은 적 로얄 {state.royal_names.length}기: {state.royal_names.join(", ") || "포획됨"}{state.enemy_initiative_turns_left > 0 && ` · 선공권 ${state.enemy_initiative_turns_left}턴`}</span>
                 </div>}
-                {state.phase === "combat" && (state.effect_choice || targetCard || activeAbility || inspectedEnemy || !turn) && (
+                {state.phase === "combat" && state.boss && <section className="boss-intent-panel" aria-label="부족의 독재자 상태와 행동 예고" aria-live="polite">
+                  <strong key={state.boss.hp} className="boss-hp-value">부족의 독재자 · HP {state.boss.hp} · 샷건 {state.boss.ammo}/{state.boss.max_ammo}</strong>
+                  <span>독재자 행동 예고: {state.boss.plan?.name ?? "행동 없음"}</span>
+                  {state.boss.plan?.targets.length ? <span>독재자 현재 대상: {state.boss.plan.targets.map((target) => `${target.name} ${"abcdefgh"[target.cell % 8]}${8 - Math.floor(target.cell / 8)} (${target.chance}%)`).join(" · ")}</span> : null}
+                  <span>갈고리 반격: {state.boss.hook_name ? `${state.boss.hook_name} 지정 · 다음 적 턴에 끌어옴` : "피해를 준 공격자를 다음 턴에 끌어옴"}</span>
+                  <small>제왕학 · 주변 8칸 사망 시 행마 습득 / 찢고 죽여라 · 주변 사망마다 HP +1</small>
+                  {state.boss.learned.length > 0 && <small>습득한 행마: {state.boss.learned.join(", ")}</small>}
+                  {recentBossEvent && <small key={state.log.length} className="boss-event-flash">최근 효과: {recentBossEvent}</small>}
+                </section>}
+                {state.phase === "combat" && (state.effect_choice || targetCard || activeAbility || inspectedEnemy || !turn || recentEnemyAction) && (
                   <div
                     className={`action-hint ${targetCard ? "target-hint" : ""}`}
                     aria-live="polite"
@@ -778,6 +893,7 @@ function App() {
                         {targetCard.definition.kind === "limiter_release" && <span>세 번째 이동 직후 대상 사망 · 턴 종료</span>}
                         <span>선택 {stagedCount}개 · 비용 {stagedCost} / {state.ammo !== null ? `탄약 ${state.ammo}` : `마나 ${state.mana}`}</span>
                         {targetCard.definition.selection_mode === "multiple" && <span className="card-target-instruction">{cardSelectionHint(targetCard.definition.kind)}</span>}
+                        {targetCard.definition.kind === "emergency_conscription" && <span className="staged-upgrades">{state.rest_options.filter((piece) => piece.dead && targetCard.targets.includes(piece.id)).map((piece) => <button key={piece.id} onClick={() => setCardTargets((ids) => ids.includes(piece.id) ? ids.filter((id) => id !== piece.id) : [...ids.filter((id) => !state.rest_options.some((p) => p.dead && p.id === id)), piece.id])}>{cardTargets.includes(piece.id) ? "✓ " : ""}{piece.name} #{piece.id}</button>)}</span>}
                         {targetCard.definition.selection_mode === "upgrade" && cardUpgrades.length > 0 && <span className="staged-upgrades">{cardUpgrades.map((choice) => <button key={choice.id} onClick={() => setCardUpgrades((old) => old.filter((u) => u.id !== choice.id))}>{state.pieces.find((p) => p.id === choice.id)?.name} ×</button>)}</span>}
                         {stagedCount > 0 && (["multiple", "upgrade"].includes(targetCard.definition.selection_mode) || ["limiter_release", "sacred_domain"].includes(targetCard.definition.kind)) ? <button className="primary" onClick={confirmCard} disabled={stagedCost > state.mana}>확인</button> : null}
                         <button
@@ -788,9 +904,9 @@ function App() {
                         </button>
                       </>
                     ) : activeAbility ? <><strong>{activeAbility.name}</strong><span>표시된 대상 칸을 선택하세요.</span><button className="text-button" onClick={() => setActiveAbility(null)}>취소 Esc</button></> : inspectedEnemy ? (
-                      <span>적 행마 조회</span>
+                      <span>적 행마 조회 · 이동·포획 가능 칸은 보드와 기물 정보에서 확인하세요.</span>
                     ) : (
-                      "상대가 다음 수를 고르고 있습니다…"
+                      recentEnemyAction ? <span>최근 적 행동: {recentEnemyAction}</span> : "상대가 다음 수를 고르고 있습니다…"
                     )}
                   </div>
                 )}
@@ -871,7 +987,18 @@ function App() {
                             {selectedPiece.name} · {selectedPiece.square}
                           </strong>
                           {selectedPiece.royal && <span className="royal-info">★ 로얄 · {inspectedEnemy ? "이 기물은 승리 목표입니다." : "이 기물을 잃으면 원정이 끝납니다."}</span>}
-                          <small className="piece-info-heading">행마법 · 특수 능력</small>
+                          {selectedPiece.key === "tribal_dictator" && state.boss && <small className="effect-note">HP {state.boss.hp} · 탄약 {state.boss.ammo}/{state.boss.max_ammo} · 습득: {state.boss.learned.join(", ") || "없음"}</small>}
+                          {selectedPiece.key === "tribal_dictator" && state.boss && <small className="effect-note">습득한 행마와 사용형 능력이 적용됩니다. 전투 시작 효과와 상시 오라는 적용되지 않습니다.</small>}
+                          {selectedPiece.key === "tribal_dictator" && state.boss?.learned_abilities.map((ability) => <small className="effect-note" key={ability.name}><b>제왕학 · {ability.name}</b> — {ability.description}</small>)}
+                          {inspectedEnemy && selectedMovement && <>
+                            <small className="piece-info-heading">기본 행마</small>
+                            <p>{selectedMovement[0]}</p>
+                            <small className="piece-info-heading">추가 행마</small>
+                            <p>{selectedMovement[1]}</p>
+                            <small className="piece-info-heading">이동 가능 · {squareSummary(enemyMoveCells)}</small>
+                            <small className="piece-info-heading">포획 가능 · {squareSummary(enemyCaptureCells)}</small>
+                          </>}
+                          <small className="piece-info-heading">{inspectedEnemy ? "전체 행마 · 특수 능력" : "행마법 · 특수 능력"}</small>
                           <p>{selectedPiece.description}</p>
                           {turn && !inspectedEnemy && selectedAbilities.map((ability, index) => <button key={index} className={`ability-button ${activeAbility === ability ? "selected" : ""}`}
                             title={ability.description} onClick={() => { setTargetCard(null); setActiveAbility(activeAbility === ability ? null : ability); }}

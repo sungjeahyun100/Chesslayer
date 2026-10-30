@@ -1,6 +1,7 @@
 export type Phase =
   "map" | "combat" | "reward" | "treasure" | "rest" | "event" | "shop" | "victory" | "defeat";
 export interface Progress {
+  // Kept to read earlier browser saves; ordinary floor progression ignores both.
   highest_floor: number;
   unlocked_squads: string[];
   final_unlocked: boolean;
@@ -36,12 +37,22 @@ export interface Ability {
   kind: string;
   name: string;
   description: string;
-  targets: { cell: number; chance: number | null }[];
+  targets: { cell: number; chance: number | null; blast: number[]; paths: number[][] }[];
 }
 export interface EnemyInspection {
   piece_id: number;
   cell: number;
   moves: { to: number; captures: number[]; route: number[] | null }[];
+}
+export interface BossState {
+  hp: number;
+  ammo: number;
+  max_ammo: number;
+  hook_target: number | null;
+  hook_name: string | null;
+  learned: string[];
+  learned_abilities: { name: string; description: string }[];
+  plan: { name: string; from: number; to: number; area: number[]; targets: { cell: number; chance: number; name: string }[] } | null;
 }
 export interface CardDefinition {
   kind: string;
@@ -73,6 +84,7 @@ export type Reward =
   | { type: "card"; definition: CardDefinition }
   | { type: "relic"; definition: Relic };
 export interface Snapshot {
+  boss: BossState | null;
   phase: Phase;
   map: {
     rows: number;
@@ -109,6 +121,7 @@ export interface Snapshot {
   rest_options: RestOption[];
   upgrade_paths: UpgradePath[];
   royal_name: string;
+  royal_names: string[];
   seed: number;
   floor: number;
   squad_id: string;
@@ -122,6 +135,7 @@ export interface Snapshot {
   ammo: number | null;
   ammo_capacity: number | null;
   abilities: Ability[];
+  fallout: { cell: number; remaining: number }[];
   effect_choice: { name: string; targets: number[]; can_finish: boolean } | null;
 }
 export type Command =
@@ -130,6 +144,7 @@ export type Command =
   | { type: "play_card"; id: number; target?: number }
   | { type: "play_card_selection"; id: number; targets?: number[]; upgrades?: { id: number; target: number }[] }
   | { type: "end_turn" | "enemy_step" | "claim_treasure" | "rest_skip" }
+  | { type: "enemy_step_selected"; from: number | null; index: number | null }
   | { type: "choose_reward"; index: number }
   | { type: "claim_reward"; index: number }
   | { type: "continue_reward" | "advance_floor" }

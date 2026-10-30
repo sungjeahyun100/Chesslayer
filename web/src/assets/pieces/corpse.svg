@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="시체">
+  <path d="M8 51h48l3 6H5z" fill="#263b39" stroke="#d9c8a7" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M12 42c4-5 10-8 20-8s16 3 20 8l3 9H9z" fill="#59736c" stroke="#e9dec6" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M17 41c8 4 22 4 30 0M15 47c10 3 24 3 34 0" fill="none" stroke="#b6c2ad" stroke-width="2" stroke-linecap="round"/>
+  <path d="M24 36v-5c-3-2-5-6-5-10 0-7 6-12 13-12s13 5 13 12c0 4-2 8-5 10v5z" fill="#e7d9bb" stroke="#334841" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M22 20c0-6 4-10 10-10s10 4 10 10" fill="none" stroke="#f8f0d8" stroke-width="2" stroke-linecap="round"/>
+  <path d="M25 23l5 2-2 4-5-1zm14 0-5 2 2 4 5-1z" fill="#334841"/>
+  <path d="M32 28l-2 4h4zm-5 7h10M29 34v3m3-3v3m3-3v3" fill="none" stroke="#334841" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M11 37l6-7 3 2-5 8m38-3-6-7-3 2 5 8" fill="#d9c8a7" stroke="#334841" stroke-width="2" stroke-linejoin="round"/>
+</svg>

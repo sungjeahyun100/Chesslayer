@@ -9,6 +9,26 @@ fn cell(square: &str) -> usize {
     let p = at(square);
     (p.rank * 8 + p.file) as usize
 }
+
+#[test]
+fn haste_is_only_available_to_vanguard() {
+    assert!(!RELIC_REWARD_POOL.contains(&Relic::Haste));
+    for character in content::characters::ALL {
+        let pool = content::relics::reward_pool(character.id);
+        assert_eq!(pool.contains(&Relic::Haste), character.id == "vanguard");
+        let game = Game::new(character.id, 2026).unwrap();
+        assert_eq!(
+            game.relics.contains(&Relic::Haste),
+            character.id == "vanguard"
+        );
+        assert!(game
+            .map
+            .nodes
+            .iter()
+            .filter_map(|node| node.relic)
+            .all(|relic| pool.contains(&relic)));
+    }
+}
 fn move_to(b: &mut Battle, from: &str, to: &str) {
     let action = b
         .legal_actions(at(from))

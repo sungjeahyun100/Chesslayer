@@ -29,11 +29,30 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
             1
         );
         assert_eq!(map.nodes[boss].row, 14);
-        for row in [6, 13] {
+        for row in [4, 10] {
             let rests: Vec<_> = map.nodes.iter().filter(|n| n.row == row).collect();
             assert!(!rests.is_empty());
             assert!(rests.iter().all(|n| n.kind == NodeKind::Rest));
         }
+        let optional = map.nodes.iter().filter(|n| n.row == 12).collect::<Vec<_>>();
+        assert_eq!(
+            optional.iter().filter(|n| n.kind == NodeKind::Rest).count(),
+            1
+        );
+        assert_eq!(
+            optional
+                .iter()
+                .filter(|n| n.kind == NodeKind::Treasure)
+                .count(),
+            1
+        );
+        assert_eq!(
+            map.nodes
+                .iter()
+                .filter(|n| n.kind == NodeKind::Rest)
+                .count(),
+            5
+        );
         let mut incoming = vec![0; map.nodes.len()];
         for n in &map.nodes {
             assert_eq!(n.id, map.nodes[n.id].id);
@@ -103,7 +122,7 @@ fn later_floor_nodes_draw_only_registered_encounters() {
             assert!(map
                 .nodes
                 .iter()
-                .filter(|n| n.row == 6 || n.row == 13)
+                .filter(|n| n.row == 4 || n.row == 10)
                 .all(|n| n.kind == NodeKind::Rest));
             assert!(map
                 .nodes

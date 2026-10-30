@@ -12,10 +12,14 @@ fn catalog_entries_are_unique_and_connected() {
         assert!(!definition.key.is_empty());
         assert!(!definition.description.is_empty());
         for side in ["white", "black"] {
-            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
-                "../../web/src/assets/pieces/{}-{side}.svg",
-                definition.key
-            ));
+            let file = if definition.kind == content::pieces::CORPSE {
+                "corpse.svg".to_string()
+            } else {
+                format!("{}-{side}.svg", definition.key)
+            };
+            let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../web/src/assets/pieces")
+                .join(file);
             assert!(path.is_file(), "missing image: {}", path.display());
         }
         for upgrade in definition.upgrades {
@@ -106,4 +110,50 @@ fn each_piece_keeps_its_own_movement_source() {
             chessembly::Program::parse(&source).unwrap();
         }
     }
+}
+
+#[test]
+fn compendium_reads_registered_squad_content() {
+    let entries = content::compendium::catalog();
+    assert_eq!(entries.len(), content::characters::ALL.len());
+    for (entry, character) in entries.iter().zip(content::characters::ALL) {
+        assert_eq!(entry.id, character.id);
+        assert!(entry
+            .relics
+            .iter()
+            .any(|relic| relic.id == character.relic && relic.starting));
+        assert!(entry.pieces.iter().any(|piece| piece.starting));
+        for kind in content::cards::reward_pool(character.id) {
+            assert!(entry.cards.iter().any(|card| card.definition.kind == *kind));
+        }
+        for kind in content::relics::reward_pool(character.id) {
+            assert!(entry.relics.iter().any(|relic| relic.id == *kind));
+        }
+    }
+}
+
+#[test]
+fn compendium_shows_shooting_separately_from_movement() {
+    let entries = content::compendium::catalog();
+    let pieces: Vec<_> = entries.iter().flat_map(|entry| &entry.pieces).collect();
+    let rifleman = pieces.iter().find(|piece| piece.key == "rifleman").unwrap();
+    assert!(rifleman
+        .shots
+        .iter()
+        .any(|shot| shot.cell == 27 && shot.chance == 95));
+    assert!(rifleman
+        .shots
+        .iter()
+        .any(|shot| shot.cell == 19 && shot.chance == 90));
+    assert!(!rifleman.shots.iter().any(|shot| shot.cell == 43));
+    assert!(rifleman.moves.contains(&43));
+
+    let mortar = pieces.iter().find(|piece| piece.key == "mortar").unwrap();
+    assert!(!mortar.shots.iter().any(|shot| shot.cell == 27));
+    assert!(mortar
+        .shots
+        .iter()
+        .any(|shot| shot.cell == 19 && shot.chance == 80));
+    let pawn = pieces.iter().find(|piece| piece.key == "pawn").unwrap();
+    assert!(pawn.shots.is_empty());
 }

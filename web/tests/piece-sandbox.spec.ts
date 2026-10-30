@@ -1,0 +1,81 @@
+import { expect, test } from "@playwright/test";
+
+test("sandbox changes placed pieces, moves either side, and executes real cards", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "기물 테스트장" }).click();
+  await expect(page.getByRole("heading", { name: "기물 테스트장" })).toBeVisible();
+  const board = page.locator(".sandbox-v2-board");
+  const starters = page.locator(".sandbox-v2-starters button");
+  await expect(starters.filter({ hasText: "나이트라이더" })).toHaveCount(0);
+  await starters.filter({ hasText: "폰" }).click();
+  await board.locator('[data-square="d4"]').click();
+  await expect(board.locator('[data-square="d4"] img')).toHaveAttribute("data-piece-key", "pawn");
+  await page.locator(".sandbox-v2-tree button").filter({ hasText: "템페스트 폰" }).click();
+  await expect(board.locator('[data-square="d4"] img')).toHaveAttribute("data-piece-key", "tempest_pawn");
+  await page.locator(".sandbox-v2-tree button").first().click();
+  await expect(board.locator('[data-square="d4"] img')).toHaveAttribute("data-piece-key", "pawn");
+  await page.locator(".sandbox-v2-tree button").filter({ hasText: "템페스트 폰" }).click();
+  await expect(board.locator('[data-square="c4"]')).toHaveAttribute("data-legal", "true");
+  await board.locator('[data-square="c4"]').click();
+  await expect(board.locator('[data-square="c4"] img')).toHaveAttribute("data-piece-key", "tempest_pawn");
+
+  await starters.filter({ hasText: "폰" }).click();
+  await page.getByRole("button", { name: "흑 배치" }).click();
+  await board.locator('[data-square="e5"]').click();
+  await expect(board.locator('[data-square="e4"]')).toHaveAttribute("data-legal", "true");
+  await board.locator('[data-square="e4"]').click();
+  await expect(board.locator('[data-square="e4"] img')).toHaveAttribute("data-piece-key", "pawn");
+  await expect(page.getByRole("button", { name: "백 턴" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "흑 턴" })).toHaveCount(0);
+
+  const ward = page.locator(".sandbox-v2-catalog-card").filter({ has: page.locator("strong", { hasText: /^가호$/ }) });
+  await ward.locator("button").first().click();
+  await ward.locator("button").first().click();
+  await expect(page.locator(".sandbox-v2-deck-list > div")).toHaveCount(2);
+  await ward.getByRole("button", { name: "가호 손패에 직접 추가" }).click();
+  await page.locator(".sandbox-v2-hand-card").filter({ hasText: "가호" }).click();
+  await board.locator('[data-square="c4"]').click();
+  await expect(board.locator('[data-square="c4"] .sandbox-v2-ward')).toBeVisible();
+  await expect(page.locator(".sandbox-v2-section-title")).toContainText("마나 2");
+  await page.getByRole("button", { name: "보드 초기화" }).click();
+  await expect(board.locator("img")).toHaveCount(0);
+  await expect(page.locator(".sandbox-v2-deck-list > div")).toHaveCount(2);
+  await page.getByRole("button", { name: "덱 다시 뽑기" }).click();
+  await expect(page.locator(".sandbox-v2-hand-card")).toHaveCount(1);
+  await starters.filter({ hasText: "폰" }).click();
+  await page.getByRole("button", { name: "백 배치" }).click();
+  await board.locator('[data-square="d4"]').click();
+  await page.getByRole("button", { name: "일시 강화 손패에 직접 추가" }).click();
+  await page.locator(".sandbox-v2-hand-card").filter({ hasText: "일시 강화" }).click();
+  await board.locator('[data-square="d4"]').click();
+  await page.locator(".sandbox-v2-upgrade-choice button").filter({ hasText: "템페스트 폰" }).click();
+  await page.getByRole("button", { name: "카드 사용" }).click();
+  await expect(board.locator('[data-square="d4"] img')).toHaveAttribute("data-piece-key", "tempest_pawn");
+
+  await page.getByRole("button", { name: "보드 초기화" }).click();
+  await page.locator(".sandbox-v2-pieces .sandbox-mini-tabs").getByRole("button", { name: "특수부대" }).click();
+  await starters.filter({ hasText: "저격수" }).click();
+  await page.getByRole("button", { name: "백 배치" }).click();
+  await board.locator('[data-square="d4"]').click();
+  await page.locator(".sandbox-v2-pieces .sandbox-mini-tabs").getByRole("button", { name: "수호자 부대" }).click();
+  await starters.filter({ hasText: "폰" }).click();
+  await page.getByRole("button", { name: "흑 배치" }).click();
+  await board.locator('[data-square="e5"]').click();
+  await board.locator('[data-square="a1"]').click();
+  await board.locator('[data-square="d4"]').click();
+  await page.getByRole("button", { name: /특수 능력/ }).click();
+  await board.locator('[data-square="e5"]').click();
+  await expect(board.locator('[data-square="d4"] img')).toHaveAttribute("data-piece-key", "sniper");
+  await expect(page.locator(".sandbox-v2-event")).toContainText("사격");
+});
+
+test("new relics use the existing sandbox squad catalog", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "기물 테스트장" }).click();
+  await page.locator(".sandbox-v2-cards .sandbox-mini-tabs").getByRole("button", { name: "선봉대" }).click();
+  const relic = page.locator(".sandbox-v2-cards .sandbox-v2-deck-list label").filter({ hasText: "징병 사무소" });
+  await relic.locator("input").check();
+  await expect(page.locator('.sandbox-v2-board [data-square="a2"] img')).toHaveAttribute("data-piece-key", "pawn");
+  await expect(page.locator(".sandbox-v2-card-catalog")).toContainText("인해전술");
+  await expect(page.getByText("화력치중 빌드")).toHaveCount(0);
+});

@@ -1,6 +1,7 @@
 //! Replaceable prototype content and provisional rules, not final game design.
 pub mod cards;
 pub mod characters;
+pub mod compendium;
 pub mod encounters;
 pub mod pieces;
 pub mod relics;
@@ -14,7 +15,7 @@ pub const DRAW_PER_TURN: usize = 1;
 pub const HAND_LIMIT: usize = 10;
 pub const HASTE_ACTIONS: u8 = 2;
 /// Small deterministic generator: the same seed and commands yield the same run, including WASM.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub struct Rng(u64);
 impl Rng {
     pub fn new(seed: u32) -> Self {

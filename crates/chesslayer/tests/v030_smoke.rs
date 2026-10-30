@@ -132,10 +132,10 @@ fn ingredient_capture_stays_then_corpse_capture_grants_agility_and_cures_hunger(
 }
 
 #[test]
-fn each_boss_capture_unlocks_next_campaign_and_final_is_a_separate_encounter() {
-    let mut progress = Progress::default();
+fn each_boss_unlocks_its_troop_and_continues_the_same_expedition() {
+    let mut game = Game::new_run("guardian", 300, 1, Progress::default()).unwrap();
     for floor in 1..=4 {
-        let mut game = Game::new_run("guardian", 300, floor, progress).unwrap();
+        assert_eq!(game.floor, floor);
         let node = game
             .map
             .nodes
@@ -185,23 +185,21 @@ fn each_boss_capture_unlocks_next_campaign_and_final_is_a_separate_encounter() {
             }
             assert_eq!(game.phase, RunPhase::Reward, "floor {floor}, royal {index}");
         }
-        assert_eq!(game.progress.highest_floor, (floor + 1).min(4));
+        assert_eq!(game.progress.highest_floor, 1);
         assert!(game
             .progress
             .unlocked_squads
             .iter()
             .any(|id| id == ["vanguard", "heretic", "artillery", "special"][(floor - 1) as usize]));
         game.dispatch(Command::ContinueReward).unwrap();
-        assert_eq!(game.phase, RunPhase::Victory);
-        progress = game.progress;
+        assert_eq!(game.phase, RunPhase::Map);
+        assert_eq!(game.floor, (floor + 1).min(4));
     }
-    assert!(progress.final_unlocked);
-    let mut final_run = Game::new_run("special", 301, 0, progress).unwrap();
-    assert!(final_run.final_battle);
-    assert_eq!(final_run.map.nodes.len(), 1);
-    final_run.dispatch(Command::SelectNode { id: 0 }).unwrap();
-    assert_eq!(final_run.phase, RunPhase::Combat);
-    assert_eq!(final_run.snapshot().royal_name, "부족의 독재자");
+    assert!(game.final_battle);
+    assert_eq!(game.map.nodes.len(), 1);
+    game.dispatch(Command::SelectNode { id: 0 }).unwrap();
+    assert_eq!(game.phase, RunPhase::Combat);
+    assert_eq!(game.snapshot().royal_name, "부족의 독재자");
 }
 
 #[test]

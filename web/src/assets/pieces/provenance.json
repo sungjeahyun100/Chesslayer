@@ -1621,20 +1621,11 @@
   },
   {
     "key": "corpse",
-    "side": "white",
-    "file": "corpse-white.svg",
+    "side": "neutral",
+    "file": "corpse.svg",
     "source": "self-authored vector for Chesslayer v0.3.0",
-    "sha256": "e7ca6edafbdba6bb564fa8e5de4d949b636e910d957f63c58b2f169f3484fb7f",
-    "changes": "Original squad role silhouette with upgrade and branch insignia.",
-    "license": "original"
-  },
-  {
-    "key": "corpse",
-    "side": "black",
-    "file": "corpse-black.svg",
-    "source": "self-authored vector for Chesslayer v0.3.0",
-    "sha256": "e671ce11f4b42d33356f2135239d9acd097244f719072c203951dd3c7b310c0f",
-    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "sha256": "f8567673cf85668c172741d1f5f095b3ef7c61c22d23b31cca8892dea1c6ac9e",
+    "changes": "Neutral shrouded corpse with skull; shared by both sides.",
     "license": "original"
   },
   {
@@ -1905,6 +1896,150 @@
     "source": "self-authored vector for Chesslayer v0.3.0",
     "sha256": "f0e59047783bff3d2cea3bf765ca2a58b6bf8412032b7b185c42ea83501ac0cf",
     "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "c4_drone",
+    "side": "white",
+    "file": "c4_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "3a0c71bedb73eef4afbbdd266c94ddf3d4a53cc4805795d9e311d69aad7149f0",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "c4_drone",
+    "side": "black",
+    "file": "c4_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "b69133c785688d203039bd14577c1f55d0ff90c16986dc3043dc17fd3800f17b",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "machine_gun_drone",
+    "side": "white",
+    "file": "machine_gun_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "29ba64b41fb82ff9a13741e09811adfe34e88257b0839a6aa529ba6bb091c3fe",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "machine_gun_drone",
+    "side": "black",
+    "file": "machine_gun_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "bc27f8c144da5fdf485068650a7c0cf923abcf3a49aaba3d9e635793deb31431",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "tactical_nuke_drone",
+    "side": "white",
+    "file": "tactical_nuke_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "9ef3f98b9a9276458e24dc5035723be65970475c235f4eaad1a94f25b3a1e005",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "tactical_nuke_drone",
+    "side": "black",
+    "file": "tactical_nuke_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "515b9815f033c03c3128743e31c20bb5e886d5ed99e0bee691115da01f58846f",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "grenade_launcher_drone",
+    "side": "white",
+    "file": "grenade_launcher_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "5989a198af2652e162ee9fdef42efa8192975f206ed2eb6471b04aba26958b06",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "grenade_launcher_drone",
+    "side": "black",
+    "file": "grenade_launcher_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "00b920b7adc07dd7f9e2bbb9cc40b18971784351821e626ba7fb6a9e8fdd3e3d",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "he_tank",
+    "side": "white",
+    "file": "he_tank-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "eb4295356a93433d2a18663be18dedb1a8b8d0c9c02160d01820d33b83f4dbfc",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "he_tank",
+    "side": "black",
+    "file": "he_tank-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "5bfdf06433a59c9687e6fe206fa06a7a2ab87bcda857b9a997099ef3d8b7d3f4",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "ap_tank",
+    "side": "white",
+    "file": "ap_tank-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "fc5bc6c78f376f94fe7c0529a092708bdc6fb8bcb4a1c5f3ace77f446229cfac",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "ap_tank",
+    "side": "black",
+    "file": "ap_tank-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "b2f87d204b3f69363bb7da84076337788e08078f392b2039820e55f71bb4fc00",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "double_barrel",
+    "side": "white",
+    "file": "double_barrel-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "78b6968ea66774d5f504d3e5dd8c511b82581ca5956199b1c119ba45fb4e3e27",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "double_barrel",
+    "side": "black",
+    "file": "double_barrel-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "c646c7523047a2cf61b9e64258601924472d4a5a3c72800535bb370b90258521",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "fragment_tank",
+    "side": "white",
+    "file": "fragment_tank-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "452f114a6e15110097c466a1c0bea80fded4a88a4824b7c3cada46582e3b5723",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "fragment_tank",
+    "side": "black",
+    "file": "fragment_tank-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "6a5874640ff1a2519dc97aaf142175ce76dbaf70c7f2ca8855c592d1687f167c",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
     "license": "original"
   }
 ]

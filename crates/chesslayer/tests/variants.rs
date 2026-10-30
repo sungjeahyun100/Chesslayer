@@ -626,7 +626,7 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
 fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
     let rest = guardian_rest_scene();
     assert_eq!(rest.phase, RunPhase::Rest);
-    assert_eq!(rest.snapshot().upgrade_paths.len(), 51);
+    assert_eq!(rest.snapshot().upgrade_paths.len(), 59);
     for (id, source, targets) in [
         (1, ROOK, vec![TEMPEST_ROOK, BOUNCING_ROOK]),
         (3, BISHOP, vec![TEMPEST_BISHOP, BOUNCING_BISHOP]),

@@ -9,38 +9,54 @@ mod sacred_domain;
 mod temporary_upgrade;
 pub mod ward;
 
+mod aim_correction;
 mod aimed_shot;
+mod assault_order;
 mod backstage_sacrifice;
 mod bloody_invitation;
 mod body_slam;
 mod clear_tablecloth;
+mod comrade_revenge;
 mod cracked_conscience;
 mod delivered_supper;
 mod dining_etiquette;
+mod emergency_conscription;
 mod endless_ecstasy;
+mod entrenched_defense;
 mod excited_steps;
+mod expendables;
+mod extra_propellant;
 mod extraction;
+mod fire_data_sharing;
+mod focus_fire;
 mod frontline;
+mod general_mobilization;
+mod human_wave;
 mod infantry_support;
 mod infiltration;
 mod intermission_waltz;
+mod last_defense;
 mod last_stand;
 mod last_supper;
 mod late_dinner;
 mod masquerade;
 mod meal_time;
+mod rapid_reload;
+mod reckless_charge;
+mod relief_force;
 mod sacrifice;
 mod smoke_screen;
 mod stimpack;
+mod suppression_fire;
 mod torn_mask;
 mod volley;
 
 use crate::{cards::Card, Battle, PieceId, PieceType};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub use gun::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CardKind {
     Jeans,
@@ -77,6 +93,22 @@ pub enum CardKind {
     SmokeScreen,
     Infiltration,
     Extraction,
+    AssaultOrder,
+    ComradeRevenge,
+    EmergencyConscription,
+    Expendables,
+    GeneralMobilization,
+    HumanWave,
+    RecklessCharge,
+    ReliefForce,
+    AimCorrection,
+    RapidReload,
+    ExtraPropellant,
+    FireDataSharing,
+    EntrenchedDefense,
+    SuppressionFire,
+    FocusFire,
+    LastDefense,
 }
 impl CardKind {
     pub fn definition(self) -> CardDefinition {
@@ -115,6 +147,22 @@ impl CardKind {
             Self::SmokeScreen => smoke_screen::definition(),
             Self::Infiltration => infiltration::definition(),
             Self::Extraction => extraction::definition(),
+            Self::AssaultOrder => assault_order::definition(),
+            Self::ComradeRevenge => comrade_revenge::definition(),
+            Self::EmergencyConscription => emergency_conscription::definition(),
+            Self::Expendables => expendables::definition(),
+            Self::GeneralMobilization => general_mobilization::definition(),
+            Self::HumanWave => human_wave::definition(),
+            Self::RecklessCharge => reckless_charge::definition(),
+            Self::ReliefForce => relief_force::definition(),
+            Self::AimCorrection => aim_correction::definition(),
+            Self::RapidReload => rapid_reload::definition(),
+            Self::ExtraPropellant => extra_propellant::definition(),
+            Self::FireDataSharing => fire_data_sharing::definition(),
+            Self::EntrenchedDefense => entrenched_defense::definition(),
+            Self::SuppressionFire => suppression_fire::definition(),
+            Self::FocusFire => focus_fire::definition(),
+            Self::LastDefense => last_defense::definition(),
         }
     }
 }
@@ -133,7 +181,8 @@ pub enum SelectionMode {
     Upgrade,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize)]
+#[serde(default)]
 pub struct CardSelection {
     pub target: Option<PieceId>,
     pub targets: Vec<PieceId>,
@@ -240,6 +289,9 @@ pub const REWARD_POOL: &[CardKind] = &[
     CardKind::SacredDomain,
 ];
 
+/// Implemented definitions without a current starter, reward or shop route.
+pub const CATALOG_ONLY: &[CardKind] = &[CardKind::FleetingWard];
+
 pub fn starter_deck() -> Vec<Card> {
     vec![]
 }
@@ -253,6 +305,14 @@ pub fn reward_pool(character: &str) -> &'static [CardKind] {
             CardKind::InfantrySupport,
             CardKind::Sacrifice,
             CardKind::LastStand,
+            CardKind::EmergencyConscription,
+            CardKind::GeneralMobilization,
+            CardKind::AssaultOrder,
+            CardKind::ComradeRevenge,
+            CardKind::Expendables,
+            CardKind::ReliefForce,
+            CardKind::RecklessCharge,
+            CardKind::HumanWave,
         ],
         "heretic" => &[
             CardKind::ExcitedSteps,
@@ -270,7 +330,18 @@ pub fn reward_pool(character: &str) -> &'static [CardKind] {
             CardKind::LastSupper,
             CardKind::EndlessEcstasy,
         ],
-        "artillery" => &[CardKind::Volley, CardKind::Frontline],
+        "artillery" => &[
+            CardKind::Volley,
+            CardKind::Frontline,
+            CardKind::AimCorrection,
+            CardKind::RapidReload,
+            CardKind::ExtraPropellant,
+            CardKind::FireDataSharing,
+            CardKind::EntrenchedDefense,
+            CardKind::SuppressionFire,
+            CardKind::FocusFire,
+            CardKind::LastDefense,
+        ],
         "special" => &[
             CardKind::AimedShot,
             CardKind::SmokeScreen,

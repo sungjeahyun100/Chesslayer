@@ -110,9 +110,9 @@ pub use rifleman::RIFLEMAN;
 mod mortar;
 pub use mortar::MORTAR;
 mod drone;
-pub use drone::DRONE;
+pub use drone::{C4_DRONE, DRONE, GRENADE_LAUNCHER_DRONE, MACHINE_GUN_DRONE, TACTICAL_NUKE_DRONE};
 mod tank;
-pub use tank::TANK;
+pub use tank::{AP_TANK, DOUBLE_BARREL, FRAGMENT_TANK, HE_TANK, TANK};
 mod commando;
 pub use commando::COMMANDO;
 mod elite_commando;
@@ -295,7 +295,15 @@ pub const ALL: &[PieceDefinition] = &[
     rifleman::DEFINITION,
     mortar::DEFINITION,
     drone::DEFINITION,
+    drone::C4_DEFINITION,
+    drone::MACHINE_GUN_DEFINITION,
+    drone::TACTICAL_NUKE_DEFINITION,
+    drone::GRENADE_LAUNCHER_DEFINITION,
     tank::DEFINITION,
+    tank::HE_DEFINITION,
+    tank::AP_DEFINITION,
+    tank::DOUBLE_BARREL_DEFINITION,
+    tank::FRAGMENT_DEFINITION,
     commando::DEFINITION,
     elite_commando::DEFINITION,
     scout::DEFINITION,

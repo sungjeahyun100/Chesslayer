@@ -55,21 +55,43 @@ fn started(character: &str, seed: u32) -> Game {
 }
 fn start_before(character: &str, kind: NodeKind) -> Game {
     let mut game = Game::new(character, 2026).unwrap();
-    let id = game
-        .map
-        .starts()
-        .into_iter()
-        .find(|&id| {
-            game.map.nodes[id]
-                .next
-                .iter()
-                .any(|&id| game.map.nodes[id].kind == kind)
-        })
-        .unwrap();
+    let id = if kind == NodeKind::Rest {
+        game.map.starts()[0]
+    } else {
+        game.map
+            .starts()
+            .into_iter()
+            .find(|&id| {
+                game.map.nodes[id]
+                    .next
+                    .iter()
+                    .any(|&id| game.map.nodes[id].kind == kind)
+            })
+            .unwrap()
+    };
     game.dispatch(Command::SelectNode { id }).unwrap();
     game
 }
 fn select_kind(game: &mut Game, kind: NodeKind) {
+    if kind == NodeKind::Rest
+        && !game
+            .available_nodes()
+            .iter()
+            .any(|&id| game.map.nodes[id].kind == kind)
+    {
+        // The rest is now at stage 5; jump over unrelated intermediate nodes
+        // while these tests isolate the reward-to-rest boundary.
+        let rest = game.map.nodes.iter().find(|n| n.row == 4).unwrap().id;
+        let before = game
+            .map
+            .nodes
+            .iter()
+            .find(|n| n.row == 3 && n.next.contains(&rest))
+            .unwrap()
+            .id;
+        game.current_node = Some(before);
+        game.completed.push(before);
+    }
     let id = game
         .available_nodes()
         .into_iter()
@@ -398,45 +420,6 @@ fn reward_persistence_counterattack_and_relics() {
     .unwrap();
     assert_eq!(b.board.piece_at(p(0, 0)).unwrap().unwrap().id, 101);
     assert!(b.events.iter().any(|s| s.starts_with("호신용품")));
-    let mut a = (42..100)
-        .map(|seed| {
-            let mut g = Game::new("guardian", seed).unwrap();
-            g.relics.push(Relic::Whirlwind);
-            g
-        })
-        .find(|g| {
-            g.map.nodes.iter().any(|n| {
-                n.kind == NodeKind::Elite && encounter(n.encounter.unwrap()).enemies.len() > 1
-            })
-        })
-        .unwrap();
-    let target = a
-        .map
-        .nodes
-        .iter()
-        .find(|n| n.kind == NodeKind::Elite && encounter(n.encounter.unwrap()).enemies.len() > 1)
-        .unwrap()
-        .id;
-    let parent = a
-        .map
-        .nodes
-        .iter()
-        .find(|n| n.next.contains(&target))
-        .unwrap()
-        .id;
-    a.current_node = Some(parent);
-    a.completed.push(parent);
-    a.dispatch(Command::SelectNode { id: target }).unwrap();
-    assert!(a.log.iter().any(|s| s.starts_with("소용돌이")));
-    assert!(encounter(a.map.nodes[target].encounter.unwrap())
-        .enemies
-        .iter()
-        .any(|e| a
-            .battle
-            .board
-            .piece_at(e.position)
-            .unwrap()
-            .is_none_or(|p| p.id != e.id)));
 }
 #[test]
 fn rest_upgrade_revive_and_reset_origin() {

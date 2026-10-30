@@ -187,8 +187,7 @@ pub const ENCOUNTERS: [EncounterDefinition; 37] = [
     EncounterDefinition {
         id: "FINAL-B01",
         name: "부족의 독재자",
-        description:
-            "4층 완료 후 별도로 도전하는 최종 결전. 모든 부대의 정예가 독재자를 호위합니다.",
+        description: "4층 완료 후 별도로 도전하는 최종 결전. 독재자 한 기와 싸웁니다.",
     },
     EncounterDefinition {
         id: "3F-N01",
@@ -531,38 +530,6 @@ fn troop_encounter(index: usize) -> Encounter {
         }
         DICTATOR_BOSS => {
             add(TRIBAL_DICTATOR, 4, 0);
-            for (file, kind) in [
-                TANK,
-                PHANTOM_SCOUT,
-                HUNGER_PRIEST,
-                INVITING_LADY,
-                TRIBAL_DICTATOR,
-                LOCUST_HIGH_PRIEST,
-                MARKSMAN,
-                TANK,
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                if file != 4 {
-                    add(kind, file as i32, 0);
-                }
-            }
-            for (file, kind) in [
-                HALBERD_INFANTRY,
-                RIFLEMAN,
-                ELITE_COMMANDO,
-                GLUTTON_FOLLOWER,
-                GLUTTON_FOLLOWER,
-                ELITE_COMMANDO,
-                RIFLEMAN,
-                HALBERD_INFANTRY,
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                add(kind, file as i32, 1);
-            }
         }
         THREE_RIFLES => {
             add(RIFLEMAN, 4, 1);

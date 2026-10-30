@@ -4,7 +4,7 @@ import { PieceImage } from "./PieceImage";
 import { buildUpgradeTree } from "./upgradeTree";
 import type { RestOption, UpgradePath } from "./types";
 
-export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, completed, selectionOnly = false, inlineConfirm = false }: {
+export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, completed, selectionOnly = false, inlineConfirm = false, readOnly = false, selectedKind }: {
   piece: RestOption;
   paths: UpgradePath[];
   acquired: number[];
@@ -13,6 +13,8 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
   completed: boolean;
   selectionOnly?: boolean;
   inlineConfirm?: boolean;
+  readOnly?: boolean;
+  selectedKind?: number;
 }) {
   const tree = useMemo(() => buildUpgradeTree(paths, piece), [paths, piece]);
   const viewport = useRef<HTMLDivElement>(null);
@@ -108,11 +110,11 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
     return index >= 0 && (parents.length === 1 || acquired[index - 1] === edge.from);
   }));
   const attained = new Set([piece.kind, ...acquired, ...[...completedEdges].map((e) => e.from)]);
-  const status = (kind: number) => attained.has(kind)
+  const status = (kind: number) => readOnly ? "available" : attained.has(kind)
     ? "acquired"
     : piece.can_upgrade && paths.some((p) => p.from === piece.kind && p.to === kind && p.unlocked)
       ? "available" : "locked";
-  const statusText = (kind: number) => kind === piece.kind ? "현재 기물"
+  const statusText = (kind: number) => readOnly ? "정보 열람" : kind === piece.kind ? "현재 기물"
     : acquired.includes(kind) ? "획득 완료"
       : status(kind) === "available" ? "선택 가능"
         : tree.nodes.find((n) => n.kind === kind)?.incoming.length ? "잠김" : "기본 상태";
@@ -125,9 +127,9 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
         <h3>강화 경로</h3>
       </div>
       <div className="skill-map">
-        <div className="skill-legend" aria-label="노드 상태 안내">
+        {!readOnly && <div className="skill-legend" aria-label="노드 상태 안내">
           <span className="acquired">◆ 획득</span><span className="available">◇ 선택 가능</span><span className="locked">◈ 잠김</span><span className="inspecting">◎ 살펴보는 중</span>
-        </div>
+        </div>}
         <div className="skill-viewport" ref={viewport} tabIndex={0} role="region" aria-label="강화 경로 지도. 확대 후 스크롤 또는 빈 공간을 드래그하여 이동"
           onClick={(e) => {
             if (dragged.current) { dragged.current = false; return; }
@@ -158,7 +160,7 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
                     // Only actual rest commands activate a path. A promoted piece
                     // must not claim an upgrade from the ordinary piece of its new kind.
                     const done = completedEdges.has(edge);
-                    const state = done ? "acquired" : piece.can_upgrade && edge.from === piece.kind && edge.unlocked ? "available" : "locked";
+                    const state = readOnly ? "available" : done ? "acquired" : piece.can_upgrade && edge.from === piece.kind && edge.unlocked ? "available" : "locked";
                     return <g key={`${edge.from}-${edge.to}`} className={`skill-connection ${state}`} data-from={edge.from} data-to={edge.to}>
                       <path className="skill-line-bed" d={edge.d} /><path className="skill-line" d={edge.d} />
                     </g>;
@@ -166,17 +168,17 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
                 </svg>
                 {tree.nodes.map((node) => (
                   <button key={node.kind} type="button" data-kind={node.kind}
-                    className={`skill-node ${status(node.kind)} ${!node.incoming.length ? "root-node" : ""}`}
+                    className={`skill-node ${status(node.kind)} ${!node.incoming.length ? "root-node" : ""} ${selectedKind === node.kind ? "sandbox-chosen" : ""}`}
                     style={{ left: node.x, top: node.y }}
-                    aria-pressed={openKind === node.kind}
+                    aria-pressed={selectedKind === undefined ? openKind === node.kind : selectedKind === node.kind}
                     aria-label={`${node.name} · ${statusText(node.kind)} · 상세 보기`}
                     title={`${node.name} · ${statusText(node.kind)}${node.incoming.flatMap((p) => p.required_pieces.map((r) => `\n${r.name}: ${r.owned ? "보유" : "미보유"}`)).join("")}`}
-                    aria-controls={openKind === node.kind && available ? "skill-node-popup" : undefined}
-                    aria-expanded={openKind === node.kind && available}
+                    aria-controls={openKind === node.kind && available && !readOnly ? "skill-node-popup" : undefined}
+                    aria-expanded={openKind === node.kind && available && !readOnly}
                     onClick={() => chooseNode(node.kind)}
                     onFocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
                   >
-                    <span className="skill-node-orb"><PieceImage pieceKey={node.key} /><span className="skill-node-mark">{status(node.kind) === "acquired" ? "◆" : !node.incoming.length ? "·" : status(node.kind) === "available" ? "+" : "◈"}</span></span>
+                    <span className="skill-node-orb"><PieceImage pieceKey={node.key} /><span className="skill-node-mark">{readOnly ? "·" : status(node.kind) === "acquired" ? "◆" : !node.incoming.length ? "·" : status(node.kind) === "available" ? "+" : "◈"}</span></span>
                     <strong style={{ fontSize: 13 / Math.max(0.6, Math.min(1, scale)) }}>{node.name}</strong>
                     <small style={{ fontSize: 10 / Math.max(0.6, Math.min(1, scale)) }}>{statusText(node.kind)}</small>
                   </button>
@@ -194,7 +196,8 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
           </div>
         </div>
       </div>
-      {!inlineConfirm && openKind !== null && available && createPortal(<div key={openKind} id="skill-node-popup" ref={popup} className="skill-node-popup" role="group" aria-label={`${active.name} 강화 동작`}>
+      {readOnly && <div className="compendium-upgrade-detail" role="status"><strong>{active.name}</strong><p>{active.description}</p>{active.incoming.map((path) => <p key={`${path.from}-${path.to}`}>{path.from_name} → {path.to_name}: {path.effect} · {path.requirement}</p>)}</div>}
+      {!readOnly && !inlineConfirm && openKind !== null && available && createPortal(<div key={openKind} id="skill-node-popup" ref={popup} className="skill-node-popup" role="group" aria-label={`${active.name} 강화 동작`}>
         <button type="button" className="primary" onClick={() => confirm(active.kind)}>{selectionOnly ? "경로 선택" : "강화 확정"}</button>
       </div>, document.body)}
     </section>

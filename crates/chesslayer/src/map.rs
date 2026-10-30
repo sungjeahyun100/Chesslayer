@@ -7,7 +7,9 @@ use serde::Serialize;
 
 pub const MAP_ROWS: usize = 15;
 pub const MAP_LANES: usize = 5;
-const REST_ROWS: [usize; 2] = [6, 13];
+// Stages 5 and 11 are guaranteed rests. Stage 13 offers a third rest
+// instead of another reward; every route can visit at most three.
+const REST_ROWS: [usize; 2] = [4, 10];
 const BOSS_ROW: usize = MAP_ROWS - 1;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -47,7 +49,7 @@ impl MapNode {
             }
             NodeKind::Elite => "승리하면 카드 보상과 기물 강화 기회 1회를 얻습니다.".into(),
             NodeKind::Rest => {
-                "생존 폰 하나 강화 또는 사망 기물 하나 부활. 점유된 초기 칸에는 부활할 수 없습니다."
+                "생존 아군 기물 하나 강화 또는 사망 기물 하나 부활. 점유된 초기 칸에는 부활할 수 없습니다."
                     .into()
             }
             NodeKind::Treasure => format!(
@@ -110,24 +112,25 @@ impl ActMap {
                 BOSS_ROW => vec![NodeKind::Boss],
                 1 | 7 => vec![
                     NodeKind::Combat,
-                    NodeKind::Rest,
+                    NodeKind::Combat,
                     NodeKind::Treasure,
                     NodeKind::Combat,
                 ],
-                2 | 4 | 8 | 10 => vec![NodeKind::Combat, NodeKind::Elite],
+                2 | 8 | 13 => vec![NodeKind::Combat, NodeKind::Elite],
                 3 | 5 | 9 | 11 => {
-                    let mut kinds = vec![NodeKind::Rest, NodeKind::Treasure, NodeKind::Combat];
+                    let mut kinds = vec![NodeKind::Combat, NodeKind::Treasure, NodeKind::Combat];
                     if width == 4 {
                         kinds.push(NodeKind::Elite);
                     }
                     kinds
                 }
-                12 => vec![NodeKind::Event, NodeKind::Shop],
+                6 => vec![NodeKind::Combat],
+                12 => vec![NodeKind::Rest, NodeKind::Treasure],
                 _ => unreachable!("all map rows have a node rule"),
             };
             // Treasure remains possible in regular branches, but no row reserves one.
             for kind in &mut kinds {
-                if *kind == NodeKind::Treasure && treasure_rng.index(2) == 0 {
+                if row != 12 && *kind == NodeKind::Treasure && treasure_rng.index(2) == 0 {
                     *kind = NodeKind::Combat;
                 }
             }
@@ -189,7 +192,7 @@ impl ActMap {
             }
             layers.push(layer);
             if row == REST_ROWS[0] {
-                // Keep the original first-section forks stable for existing seeds.
+                // Keep the early fork stream independent of later map rolls.
                 first_section_edges = Some(rng.clone());
             }
         }

@@ -1,6 +1,8 @@
 import type { Progress } from "./types";
 
 export const PROGRESS_KEY = "chesslayer.progress.v1";
+export const DEVELOPER_MODE_KEY = "chesslayer.developer_mode.v1";
+export const DEVELOPER_RUN_KEY = "chesslayer.run.developer.v1";
 export const initialProgress: Progress = {
   highest_floor: 1,
   unlocked_squads: ["guardian"],
@@ -15,6 +17,15 @@ export function mergeProgress(previous: Progress, next: Progress): Progress {
     final_unlocked: previous.final_unlocked || next.final_unlocked,
     final_defeated: previous.final_defeated || next.final_defeated,
   };
+}
+
+export function developerProgress(progress: Progress, squadIds: string[]): Progress {
+  return mergeProgress(progress, {
+    highest_floor: 4,
+    unlocked_squads: squadIds,
+    final_unlocked: true,
+    final_defeated: false,
+  });
 }
 
 export function readProgress(): Progress {
