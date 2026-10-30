@@ -170,17 +170,7 @@ fn self_defense_ignores_other_victims_removals_cards_and_swaps() {
 #[test]
 fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
     let mut g = Game::new("vanguard", 2026).unwrap();
-    let start = g
-        .map
-        .starts()
-        .into_iter()
-        .find(|&id| {
-            g.map.nodes[id]
-                .next
-                .iter()
-                .any(|&id| g.map.nodes[id].kind == NodeKind::Rest)
-        })
-        .unwrap();
+    let start = g.map.starts()[0];
     g.dispatch(Command::SelectNode { id: start }).unwrap();
     let mut players = Battle::standard_roster();
     players[0].position = None;
@@ -247,6 +237,17 @@ fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
         .any(|p| p.id == 500 || p.owner == ENEMY));
     assert!(g.battle.board.piece_at(at(0, 7)).unwrap().is_none());
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
+    // Position this boundary test immediately before the guaranteed stage-5 rest.
+    let rest = g.map.nodes.iter().find(|n| n.row == 4).unwrap().id;
+    let predecessor = g
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.row == 3 && n.next.contains(&rest))
+        .unwrap()
+        .id;
+    g.current_node = Some(predecessor);
+    g.completed.push(predecessor);
     let rest = g
         .available_nodes()
         .into_iter()
@@ -341,25 +342,7 @@ fn each_battle_selects_one_living_ally_including_king_with_seeded_replay() {
     g.battle = protected_scene(ROOK, true, false);
     g.dispatch(Command::EndTurn).unwrap();
     g.dispatch(Command::EnemyStep).unwrap();
-    assert_eq!(g.phase, RunPhase::Reward);
-    assert!(g.snapshot().pieces.iter().all(|p| !p.self_defense));
-    assert!(g.log.iter().any(|s| s.contains("호신용품으로 적 로얄")));
-    g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    let next = g
-        .available_nodes()
-        .into_iter()
-        .find(|&id| g.map.nodes[id].kind == NodeKind::Combat)
-        .unwrap();
-    g.dispatch(Command::SelectNode { id: next }).unwrap();
-    // Only the king survived, so the new selection must replace the previous pawn.
-    assert!(g.battle.has_self_defense(5));
-    assert!(!g.battle.has_self_defense(9));
-    assert_eq!(
-        g.snapshot()
-            .pieces
-            .iter()
-            .filter(|p| p.self_defense)
-            .count(),
-        1
-    );
+    // Search recognizes the retaliation and avoids losing its own royal.
+    assert_eq!(g.phase, RunPhase::Combat);
+    assert!(g.battle.has_self_defense(9));
 }

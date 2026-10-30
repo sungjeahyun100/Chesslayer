@@ -7,6 +7,7 @@ const assets = import.meta.glob<string>("./assets/pieces/*.svg", {
   import: "default",
 });
 export function pieceImage(key: string, owner: number): string | undefined {
+  if (key === "corpse") return assets["./assets/pieces/corpse.svg"];
   if (owner !== 0 && owner !== 1) return undefined;
   return assets[
     `./assets/pieces/${key}-${owner === 0 ? "white" : "black"}.svg`

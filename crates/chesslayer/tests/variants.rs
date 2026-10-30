@@ -470,69 +470,48 @@ fn pawn_start_rules_and_all_promotions_preserve_instances() {
     }
 }
 
+// Isolate acquisition from a pre-v0.3 Vanguard command recording.
+fn guardian_rest_scene() -> Game {
+    let mut g = Game::new("guardian", 2026).unwrap();
+    let rest = g
+        .map
+        .nodes
+        .iter()
+        .find(|n| n.kind == chesslayer::map::NodeKind::Rest)
+        .unwrap()
+        .id;
+    g.current_node = Some(rest);
+    g.phase = RunPhase::Rest;
+    g.battle.phase = Phase::Finished;
+    g.battle.result = GameResult::Win {
+        winner: PLAYER,
+        reason: ResultReason::RoyalCaptured,
+    };
+    g
+}
+
 #[test]
 fn real_rest_branches_promotion_validation_and_enemy_ai() {
-    for (fixture, family) in [
-        (
-            include_str!("fixtures/tempest-promotion.json"),
-            TEMPEST_PAWN,
-        ),
-        (
-            include_str!("fixtures/bouncing-promotion.json"),
-            BOUNCING_PAWN,
-        ),
-    ] {
-        let commands: Vec<Command> = serde_json::from_str(fixture).unwrap();
-        let mut g = Game::new("vanguard", 2026).unwrap();
-        for (index, c) in commands.into_iter().enumerate() {
-            if let Command::RestUpgrade { id, .. } = c {
-                let before = serde_json::to_string(&g.snapshot()).unwrap();
-                for target in [QUEEN, TEMPEST_ROOK, BOUNCING_QUEEN] {
-                    assert!(g.dispatch(Command::RestUpgrade { id, target }).is_err());
-                }
-                assert_eq!(serde_json::to_string(&g.snapshot()).unwrap(), before);
-                assert_eq!(
-                    g.snapshot()
-                        .upgrade_paths
-                        .iter()
-                        .filter(|p| p.from == PAWN)
-                        .count(),
-                    2,
-                );
-            }
-            if let Command::Move {
-                from,
-                to,
-                promotion: Some(_),
-            } = c
-            {
-                let before = serde_json::to_string(&g.snapshot()).unwrap();
-                for promotion in [
-                    None,
-                    Some(QUEEN),
-                    Some(if family == TEMPEST_PAWN {
-                        BOUNCING_QUEEN
-                    } else {
-                        TEMPEST_QUEEN
-                    }),
-                    Some(65000),
-                ] {
-                    assert!(g
-                        .dispatch(Command::Move {
-                            from,
-                            to,
-                            promotion
-                        })
-                        .is_err());
-                }
-                assert_eq!(serde_json::to_string(&g.snapshot()).unwrap(), before);
-            }
-            g.dispatch(c)
-                .unwrap_or_else(|e| panic!("promotion fixture {family} command {index}: {e}"));
-            while g.phase == RunPhase::Combat && g.battle.turn == ENEMY {
-                g.dispatch(Command::EnemyStep).unwrap();
-            }
+    for family in [TEMPEST_PAWN, BOUNCING_PAWN] {
+        let mut g = guardian_rest_scene();
+        let before = serde_json::to_string(&g.snapshot()).unwrap();
+        for target in [QUEEN, TEMPEST_ROOK, BOUNCING_QUEEN] {
+            assert!(g.dispatch(Command::RestUpgrade { id: 9, target }).is_err());
         }
+        assert_eq!(serde_json::to_string(&g.snapshot()).unwrap(), before);
+        assert_eq!(
+            g.snapshot()
+                .upgrade_paths
+                .iter()
+                .filter(|p| p.from == PAWN)
+                .count(),
+            2
+        );
+        g.dispatch(Command::RestUpgrade {
+            id: 9,
+            target: family,
+        })
+        .unwrap();
         assert_eq!(g.battle.outcome()[8].kind, family);
         assert!(g
             .dispatch(Command::RestUpgrade {
@@ -540,6 +519,51 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
                 target: family
             })
             .is_err());
+        g.phase = RunPhase::Combat;
+        g.battle = scene(family, PLAYER);
+        let actor = g.battle.board.piece_at(q(PLAYER, 0, 0)).unwrap();
+        g.battle.board.set_piece(q(PLAYER, 0, 0), None).unwrap();
+        g.battle
+            .board
+            .set_piece(Position::new(0, 1), actor)
+            .unwrap();
+        let before = serde_json::to_string(&g.snapshot()).unwrap();
+        for promotion in [
+            None,
+            Some(QUEEN),
+            Some(if family == TEMPEST_PAWN {
+                BOUNCING_QUEEN
+            } else {
+                TEMPEST_QUEEN
+            }),
+            Some(65000),
+        ] {
+            assert!(g
+                .dispatch(Command::Move {
+                    from: 8,
+                    to: 0,
+                    promotion
+                })
+                .is_err());
+        }
+        assert_eq!(serde_json::to_string(&g.snapshot()).unwrap(), before);
+        let promotion = pieces::definition(family).unwrap().promotions[0];
+        g.dispatch(Command::Move {
+            from: 8,
+            to: 0,
+            promotion: Some(promotion),
+        })
+        .unwrap();
+        assert_eq!(
+            g.battle
+                .board
+                .piece_at(Position::new(0, 0))
+                .unwrap()
+                .unwrap()
+                .kind,
+            promotion
+        );
+        assert_eq!(g.battle.outcome()[8].kind, family);
         let mut ai = Game::new("vanguard", 2026).unwrap();
         ai.phase = RunPhase::Combat;
         ai.battle = scene(family, ENEMY);
@@ -600,20 +624,9 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
 
 #[test]
 fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
-    let mut rest = Game::new("vanguard", 2026).unwrap();
-    let commands: Vec<Command> =
-        serde_json::from_str(include_str!("fixtures/winning-run.json")).unwrap();
-    for command in commands {
-        if rest.phase == RunPhase::Rest {
-            break;
-        }
-        rest.dispatch(command).unwrap();
-        while rest.phase == RunPhase::Combat && rest.battle.turn == ENEMY {
-            rest.dispatch(Command::EnemyStep).unwrap();
-        }
-    }
+    let rest = guardian_rest_scene();
     assert_eq!(rest.phase, RunPhase::Rest);
-    assert_eq!(rest.snapshot().upgrade_paths.len(), 23);
+    assert_eq!(rest.snapshot().upgrade_paths.len(), 59);
     for (id, source, targets) in [
         (1, ROOK, vec![TEMPEST_ROOK, BOUNCING_ROOK]),
         (3, BISHOP, vec![TEMPEST_BISHOP, BOUNCING_BISHOP]),
@@ -673,7 +686,10 @@ fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
                     target: TEMPEST_PAWN
                 })
                 .is_err());
-            g.dispatch(Command::SelectNode { id: 13 }).unwrap();
+            let next = g.available_nodes()[0];
+            g.map.nodes[next].kind = chesslayer::map::NodeKind::Combat;
+            g.map.nodes[next].encounter = Some(0);
+            g.dispatch(Command::SelectNode { id: next }).unwrap();
             expected.position = Some(expected.origin);
             assert_eq!(
                 g.battle.outcome().into_iter().find(|p| p.id == id).unwrap(),

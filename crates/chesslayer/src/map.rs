@@ -1,13 +1,15 @@
 //! One immutable, seeded Act graph. Run traversal is kept separately by Game.
 use crate::content::{
-    encounters::{ELITES, FLOOR_TWO_BOSSES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS, HOOK_BOSS},
+    encounters::{self, ELITES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS},
     Relic, Rng, ENCOUNTERS, RELIC_REWARD_POOL,
 };
 use serde::Serialize;
 
-pub const MAP_ROWS: usize = 14;
+pub const MAP_ROWS: usize = 15;
 pub const MAP_LANES: usize = 5;
-const REST_ROWS: [usize; 2] = [6, 12];
+// Stages 5 and 11 are guaranteed rests. Stage 13 offers a third rest
+// instead of another reward; every route can visit at most three.
+const REST_ROWS: [usize; 2] = [4, 10];
 const BOSS_ROW: usize = MAP_ROWS - 1;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -17,6 +19,8 @@ pub enum NodeKind {
     Rest,
     Treasure,
     Boss,
+    Event,
+    Shop,
 }
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct MapNode {
@@ -33,6 +37,8 @@ impl MapNode {
         match self.kind {
             NodeKind::Rest => "작은 쉼터",
             NodeKind::Treasure => "남겨진 보물",
+            NodeKind::Event => "식당",
+            NodeKind::Shop => "원정 상점",
             _ => ENCOUNTERS[self.encounter.expect("combat node has encounter")].name,
         }
     }
@@ -43,14 +49,16 @@ impl MapNode {
             }
             NodeKind::Elite => "승리하면 카드 보상과 기물 강화 기회 1회를 얻습니다.".into(),
             NodeKind::Rest => {
-                "생존 폰 하나 강화 또는 사망 기물 하나 부활. 점유된 초기 칸에는 부활할 수 없습니다."
+                "생존 아군 기물 하나 강화 또는 사망 기물 하나 부활. 점유된 초기 칸에는 부활할 수 없습니다."
                     .into()
             }
             NodeKind::Treasure => format!(
                 "{}을 얻습니다. 이미 가진 유물이면 가호 카드 1장을 얻습니다.",
                 self.relic.unwrap().name()
             ),
-            NodeKind::Boss => "승리하면 카드 보상과 기물 강화 기회 1회를 얻습니다.".into(),
+            NodeKind::Boss => "격파하면 다음 층과 보스 부대를 해금하고 이번 런을 마칩니다.".into(),
+            NodeKind::Event => "따뜻한 식사로 아군 전체의 허기를 해소합니다.".into(),
+            NodeKind::Shop => "전투에서 얻은 금화로 부대 전용 카드를 구입합니다.".into(),
         }
     }
 }
@@ -68,7 +76,6 @@ impl ActMap {
         let mut rng = Rng::new(seed ^ 0x41c7_9e35 ^ (u32::from(floor - 1) << 24));
         // Keep the graph, normal encounters and relic stream stable when elite selection changes.
         let mut elite_rng = Rng::new(seed ^ 0xe11e_0001 ^ (u32::from(floor - 1) << 24));
-        let mut boss_rng = Rng::new(seed ^ 0xb055_0002);
         let mut later_width_rng = Rng::new(seed ^ 0x7a1e_0003 ^ (u32::from(floor - 1) << 24));
         let mut treasure_rng = Rng::new(seed ^ 0x7a1e_0004 ^ (u32::from(floor - 1) << 24));
         let widths = [
@@ -84,6 +91,7 @@ impl ActMap {
             3 + later_width_rng.index(2),
             2,
             3 + later_width_rng.index(2),
+            2,
             2,
             1,
         ];
@@ -104,25 +112,33 @@ impl ActMap {
                 BOSS_ROW => vec![NodeKind::Boss],
                 1 | 7 => vec![
                     NodeKind::Combat,
-                    NodeKind::Rest,
+                    NodeKind::Combat,
                     NodeKind::Treasure,
                     NodeKind::Combat,
                 ],
-                2 | 4 | 8 | 10 => vec![NodeKind::Combat, NodeKind::Elite],
+                2 | 8 | 13 => vec![NodeKind::Combat, NodeKind::Elite],
                 3 | 5 | 9 | 11 => {
-                    let mut kinds = vec![NodeKind::Rest, NodeKind::Treasure, NodeKind::Combat];
+                    let mut kinds = vec![NodeKind::Combat, NodeKind::Treasure, NodeKind::Combat];
                     if width == 4 {
                         kinds.push(NodeKind::Elite);
                     }
                     kinds
                 }
+                6 => vec![NodeKind::Combat],
+                12 => vec![NodeKind::Rest, NodeKind::Treasure],
                 _ => unreachable!("all map rows have a node rule"),
             };
             // Treasure remains possible in regular branches, but no row reserves one.
             for kind in &mut kinds {
-                if *kind == NodeKind::Treasure && treasure_rng.index(2) == 0 {
+                if row != 12 && *kind == NodeKind::Treasure && treasure_rng.index(2) == 0 {
                     *kind = NodeKind::Combat;
                 }
+            }
+            if row == 3 {
+                kinds[0] = NodeKind::Event;
+            }
+            if row == 9 {
+                kinds[0] = NodeKind::Shop;
             }
             rng.shuffle(&mut kinds);
             let mut starting_encounters = [0, 0, 1];
@@ -130,10 +146,11 @@ impl ActMap {
             let mut layer = vec![];
             for (i, (lane, kind)) in lanes.into_iter().zip(kinds).enumerate() {
                 let encounter = match kind {
-                    NodeKind::Boss => Some(if floor == 1 {
-                        HOOK_BOSS
-                    } else {
-                        FLOOR_TWO_BOSSES[boss_rng.index(FLOOR_TWO_BOSSES.len())]
+                    NodeKind::Boss => Some(match floor {
+                        1 => encounters::VANGUARD_BOSS,
+                        2 => encounters::HERETIC_BOSS,
+                        3 => encounters::ARTILLERY_BOSS,
+                        _ => encounters::SPECIAL_BOSS,
                     }),
                     NodeKind::Elite => Some(if floor == 1 {
                         // Preserve the former four-way roll so existing seeded paths
@@ -143,12 +160,20 @@ impl ActMap {
                             2 => ELITES[1],
                             _ => ELITES[2],
                         }
-                    } else {
+                    } else if floor == 2 {
                         FLOOR_TWO_ELITES[elite_rng.index(FLOOR_TWO_ELITES.len())]
+                    } else {
+                        let pool = encounters::floor_elites(floor);
+                        pool[elite_rng.index(pool.len())]
                     }),
                     NodeKind::Combat if floor == 1 && row == 0 => Some(starting_encounters[i]),
                     NodeKind::Combat if floor == 1 => Some(1 + rng.index(3)),
-                    NodeKind::Combat => Some(FLOOR_TWO_NORMALS[rng.index(FLOOR_TWO_NORMALS.len())]),
+                    NodeKind::Combat => Some(if floor == 2 {
+                        FLOOR_TWO_NORMALS[rng.index(FLOOR_TWO_NORMALS.len())]
+                    } else {
+                        let pool = encounters::floor_normals(floor);
+                        pool[rng.index(pool.len())]
+                    }),
                     _ => None,
                 };
                 let relic = matches!(kind, NodeKind::Elite | NodeKind::Treasure)
@@ -167,7 +192,7 @@ impl ActMap {
             }
             layers.push(layer);
             if row == REST_ROWS[0] {
-                // Keep the original first-section forks stable for existing seeds.
+                // Keep the early fork stream independent of later map rolls.
                 first_section_edges = Some(rng.clone());
             }
         }

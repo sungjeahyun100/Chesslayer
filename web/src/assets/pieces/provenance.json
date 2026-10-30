@@ -1042,5 +1042,1004 @@
     "sha256": "cdd0c44cbc146278311cd2e5acd728adcb69a44c70c69baaae27b9ec0c75b31f",
     "changes": "Added original green storm arcs to the existing king artwork.",
     "license": "project asset derivative"
+  },
+  {
+    "key": "axe_infantry",
+    "side": "white",
+    "file": "axe_infantry-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "baa533116c0b7ec5650eb4ec94fb590a630a3bf02b3d7c6e9c06b78dc5c39a06",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "axe_infantry",
+    "side": "black",
+    "file": "axe_infantry-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "852d120ba7950d141c97792299eb87c6dea3962bc9abe5a20121cee273c5a9b3",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "spear_infantry",
+    "side": "white",
+    "file": "spear_infantry-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "13fd08910fc2a95b70ef20a5b342860b12753fb3dfda1ab3c05c9381af00f94e",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "spear_infantry",
+    "side": "black",
+    "file": "spear_infantry-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "4ab648052508f4efafa93389ce830512f79395cf33f304784af2ea5edfe813a3",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "sword_infantry",
+    "side": "white",
+    "file": "sword_infantry-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "f9c976395ff50b8ebeed4b461882055be704d7e638968c3e294f9b70f81023ea",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "sword_infantry",
+    "side": "black",
+    "file": "sword_infantry-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "046a75c503722f0789b8a5ab16d48276a6ecb372322a5952aa1224b8cf5c45be",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "halberd_infantry",
+    "side": "white",
+    "file": "halberd_infantry-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "934d5dca8dc4a9cf1d7aa5c84af4b39b8a48be3d895210fe62dcb9bfb5033678",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "halberd_infantry",
+    "side": "black",
+    "file": "halberd_infantry-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "106c20ee5ea259ae493424df02a29644b3dd586d2103c316871b6f442b93aedd",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "pistol_infantry",
+    "side": "white",
+    "file": "pistol_infantry-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "dfb6e98ee59e46b02767a0f4b33864c985b352736834c9920084720a421e5e64",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "pistol_infantry",
+    "side": "black",
+    "file": "pistol_infantry-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "7aad3f263624ea19c42fc3a7487170304d375248874a5e14e6574cfce0c6058f",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "vanguard_officer",
+    "side": "white",
+    "file": "vanguard_officer-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "a8489ea7f76f1c80bc69732ad9028eb3875ac8e4fa211ac518b7b0a7c7587cac",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "vanguard_officer",
+    "side": "black",
+    "file": "vanguard_officer-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "6f5546dfa4cedd3d288b808e8d1f13f5ab9d560151aa4a5d03e8c0987a6da13c",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "mounted_officer",
+    "side": "white",
+    "file": "mounted_officer-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "cc7ebe37b9cf4b6329cf0e87ac10e02fcc4c5c903f9e5f38005bc4456f1325be",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "mounted_officer",
+    "side": "black",
+    "file": "mounted_officer-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "159ace47249bd94b2a1b6ac2e7de83131791af5930f9ae226bb980e497fb888c",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "vanguard_commander",
+    "side": "white",
+    "file": "vanguard_commander-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "cfb0a0235f5a59b392d3aef69b8db4c4c7fdc493945d7a4094fbb04acca27714",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "vanguard_commander",
+    "side": "black",
+    "file": "vanguard_commander-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "a89a6be66b31efa17f0cb54ef6d29f94dc8754ae97b3b8fd6328e8287d97d30d",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "mounted_commander",
+    "side": "white",
+    "file": "mounted_commander-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "8b7f7f07337fac749ff6c5d7bf66d5ec4c29586ee1f212f1aead1e342004fe1b",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "mounted_commander",
+    "side": "black",
+    "file": "mounted_commander-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "405aa4fe482947e1a31a2d52d45c0a62e0de374feaa925eaa22a4d9adf478dfa",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "smiling_king",
+    "side": "white",
+    "file": "smiling_king-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "61f818ab06e9e3fa218a4afaab743a4e1a9418c79ce3cba469ab2c190dc18d79",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "smiling_king",
+    "side": "black",
+    "file": "smiling_king-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "b914b4247c2b823782118b80d296774d8caf1568f430f6985a4e23a689d82b3a",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "toast_lord",
+    "side": "white",
+    "file": "toast_lord-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "35c4c594239d67be657e57508b811b6bc3d21e8884343662fc4e65387dd8e008",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "toast_lord",
+    "side": "black",
+    "file": "toast_lord-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "17e00ccc7b8449bafee1be856d59b48783452fe7ca74c5d851cb12fb6381f100",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "ecstatic_lord",
+    "side": "white",
+    "file": "ecstatic_lord-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "2ff8c3bcef0e3e3a475be3f724e9134a610741a73fda9138be0952128008c12d",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "ecstatic_lord",
+    "side": "black",
+    "file": "ecstatic_lord-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "4185697ee363813b229a6344c18a80dbd63a362b0252a3df52f84f12533f6400",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "masked_lady",
+    "side": "white",
+    "file": "masked_lady-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "9105eca22ccfb5e9f22cba0f0b9f60e906ddbb2c64a1d0284d86a6016c7e7e0e",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "masked_lady",
+    "side": "black",
+    "file": "masked_lady-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "a47ab88eeaf103ed7ac8d79d88577f5264d9332e37a472c63e5379969564bafa",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "red_lady",
+    "side": "white",
+    "file": "red_lady-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "38d9729cfbb5817d7b1a6d452417d7568dd6ed4b04f9e2b70bdb3e579721f13b",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "red_lady",
+    "side": "black",
+    "file": "red_lady-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "9d161b4065e0e89f8563b2ef887a702f225f9324452feeb8213d398fc7ecebb9",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "banquet_lady",
+    "side": "white",
+    "file": "banquet_lady-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "d490f42f910b878d827726b35e42fbdb761737b1af74cbd0fa1d22cc214f2171",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "banquet_lady",
+    "side": "black",
+    "file": "banquet_lady-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "294e6e7e0cdf39f62dc617824a66233e0fea8c6043197d5c8c6056e93f5a8d30",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "inviting_lady",
+    "side": "white",
+    "file": "inviting_lady-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "9cfc69250c72928a5ffe33b204eebfefda95aa508857ba4010286949b4216de4",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "inviting_lady",
+    "side": "black",
+    "file": "inviting_lady-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "eb490b148da9d499c210ca414bca1d1a942648280ec3def9514d6c44aaf0471d",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "butcher_cart",
+    "side": "white",
+    "file": "butcher_cart-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "6e42eb2f35d99c6f4c541e88903fd016b046818e1d98899e07ce3628ed5fc594",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "butcher_cart",
+    "side": "black",
+    "file": "butcher_cart-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "729fed265747cc29826fb0c10f99255fa0dd4a9a07aae90fd648f36d4bf4aaab",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "funeral_cart",
+    "side": "white",
+    "file": "funeral_cart-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "6ca0eeeddccf14fde1d718960199926a5c3be08a22795d85bd5d5ed9969732b5",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "funeral_cart",
+    "side": "black",
+    "file": "funeral_cart-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "b0251657b25cb80a118f20b8c4e8f6684bed6dd236f1df993a10531cc3d524fb",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "slaughter_cart",
+    "side": "white",
+    "file": "slaughter_cart-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "05d5eaa919111107ff5e1dee91c7898238454ed37e6353f992a798e543f1c430",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "slaughter_cart",
+    "side": "black",
+    "file": "slaughter_cart-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "6bc812b37bd62d4ae650ca17dc6c4c3cdc3873a46f5cf18045ac21abd2b45137",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "feast_cart",
+    "side": "white",
+    "file": "feast_cart-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "19940dacb7cf7e65e0501f0e0c20b20b76e9bdc21cd5231bcf5a0ed05c26be26",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "feast_cart",
+    "side": "black",
+    "file": "feast_cart-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "b505cea91adf445555d32df7d712972bf861ce68e0a33f54d0bc8d95a73c23b2",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "intoxicated_priest",
+    "side": "white",
+    "file": "intoxicated_priest-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "4c84734329dfda3301953c70cb1380926b4e817a504b74f8308185f41f598204",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "intoxicated_priest",
+    "side": "black",
+    "file": "intoxicated_priest-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "2f065d6d6118493351bf1a3d789d4534bc797ea822d4709a2392864d7805a148",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "feast_priest",
+    "side": "white",
+    "file": "feast_priest-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "f461501b71c16813e0089748f248b0ebacebda06ff801c3060ea1bf335dd3969",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "feast_priest",
+    "side": "black",
+    "file": "feast_priest-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "fd398ca23dbbadb0b2634c45aa54d01e06994598da63072363da6b98f08ed38a",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "locust_high_priest",
+    "side": "white",
+    "file": "locust_high_priest-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "efb762d614c5048aa4e0d577f429ed4bfbe360aedbcc4ea10cf611d41ccf9159",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "locust_high_priest",
+    "side": "black",
+    "file": "locust_high_priest-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "ece5653519f73e23740d3b2f0ca6e592b04190f03d190e75011d99f408af2478",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "hunger_priest",
+    "side": "white",
+    "file": "hunger_priest-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "695f60d938fa8768455e3dade678eaea1492774eac062f8fafecae1ac9bb9241",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "hunger_priest",
+    "side": "black",
+    "file": "hunger_priest-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "c640b7d6be2376223c5fc6deda2d1efd5e1c9ec6883cbb48e032562ad43e7445",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "frenzied_dancer",
+    "side": "white",
+    "file": "frenzied_dancer-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "21d318915c937c3f47a2f1ef1c03d35a449807f676adab4db1d7399a3a8a3bde",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "frenzied_dancer",
+    "side": "black",
+    "file": "frenzied_dancer-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "8f6130dcd48ebdea96b4787a82644df7d693e92f91f95814f3685d50fb1a3cd6",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "masked_dancer",
+    "side": "white",
+    "file": "masked_dancer-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "c3354ae8563d23190dccf2705c4d221b4d4dd257ed17ff14f0fe05df2faa7ad2",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "masked_dancer",
+    "side": "black",
+    "file": "masked_dancer-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "03d316f9814ec881a9b95fc49efbaefe43b90209ebab272c9a3fe2efbc528817",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "ecstatic_dancer",
+    "side": "white",
+    "file": "ecstatic_dancer-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "50fed09bea1f4fd92f750bf1947103a14597899c39ed96a48677b6f9413aefe5",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "ecstatic_dancer",
+    "side": "black",
+    "file": "ecstatic_dancer-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "d54ba7e0c2a1f7b181ed5053839b0c79c7272705da5ee4df9a1c02364cc36403",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "tempting_dancer",
+    "side": "white",
+    "file": "tempting_dancer-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "9018d52cafae6b1f0db3337bc65ffd933d62d0b10d34bcf139d2e1cd908e31b5",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "tempting_dancer",
+    "side": "black",
+    "file": "tempting_dancer-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "561b927a62854f810ea429355023c48d010e7799950bad0106144efcaae93d10",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "procession_follower",
+    "side": "white",
+    "file": "procession_follower-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "7804bfd6415c365d520f8f046dcf6b58c91d121ebdbaba841e568f2b483dafbf",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "procession_follower",
+    "side": "black",
+    "file": "procession_follower-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "dccd76303ae165d85a9305257a16c99c65fa6df8e656a6121eda092eb96267c9",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "hungry_follower",
+    "side": "white",
+    "file": "hungry_follower-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "77ed0310eb8e8024efcc9fe1575bc21bd07560d7c95d9a3fcfde4cbf3f8e24c3",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "hungry_follower",
+    "side": "black",
+    "file": "hungry_follower-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "56733b6d6320f2cb308a74862ebc27408d8a8efe192f7e912d5639875d4f8491",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "glutton_follower",
+    "side": "white",
+    "file": "glutton_follower-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "2065ce0caea0c2226141960033e26ebf4b517552e5051b0c114c3f3e781932a8",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "glutton_follower",
+    "side": "black",
+    "file": "glutton_follower-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "e8bdfa8a3448617482efcc340365cd9297b7ce326576cbe81043af7174ae0f48",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "inviting_follower",
+    "side": "white",
+    "file": "inviting_follower-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "e83b085d116d9a647307d96dc04cbe859c503ebb72e869b37d6874e37149170e",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "inviting_follower",
+    "side": "black",
+    "file": "inviting_follower-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "c80aa53b3c4fd25d91ecdb60149bf7eb65a73bd51f92058514f19801422fbbd5",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "corpse",
+    "side": "neutral",
+    "file": "corpse.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "f8567673cf85668c172741d1f5f095b3ef7c61c22d23b31cca8892dea1c6ac9e",
+    "changes": "Neutral shrouded corpse with skull; shared by both sides.",
+    "license": "original"
+  },
+  {
+    "key": "eternal_guest",
+    "side": "white",
+    "file": "eternal_guest-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "ed0699769bf5edaf5c76f303b057132497566f9c3ea3f1833295585a62544f6d",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "eternal_guest",
+    "side": "black",
+    "file": "eternal_guest-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "91df0123b4d884fe3a684dd5d8a83c1b7a9a63bd046cb569f294b4348e6e6113",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "warehouse",
+    "side": "white",
+    "file": "warehouse-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "6cf707c99eeab2657ed813c2cfda85c3303af70032e2d2bb541cf52fdd07f8d6",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "warehouse",
+    "side": "black",
+    "file": "warehouse-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "59a00c5fa807104c091538ceb95a960c815d26db27e28a4b20a8e320b29d08e7",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "rifleman",
+    "side": "white",
+    "file": "rifleman-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "38f2334a4685594013cfe39e7403f5ae35a958af5245934cd7b0e1c57df24b8d",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "rifleman",
+    "side": "black",
+    "file": "rifleman-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "57f9488d083e00fe3d1a65fcd248d6b115dce872581b908dca1a68f48e3f9eee",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "mortar",
+    "side": "white",
+    "file": "mortar-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "c5ef42dffd14645b6f3063dcb0b14db246a33e2844aebe4972a518e73c5a7cba",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "mortar",
+    "side": "black",
+    "file": "mortar-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "4ac8721fb3f912e0d6178cbba9496f9ff40ae3b00154b4382e2d8b1e57d8a0e8",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "drone",
+    "side": "white",
+    "file": "drone-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "3041b2f8ee246e8ded4118cc10dc2b265914b7c98ce96f51b36c10fc5d91bfd1",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "drone",
+    "side": "black",
+    "file": "drone-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "de68d5f1a8971e6d819d01d6dc8e68a380a1590403694305b86517ca462cfc8d",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "tank",
+    "side": "white",
+    "file": "tank-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "faa7500504948c3cc2ad96fbefef8a6da333ecdd909d83024e208dd112bb002c",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "tank",
+    "side": "black",
+    "file": "tank-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "d9bfebc478671e1684850442595cd9bc8bb259d99084af8f0bc2e6089e80575f",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "commando",
+    "side": "white",
+    "file": "commando-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "1683dcf69b679d176d541403639afadd4ac1a31ce9dfb490b4cb568367f8c241",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "commando",
+    "side": "black",
+    "file": "commando-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "4aeff2eda421a0389b50f6b15300171d478a348d5e2ff31e82c3f3861f8a575c",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "elite_commando",
+    "side": "white",
+    "file": "elite_commando-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "9b7b34214d32f364ca8283c438e68524761787da4bbf990032a4e67ec4c97eff",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "elite_commando",
+    "side": "black",
+    "file": "elite_commando-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "7860d4af454b55b83dc3553e3162a0814063cd0d72977add9ff78e7dc2fc0ccd",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "scout",
+    "side": "white",
+    "file": "scout-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "a6280c5c7e70cfd40055856535f48b4a7b41a8c12e0489c9ec3671e21ad2333b",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "scout",
+    "side": "black",
+    "file": "scout-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "d79fe047487d54eb7d011470c8d354d2fd8438b6bf5f02038abcf91c4c21f6c1",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "phantom_scout",
+    "side": "white",
+    "file": "phantom_scout-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "3359fecb517640e31a7934875f4a8ed344958be99ffcab76300e883ad72aae71",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "phantom_scout",
+    "side": "black",
+    "file": "phantom_scout-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "19c06f488e66639507bfa0c4c1e0394807e88bf621ba612b3c859f8cebfbc89f",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "sniper",
+    "side": "white",
+    "file": "sniper-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "c3ad2558029989ea06d50636a1ff341388534558310feb2b4e8dae445a88556b",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "sniper",
+    "side": "black",
+    "file": "sniper-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "237e60d0b82975885f4d450f1439facf726ed010e263b604b328c6d38a3c281b",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "marksman",
+    "side": "white",
+    "file": "marksman-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "e80ddf79f8dd6e2cb55c184b5159f097d9139064dfd38d40e4d96608d6bfd6e3",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "marksman",
+    "side": "black",
+    "file": "marksman-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "97b1ad5f7b05cfce5b7e60dc2b48056d687bf0ba32ee7a0540d5f874bd1fe397",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "special_commander",
+    "side": "white",
+    "file": "special_commander-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "653fc811e0d198b946efc46f0b1fff13775537d275786204f917d59ef6ff86a8",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "special_commander",
+    "side": "black",
+    "file": "special_commander-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "a7f45f2837890d6d85e4df7fe9bc769a741019ad3c83994c91d294ef9ae55fb8",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "shadow_commander",
+    "side": "white",
+    "file": "shadow_commander-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "ff5447758b61007334fd07ae368894dd5adad2eada27ec61cff33f8519f37071",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "shadow_commander",
+    "side": "black",
+    "file": "shadow_commander-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "f7bfb5b2f951fa8ffa2e03376de80d009506ea5f09229e1a81c1382f7452d4bd",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "tribal_dictator",
+    "side": "white",
+    "file": "tribal_dictator-white.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "06e62fd289019d127d4a486451a60f93efd833eb215d90702dedfe6eea14560b",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "tribal_dictator",
+    "side": "black",
+    "file": "tribal_dictator-black.svg",
+    "source": "self-authored vector for Chesslayer v0.3.0",
+    "sha256": "f0e59047783bff3d2cea3bf765ca2a58b6bf8412032b7b185c42ea83501ac0cf",
+    "changes": "Original squad role silhouette with upgrade and branch insignia.",
+    "license": "original"
+  },
+  {
+    "key": "c4_drone",
+    "side": "white",
+    "file": "c4_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "3a0c71bedb73eef4afbbdd266c94ddf3d4a53cc4805795d9e311d69aad7149f0",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "c4_drone",
+    "side": "black",
+    "file": "c4_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "b69133c785688d203039bd14577c1f55d0ff90c16986dc3043dc17fd3800f17b",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "machine_gun_drone",
+    "side": "white",
+    "file": "machine_gun_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "29ba64b41fb82ff9a13741e09811adfe34e88257b0839a6aa529ba6bb091c3fe",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "machine_gun_drone",
+    "side": "black",
+    "file": "machine_gun_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "bc27f8c144da5fdf485068650a7c0cf923abcf3a49aaba3d9e635793deb31431",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "tactical_nuke_drone",
+    "side": "white",
+    "file": "tactical_nuke_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "9ef3f98b9a9276458e24dc5035723be65970475c235f4eaad1a94f25b3a1e005",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "tactical_nuke_drone",
+    "side": "black",
+    "file": "tactical_nuke_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "515b9815f033c03c3128743e31c20bb5e886d5ed99e0bee691115da01f58846f",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "grenade_launcher_drone",
+    "side": "white",
+    "file": "grenade_launcher_drone-white.svg",
+    "source": "self-authored drone-white.svg with branch insignia",
+    "sha256": "5989a198af2652e162ee9fdef42efa8192975f206ed2eb6471b04aba26958b06",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "grenade_launcher_drone",
+    "side": "black",
+    "file": "grenade_launcher_drone-black.svg",
+    "source": "self-authored drone-black.svg with branch insignia",
+    "sha256": "00b920b7adc07dd7f9e2bbb9cc40b18971784351821e626ba7fb6a9e8fdd3e3d",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "he_tank",
+    "side": "white",
+    "file": "he_tank-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "eb4295356a93433d2a18663be18dedb1a8b8d0c9c02160d01820d33b83f4dbfc",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "he_tank",
+    "side": "black",
+    "file": "he_tank-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "5bfdf06433a59c9687e6fe206fa06a7a2ab87bcda857b9a997099ef3d8b7d3f4",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "ap_tank",
+    "side": "white",
+    "file": "ap_tank-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "fc5bc6c78f376f94fe7c0529a092708bdc6fb8bcb4a1c5f3ace77f446229cfac",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "ap_tank",
+    "side": "black",
+    "file": "ap_tank-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "b2f87d204b3f69363bb7da84076337788e08078f392b2039820e55f71bb4fc00",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "double_barrel",
+    "side": "white",
+    "file": "double_barrel-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "78b6968ea66774d5f504d3e5dd8c511b82581ca5956199b1c119ba45fb4e3e27",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "double_barrel",
+    "side": "black",
+    "file": "double_barrel-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "c646c7523047a2cf61b9e64258601924472d4a5a3c72800535bb370b90258521",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "fragment_tank",
+    "side": "white",
+    "file": "fragment_tank-white.svg",
+    "source": "self-authored tank-white.svg with branch insignia",
+    "sha256": "452f114a6e15110097c466a1c0bea80fded4a88a4824b7c3cada46582e3b5723",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
+  },
+  {
+    "key": "fragment_tank",
+    "side": "black",
+    "file": "fragment_tank-black.svg",
+    "source": "self-authored tank-black.svg with branch insignia",
+    "sha256": "6a5874640ff1a2519dc97aaf142175ce76dbaf70c7f2ca8855c592d1687f167c",
+    "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
+    "license": "original"
   }
 ]

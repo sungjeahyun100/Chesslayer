@@ -35,6 +35,103 @@ mod typhoon_queen;
 mod typhoon_rook;
 mod unicorn;
 
+mod axe_infantry;
+pub use axe_infantry::AXE_INFANTRY;
+mod spear_infantry;
+pub use spear_infantry::SPEAR_INFANTRY;
+mod sword_infantry;
+pub use sword_infantry::SWORD_INFANTRY;
+mod halberd_infantry;
+pub use halberd_infantry::HALBERD_INFANTRY;
+mod pistol_infantry;
+pub use pistol_infantry::PISTOL_INFANTRY;
+mod vanguard_officer;
+pub use vanguard_officer::VANGUARD_OFFICER;
+mod mounted_officer;
+pub use mounted_officer::MOUNTED_OFFICER;
+mod vanguard_commander;
+pub use vanguard_commander::VANGUARD_COMMANDER;
+mod mounted_commander;
+pub use mounted_commander::MOUNTED_COMMANDER;
+mod smiling_king;
+pub use smiling_king::SMILING_KING;
+mod toast_lord;
+pub use toast_lord::TOAST_LORD;
+mod ecstatic_lord;
+pub use ecstatic_lord::ECSTATIC_LORD;
+mod masked_lady;
+pub use masked_lady::MASKED_LADY;
+mod red_lady;
+pub use red_lady::RED_LADY;
+mod banquet_lady;
+pub use banquet_lady::BANQUET_LADY;
+mod inviting_lady;
+pub use inviting_lady::INVITING_LADY;
+mod butcher_cart;
+pub use butcher_cart::BUTCHER_CART;
+mod funeral_cart;
+pub use funeral_cart::FUNERAL_CART;
+mod slaughter_cart;
+pub use slaughter_cart::SLAUGHTER_CART;
+mod feast_cart;
+pub use feast_cart::FEAST_CART;
+mod intoxicated_priest;
+pub use intoxicated_priest::INTOXICATED_PRIEST;
+mod feast_priest;
+pub use feast_priest::FEAST_PRIEST;
+mod locust_high_priest;
+pub use locust_high_priest::LOCUST_HIGH_PRIEST;
+mod hunger_priest;
+pub use hunger_priest::HUNGER_PRIEST;
+mod frenzied_dancer;
+pub use frenzied_dancer::FRENZIED_DANCER;
+mod masked_dancer;
+pub use masked_dancer::MASKED_DANCER;
+mod ecstatic_dancer;
+pub use ecstatic_dancer::ECSTATIC_DANCER;
+mod tempting_dancer;
+pub use tempting_dancer::TEMPTING_DANCER;
+mod procession_follower;
+pub use procession_follower::PROCESSION_FOLLOWER;
+mod hungry_follower;
+pub use hungry_follower::HUNGRY_FOLLOWER;
+mod glutton_follower;
+pub use glutton_follower::GLUTTON_FOLLOWER;
+mod inviting_follower;
+pub use inviting_follower::INVITING_FOLLOWER;
+mod corpse;
+pub use corpse::CORPSE;
+mod eternal_guest;
+pub use eternal_guest::ETERNAL_GUEST;
+mod warehouse;
+pub use warehouse::WAREHOUSE;
+mod rifleman;
+pub use rifleman::RIFLEMAN;
+mod mortar;
+pub use mortar::MORTAR;
+mod drone;
+pub use drone::{C4_DRONE, DRONE, GRENADE_LAUNCHER_DRONE, MACHINE_GUN_DRONE, TACTICAL_NUKE_DRONE};
+mod tank;
+pub use tank::{AP_TANK, DOUBLE_BARREL, FRAGMENT_TANK, HE_TANK, TANK};
+mod commando;
+pub use commando::COMMANDO;
+mod elite_commando;
+pub use elite_commando::ELITE_COMMANDO;
+mod scout;
+pub use scout::SCOUT;
+mod phantom_scout;
+pub use phantom_scout::PHANTOM_SCOUT;
+mod sniper;
+pub use sniper::SNIPER;
+mod marksman;
+pub use marksman::MARKSMAN;
+mod special_commander;
+pub use special_commander::SPECIAL_COMMANDER;
+mod shadow_commander;
+pub use shadow_commander::SHADOW_COMMANDER;
+mod tribal_dictator;
+pub use tribal_dictator::TRIBAL_DICTATOR;
+
 use crate::{Board, DefaultAction, PieceType, Position};
 use chessembly::Error as MovementError;
 
@@ -87,12 +184,14 @@ pub enum PieceFamily {
     Bishop,
 }
 
+pub type NativeMovement = fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>;
+
 pub struct PieceDefinition {
     pub kind: PieceType,
     pub key: &'static str,
     pub name: &'static str,
     pub movement: fn() -> String,
-    pub native_movement: Option<fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>>,
+    pub native_movement: Option<NativeMovement>,
     pub value: i32,
     pub description: &'static str,
     pub upgrades: &'static [UpgradeDefinition],
@@ -158,6 +257,62 @@ pub const ALL: &[PieceDefinition] = &[
     centaur::DEFINITION,
     lobster::DEFINITION,
     tempest_king::DEFINITION,
+    axe_infantry::DEFINITION,
+    spear_infantry::DEFINITION,
+    sword_infantry::DEFINITION,
+    halberd_infantry::DEFINITION,
+    pistol_infantry::DEFINITION,
+    vanguard_officer::DEFINITION,
+    mounted_officer::DEFINITION,
+    vanguard_commander::DEFINITION,
+    mounted_commander::DEFINITION,
+    smiling_king::DEFINITION,
+    toast_lord::DEFINITION,
+    ecstatic_lord::DEFINITION,
+    masked_lady::DEFINITION,
+    red_lady::DEFINITION,
+    banquet_lady::DEFINITION,
+    inviting_lady::DEFINITION,
+    butcher_cart::DEFINITION,
+    funeral_cart::DEFINITION,
+    slaughter_cart::DEFINITION,
+    feast_cart::DEFINITION,
+    intoxicated_priest::DEFINITION,
+    feast_priest::DEFINITION,
+    locust_high_priest::DEFINITION,
+    hunger_priest::DEFINITION,
+    frenzied_dancer::DEFINITION,
+    masked_dancer::DEFINITION,
+    ecstatic_dancer::DEFINITION,
+    tempting_dancer::DEFINITION,
+    procession_follower::DEFINITION,
+    hungry_follower::DEFINITION,
+    glutton_follower::DEFINITION,
+    inviting_follower::DEFINITION,
+    corpse::DEFINITION,
+    eternal_guest::DEFINITION,
+    warehouse::DEFINITION,
+    rifleman::DEFINITION,
+    mortar::DEFINITION,
+    drone::DEFINITION,
+    drone::C4_DEFINITION,
+    drone::MACHINE_GUN_DEFINITION,
+    drone::TACTICAL_NUKE_DEFINITION,
+    drone::GRENADE_LAUNCHER_DEFINITION,
+    tank::DEFINITION,
+    tank::HE_DEFINITION,
+    tank::AP_DEFINITION,
+    tank::DOUBLE_BARREL_DEFINITION,
+    tank::FRAGMENT_DEFINITION,
+    commando::DEFINITION,
+    elite_commando::DEFINITION,
+    scout::DEFINITION,
+    phantom_scout::DEFINITION,
+    sniper::DEFINITION,
+    marksman::DEFINITION,
+    special_commander::DEFINITION,
+    shadow_commander::DEFINITION,
+    tribal_dictator::DEFINITION,
 ];
 
 /// Permanent-roster prerequisites. The source piece still has to be alive at rest.
@@ -187,4 +342,46 @@ pub(crate) fn catalog() -> Vec<String> {
 
 pub fn piece_name(kind: PieceType) -> &'static str {
     definition(kind).map_or("기물", |d| d.name)
+}
+
+/// Royal kinds used by playable rosters; artillery tracks warehouses separately.
+pub fn is_royal(kind: PieceType) -> bool {
+    matches!(
+        kind,
+        KING | TEMPEST_KING
+            | VANGUARD_COMMANDER
+            | MOUNTED_COMMANDER
+            | SMILING_KING
+            | TOAST_LORD
+            | ECSTATIC_LORD
+            | ETERNAL_GUEST
+            | SPECIAL_COMMANDER
+            | SHADOW_COMMANDER
+            | TRIBAL_DICTATOR
+    )
+}
+
+pub fn is_pawn(kind: PieceType) -> bool {
+    matches!(
+        kind,
+        PAWN | TEMPEST_PAWN
+            | BOUNCING_PAWN
+            | PROCESSION_FOLLOWER
+            | HUNGRY_FOLLOWER
+            | GLUTTON_FOLLOWER
+            | INVITING_FOLLOWER
+    )
+}
+
+/// One permanent step down for shared weakening; branches return to their parent.
+pub fn previous_upgrade(kind: PieceType) -> Option<PieceType> {
+    ALL.iter()
+        .find(|definition| {
+            definition.kind != kind
+                && definition
+                    .upgrades
+                    .iter()
+                    .any(|upgrade| upgrade.target == kind)
+        })
+        .map(|definition| definition.kind)
 }

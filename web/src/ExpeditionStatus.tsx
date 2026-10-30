@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { PieceImage } from "./PieceImage";
+import { PieceStatuses } from "./PieceStatuses";
 import { CardFace } from "./CardFace";
 import { RelicIcon } from "./ContentArt";
 import type { RestOption, Snapshot } from "./types";
@@ -65,7 +66,7 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
     <div className="expedition-status-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="expedition-status-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="expedition-status-title">
         <header className="expedition-status-heading">
-          <div><p className="eyebrow">CHESSLAYER / ACT {state.floor === 1 ? "I" : "II"}</p><h2 id="expedition-status-title">원정 현황</h2></div>
+          <div><p className="eyebrow">CHESSLAYER / {state.final_battle ? "FINALE" : `ACT ${["", "I", "II", "III", "IV"][state.floor]}`} / {state.character}</p><h2 id="expedition-status-title">원정 현황</h2></div>
           <button className="expedition-status-close" ref={closeRef} onClick={onClose} aria-label="원정 현황 닫기">닫기 ×</button>
         </header>
         <div className="expedition-status-content">
@@ -101,6 +102,7 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
               </div>
               <strong>{selectedPiece.name}</strong>
               <p>{selectedPiece.description}</p>
+              <PieceStatuses statuses={selectedPiece.statuses} />
               <small>{selectedPiece.dead ? "전투 불가" : "다음 전투 참가"} · 강화 {selectedPiece.upgrades.length}회</small>
               {selectedPiece.upgrades.length > 0 && <ol className="status-upgrade-history">
                 {upgradeSteps.map(({ key, path }, index) => {

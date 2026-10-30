@@ -3,7 +3,8 @@ use super::{Character, Relic};
 pub const DEFINITION: Character = Character {
     id: "vanguard",
     name: "선봉대",
-    title: "한 수 더, 한 발 먼저",
-    description: "가속으로 연속 두 수를 둡니다. 적도 두 번 움직이므로 킹을 지키세요.",
+    title: "한 발 더 빠르게",
+    description: "기동 보병과 지휘관, 민첩과 희생으로 전선을 돌파합니다. 한 턴에 부대 전체가 두 번 행동합니다.",
     relic: Relic::Haste,
+    unlock_floor: 1,
 };

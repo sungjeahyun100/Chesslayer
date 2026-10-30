@@ -444,6 +444,10 @@ fn complete_upgrade_graph_has_no_cycle() {
     for definition in pieces::ALL {
         indegree.entry(definition.kind).or_insert(0usize);
         for upgrade in definition.upgrades {
+            // Warehouse reinforcement changes ammunition, not the piece's kind.
+            if definition.kind == pieces::WAREHOUSE && upgrade.target == pieces::WAREHOUSE {
+                continue;
+            }
             *indegree.entry(upgrade.target).or_insert(0) += 1;
         }
     }
@@ -454,6 +458,9 @@ fn complete_upgrade_graph_has_no_cycle() {
     let mut i = 0;
     while i < queue.len() {
         for upgrade in pieces::definition(queue[i]).unwrap().upgrades {
+            if queue[i] == pieces::WAREHOUSE && upgrade.target == pieces::WAREHOUSE {
+                continue;
+            }
             let count = indegree.get_mut(&upgrade.target).unwrap();
             *count -= 1;
             if *count == 0 {

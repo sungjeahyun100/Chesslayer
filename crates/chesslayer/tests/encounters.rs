@@ -1,5 +1,5 @@
 use chesslayer::{
-    content::{encounters::*, pieces::HOOK},
+    content::{encounters::*, pieces::*},
     game::*,
     *,
 };
@@ -122,8 +122,82 @@ fn floor_two_rosters_and_random_royals() {
             choose_random_royal(index, &mut roster, &mut chesslayer::content::Rng::new(seed));
             selected.insert(roster.royal_id);
             assert!(roster.enemies.iter().any(|p| p.id == roster.royal_id));
+            assert!(roster.additional_royal_ids.is_empty());
         }
         assert!(selected.len() > 1);
+    }
+}
+
+#[test]
+fn legacy_encounters_keep_their_original_royal_identities() {
+    for (index, _) in ENCOUNTERS.iter().enumerate().skip(9) {
+        let mut roster = encounter(index);
+        choose_random_royal(index, &mut roster, &mut chesslayer::content::Rng::new(7));
+        let mut ids = vec![roster.royal_id];
+        ids.extend(&roster.additional_royal_ids);
+        if index == DICTATOR_BOSS {
+            assert_eq!(
+                ids.len(),
+                1,
+                "the dictator's HP reaching zero must end the battle"
+            );
+            assert_eq!(roster.enemies.len(), 1, "the dictator fights alone");
+            assert_eq!(roster.enemies[0].kind, TRIBAL_DICTATOR);
+        } else {
+            let expected_royals = if matches!(index, TWO_TWINS | ARTILLERY_BOSS | THREE_DEPOT) {
+                2
+            } else {
+                1
+            };
+            assert_eq!(ids.len(), expected_royals, "{}", ENCOUNTERS[index].id);
+        }
+        assert_eq!(ids.iter().copied().collect::<HashSet<_>>().len(), ids.len());
+        assert!(ids
+            .iter()
+            .all(|id| roster.enemies.iter().any(|p| p.id == *id)));
+        Battle::new(BattleStart {
+            players: Battle::standard_roster(),
+            encounter: roster,
+        })
+        .unwrap();
+    }
+}
+
+#[test]
+fn later_elites_keep_their_original_forces() {
+    for (index, count) in [
+        (THREE_DEPOT, 8),
+        (THREE_MOBILE, 5),
+        (THREE_GUNNERS, 4),
+        (FOUR_PHANTOMS, 5),
+        (FOUR_MARKSMEN, 5),
+        (FOUR_ELITE, 7),
+    ] {
+        assert_eq!(
+            encounter(index).enemies.len(),
+            count,
+            "{}",
+            ENCOUNTERS[index].id
+        );
+    }
+    for (index, kind, count) in [
+        (THREE_DEPOT, RIFLEMAN, 2),
+        (THREE_MOBILE, DRONE, 4),
+        (THREE_GUNNERS, PISTOL_INFANTRY, 3),
+        (FOUR_MARKSMEN, MARKSMAN, 4),
+        (FOUR_ELITE, ELITE_COMMANDO, 2),
+        (FOUR_ELITE, PHANTOM_SCOUT, 2),
+    ] {
+        assert_eq!(
+            encounter(index)
+                .enemies
+                .iter()
+                .filter(|p| p.kind == kind)
+                .count(),
+            count,
+            "{}",
+            ENCOUNTERS[index].id
+        );
     }
 }
 
@@ -137,9 +211,13 @@ fn twins_require_both_captures_and_surviving_god_can_act() {
     }
     players[0].position = Some(p("e7"));
     players[7].position = Some(p("d7"));
+    let mut twins = encounter(TWO_TWINS);
+    twins
+        .enemies
+        .retain(|enemy| ![p("d7"), p("e7")].contains(&enemy.position));
     let mut battle = Battle::new(BattleStart {
         players,
-        encounter: encounter(TWO_TWINS),
+        encounter: twins,
     })
     .unwrap();
     let first = battle
@@ -185,9 +263,13 @@ fn emperor_absorbs_captured_movement_and_initiative_cancels() {
     }
     players[0].position = Some(p("e7"));
     players[4].position = Some(p("h1"));
+    let mut emperor_encounter = encounter(TWO_EMPEROR);
+    emperor_encounter
+        .enemies
+        .retain(|enemy| enemy.position != p("e7"));
     let start = BattleStart {
         players,
-        encounter: encounter(TWO_EMPEROR),
+        encounter: emperor_encounter,
     };
     let both = Battle::with_options(
         start.clone(),

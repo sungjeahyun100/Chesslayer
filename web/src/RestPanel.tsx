@@ -1,6 +1,7 @@
 import { useEffect, useRef } from "react";
 import { PieceImage } from "./PieceImage";
 import { UpgradeTree } from "./UpgradeTree";
+import { PieceStatuses } from "./PieceStatuses";
 import type { Command, Snapshot } from "./types";
 
 export interface RestChoice {
@@ -25,6 +26,20 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, on
       panel.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   }, [piece?.id, piece?.dead]);
   const candidates = state.rest_options.filter((p) => p.can_revive && p.origin === choice?.cell);
+
+  if (piece && (piece.can_confess || piece.key === "warehouse") && !piece.dead) {
+    const warehouse = piece.key === "warehouse";
+    return <section className="rest-panel" aria-label="쉼터 기물 관리">
+      <div className="rest-detail-heading"><h2>{warehouse ? "창고 강화" : "고해성사"}</h2><button className="text-button" onClick={onCancel}>닫기 ×</button></div>
+      <div className="rest-portrait"><PieceImage pieceKey={piece.key} name={piece.name} /></div><h2>{piece.name}</h2>
+      <PieceStatuses statuses={piece.statuses} />
+      <p className="piece-description">{warehouse ? `현재 탄약 ${state.ammo ?? 0}의 10%를 보충합니다. 창고는 기물 강화 대신 탄약을 보충합니다.` : "고해성사로 이 기물의 영구 전투불능을 해제합니다. 일반 부활이나 회복으로는 이 상태를 해제할 수 없습니다."}</p>
+      {piece.can_confess && !reward && <button className="primary" onClick={() => send({ type: "rest_confess", id: piece.id })}>고해성사 · 행동 1회</button>}
+      {warehouse && <button className="primary" onClick={() => send(reward ? { type: "claim_upgrade", id: piece.id, target: piece.kind } : { type: "rest_supply", id: piece.id })}>탄약 보충 확정</button>}
+      {reward && !warehouse && <p>영구 전투불능 회복은 휴식에서만 가능합니다.</p>}
+      <button className="text-button rest-depart" onClick={onCancel}>대상 재선택</button>
+    </section>;
+  }
 
   if (piece && !piece.dead) {
     const square = reward && choice ? `${"abcdefgh"[choice.cell % 8]}${8 - Math.floor(choice.cell / 8)}` : piece.square;
@@ -92,6 +107,11 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, on
         <div className="rest-intro">
           <h2>{reward ? "강화할 기물 선택" : "기물 선택"}</h2>
           <p>{reward ? "보드에서 아군 기물을 선택하세요." : "아군 기물 또는 부활할 기물의 초기 칸을 선택하세요."}</p>
+          {!reward && state.rest_options.some((option) => option.can_confess) && <div className="confession-options"><h3>고해성사가 필요한 기물</h3>
+            {state.rest_options.filter((option) => option.can_confess).map((option) => <button key={option.id} onClick={() => onChoose({ id: option.id, cell: option.cell ?? option.origin ?? 0 })}>
+              <PieceImage pieceKey={option.key} name={option.name} /><span>{option.name}</span><small>영구 전투불능</small>
+            </button>)}
+          </div>}
         </div>
       ) : (
         <div className="rest-detail" key={piece.id}>
