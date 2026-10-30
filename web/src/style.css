@@ -436,6 +436,11 @@ footer span {
 .square.dark {
   background: #86a080;
 }
+.square.last-enemy-move.light { background: #f0dc76; }
+.square.last-enemy-move.dark { background: #d9bf52; }
+.square.last-enemy-move.selected { background: #d1bf68; }
+.square.last-enemy-move.targetable { background: #b4bc81; }
+.square.last-enemy-move.card-staged { background: #e7c76a; }
 .square:hover:not(:disabled) {
   box-shadow: inset 0 0 0 4px #fbf5ac80;
 }
@@ -611,14 +616,6 @@ footer span {
   font-size: 10px;
   color: #89967d;
 }
-.board-caption {
-  margin-left: 20px;
-  display: flex;
-  justify-content: space-between;
-  font-size: 10px;
-  color: #87917f;
-  padding-top: 7px;
-}
 .action-hint {
   margin: 13px 0 0 20px;
   font-size: 12px;
@@ -660,18 +657,6 @@ footer span {
   color: #909889;
   letter-spacing: 0;
 }
-.turn-panel {
-  border: 1px solid var(--line);
-  padding: 20px;
-  border-radius: 4px;
-  background: #fafbf4;
-}
-.mana {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin: 22px 0;
-}
 .mana-orb {
   height: 49px;
   width: 49px;
@@ -684,20 +669,6 @@ footer span {
   border-radius: 50%;
   font-family: Georgia, serif;
   font-size: 27px;
-}
-.mana strong {
-  font-size: 12px;
-  font-weight: 600;
-  display: block;
-}
-.mana small {
-  font-size: 10px;
-  display: block;
-  margin-top: 5px;
-  color: #8a9385;
-}
-.end-turn {
-  width: 100%;
 }
 .relic-panel {
   padding: 0 5px;
@@ -725,34 +696,6 @@ footer span {
   color: #8a9381;
   line-height: 1.8;
   margin-top: 4px;
-}
-.log-panel {
-  border-top: 1px solid var(--line);
-  padding: 20px 5px 0;
-  flex: 1;
-  min-height: 150px;
-}
-.battle-log {
-  max-height: 220px;
-  overflow-y: auto;
-  margin-top: 13px;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: #c7d0bd transparent;
-}
-.battle-log p {
-  font-size: 10px;
-  line-height: 1.9;
-  color: #929b88;
-  margin: 0 0 8px;
-  display: flex;
-  gap: 8px;
-}
-.battle-log p.important {
-  color: #456b49;
-}
-.battle-log p:last-child {
-  color: #3d5c40;
 }
 .hand-area {
   margin-left: 20px;
@@ -985,17 +928,8 @@ footer span {
     font-size: 9px;
     max-width: 100px;
   }
-  .turn-panel {
-    padding: 15px;
-  }
   .piece {
     font-size: clamp(23px, 4.6vw, 45px);
-  }
-  .mana {
-    gap: 9px;
-  }
-  .mana strong {
-    font-size: 11px;
   }
   .board {
     border-width: 3px;
@@ -1162,33 +1096,16 @@ footer span {
     padding: 0 8px;
     gap: 15px;
   }
-  .turn-panel {
-    padding: 13px;
-  }
   .section-label {
     font-size: 10px;
   }
   .section-label > span {
     font-size: 8px;
   }
-  .mana {
-    margin: 12px 0;
-    gap: 8px;
-  }
   .mana-orb {
     height: 36px;
     width: 36px;
     font-size: 23px;
-  }
-  .mana strong {
-    font-size: 10px;
-  }
-  .mana small {
-    font-size: 8px;
-  }
-  .primary.end-turn {
-    padding: 9px 11px;
-    font-size: 12px;
   }
   .relic-panel {
     padding: 10px 3px;
@@ -1203,15 +1120,6 @@ footer span {
   }
   .relic p {
     font-size: 10px;
-  }
-  .log-panel {
-    grid-column: 1/-1;
-    padding: 14px 0 0;
-    min-height: 0;
-  }
-  .battle-log {
-    max-height: 100px;
-    margin-top: 9px;
   }
   .hand-area {
     margin: 0 8px;
@@ -1290,9 +1198,6 @@ footer span {
     gap: 15px;
   }
   .royal-mark {
-    font-size: 9px;
-  }
-  .board-caption {
     font-size: 9px;
   }
   .action-hint {
@@ -1792,22 +1697,7 @@ body:has(.expedition-status-trigger) .top-right { padding-right: 125px; }
   margin-top: 6px;
 }
 .selected-piece-info > div { min-width: 0; }
-.selected-piece-info .piece-side-label,
-.selected-piece-info .piece-info-heading,
-.selected-piece-info .effect-note,
 .selected-piece-info .royal-info { display: block; }
-.selected-piece-info .piece-side-label {
-  color: #61725b;
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 4px;
-}
-.selected-piece-info .piece-info-heading {
-  margin-top: 10px;
-  color: #52674d;
-  font-size: 11px;
-  font-weight: 700;
-}
 .selected-piece-info .royal-info {
   margin-top: 6px;
   padding: 5px 7px;
@@ -1824,10 +1714,93 @@ body:has(.expedition-status-trigger) .top-right { padding-right: 125px; }
   max-height: 250px;
   overflow-y: auto;
 }
-.selected-piece-info.enemy-piece-info .piece-info-heading { margin-top: 6px; }
-.selected-piece-info.enemy-piece-info p { margin-top: 2px; line-height: 1.4; }
-.selected-piece-info.enemy-piece-info .piece-side-label,
-.selected-piece-info.enemy-piece-info .piece-info-heading { color: #2c6d8c; }
+.game-layout[data-phase="combat"] {
+  max-width: 1340px;
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 220px);
+  gap: 10px 18px;
+  padding: 12px 20px 20px;
+  align-items: start;
+}
+.game-layout[data-phase="combat"] .battle-column {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 340px);
+  align-items: start;
+  gap: 14px;
+}
+.game-layout[data-phase="combat"] .battle-heading { margin: 0 0 8px 20px; }
+.game-layout[data-phase="combat"] .battle-heading h1 { font-size: 21px; }
+.game-layout[data-phase="combat"] .board-frame {
+  width: min(100%, calc(100dvh - 155px));
+  min-width: 0;
+  margin-inline: auto;
+}
+.game-layout[data-phase="combat"] .sidebar { gap: 10px; padding-top: 0; }
+.game-layout[data-phase="combat"] .hand-area {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.game-layout[data-phase="combat"] .hand-heading {
+  display: block;
+  margin: 0 0 8px;
+}
+.game-layout[data-phase="combat"] .hand-heading h2 { font-size: 15px; }
+.game-layout[data-phase="combat"] .piles { flex-wrap: wrap; gap: 3px 10px; margin-top: 4px; font-size: 9px; }
+.game-layout[data-phase="combat"] .piles b { font-size: 10px; }
+.game-layout[data-phase="combat"] .hand {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: start;
+  gap: 7px;
+  max-height: min(69dvh, 620px);
+  overflow: auto;
+  padding: 2px 4px 8px 2px;
+}
+.game-layout[data-phase="combat"] .hand .playing-card {
+  width: 100%;
+  min-width: 0;
+  min-height: 140px;
+  padding: 8px;
+  gap: 4px;
+}
+.game-layout[data-phase="combat"] .hand .playing-card.active-card { padding: 7px; }
+.game-layout[data-phase="combat"] .hand .card-symbol { display: none; }
+.game-layout[data-phase="combat"] .hand .playing-card h3 { margin: 0; font-size: 12px; line-height: 1.3; }
+.game-layout[data-phase="combat"] .hand .playing-card p { margin: 0; font-size: 11px; line-height: 1.4; }
+.game-layout[data-phase="combat"] .hand .tags { margin-top: auto; }
+.game-layout[data-phase="combat"] .selected-piece-info {
+  padding: 10px;
+  gap: 7px;
+}
+.game-layout[data-phase="combat"] .selected-piece-info > .piece-image { width: 34px; height: 42px; }
+.game-layout[data-phase="combat"] .selected-piece-info p { margin-top: 4px; line-height: 1.4; font-size: 11px; }
+.game-layout[data-phase="combat"] .selected-piece-info .royal-info {
+  display: inline;
+  margin: 0 0 0 3px;
+  padding: 0;
+  background: none;
+  font-size: 10px;
+}
+.game-layout[data-phase="combat"] .selected-piece-info.enemy-piece-info { max-height: min(48dvh, 420px); }
+.combat-resource { display: flex; align-items: center; gap: 8px; color: #52674d; font-size: 11px; }
+.combat-resource .mana-orb { width: 39px; height: 39px; font-size: 22px; }
+.game-layout[data-phase="combat"] .relic-panel { border-top: 1px solid var(--line); }
+@media (max-width: 900px) {
+  .game-layout[data-phase="combat"] { display: flex; flex-direction: column; padding: 12px; }
+  .game-layout[data-phase="combat"] .battle-column { width: 100%; grid-template-columns: minmax(0, 1fr) minmax(250px, 330px); }
+  .game-layout[data-phase="combat"] .sidebar { width: 100%; display: flex; flex-direction: row; align-items: start; flex-wrap: wrap; padding: 0; }
+  .game-layout[data-phase="combat"] .sidebar > * { flex: 0 1 250px; }
+}
+@media (max-width: 700px) {
+  .game-layout[data-phase="combat"] .battle-column { display: flex; flex-direction: column; }
+  .game-layout[data-phase="combat"] .battle-area, .game-layout[data-phase="combat"] .hand-area { width: 100%; }
+  .game-layout[data-phase="combat"] .board-frame { width: min(100%, calc(100dvh - 160px)); }
+  .game-layout[data-phase="combat"] .hand { height: auto; max-height: 260px; }
+  .game-layout[data-phase="combat"] .hand .playing-card { min-height: 100px; }
+}
 .game-layout[data-phase="rest"] {
   max-width: 1120px;
   grid-template-columns: minmax(0, 560px) minmax(300px, 350px);
@@ -2122,9 +2095,6 @@ body:has(.expedition-status-trigger) .top-right { padding-right: 125px; }
   }
   .game-layout[data-phase="rest"] .battle-heading {
     padding-top: 8px;
-  }
-  .game-layout[data-phase="rest"] .board-caption {
-    padding-bottom: 8px;
   }
 }
 
@@ -2636,31 +2606,10 @@ body:has(.reward-overlay) .skill-node-popup { z-index: 140; }
 .postbattle-options small { color: #9a6547; }
 .shop-cards { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin: 25px 0; }
 .location-actions { display: flex; gap: 22px; justify-content: center; align-items: center; margin-top: 25px; }
-.relic-panel > summary, .log-panel > summary { cursor: pointer; padding: 9px 0; }
-.relic-panel > summary::after, .log-panel > summary::after { content: '+'; color: #657957; }
-.relic-panel[open] > summary::after, .log-panel[open] > summary::after { content: '−'; }
-.log-panel { min-height: 0; flex: none; padding-top: 0; }
-.sidebar > .turn-panel { order: -2; }
+.relic-panel > summary { cursor: pointer; padding: 9px 0; }
+.relic-panel > summary::after { content: '+'; color: #657957; }
+.relic-panel[open] > summary::after { content: '−'; }
 .sidebar > .selected-piece-info { order: -1; }
-@media (min-width: 901px) {
-  .game-layout[data-phase="combat"] { padding-top: 14px; gap: 12px 28px; max-width: 1140px; grid-template-columns: minmax(0, 620px) 300px; }
-  .game-layout[data-phase="combat"] .battle-heading { margin-bottom: 10px; }
-  .game-layout[data-phase="combat"] .battle-heading h1 { font-size: 22px; }
-  .game-layout[data-phase="combat"] .board-frame { width: min(100%, 42svh); min-width: 300px; margin-inline: auto; }
-  .game-layout[data-phase="combat"] .battle-column { gap: 10px; }
-  .game-layout[data-phase="combat"] .sidebar { gap: 12px; }
-  .game-layout[data-phase="combat"] .turn-panel { padding: 13px 15px; }
-  .game-layout[data-phase="combat"] .mana { margin: 12px 0; }
-  .game-layout[data-phase="combat"] .hand-area { padding-top: 8px; }
-  .game-layout[data-phase="combat"] .hand-heading { margin-bottom: 6px; }
-  .game-layout[data-phase="combat"] .hand { gap: 8px; padding-bottom: 8px; }
-  .game-layout[data-phase="combat"] .hand .playing-card { width: 142px; min-width: 142px; padding: 10px; }
-  .game-layout[data-phase="combat"] .hand .card-symbol { height: 36px; margin: 3px 0; }
-  .game-layout[data-phase="combat"] .hand .card-symbol .card-art { max-height: 36px; }
-  .game-layout[data-phase="combat"] .hand .playing-card h3 { font-size: 12px; margin: 6px 0; }
-  .game-layout[data-phase="combat"] .hand .playing-card p { font-size: 10px; line-height: 1.5; }
-  .game-layout[data-phase="combat"] .hand .card-unavailable { font-size: 9px; }
-}
 @media (max-width: 1100px) {
   .characters { grid-template-columns: repeat(3, 1fr); }
   .character, .character.chosen { padding: 16px; }
@@ -2741,6 +2690,14 @@ body:has(.reward-overlay) .skill-node-popup { z-index: 140; }
 .sandbox-v2-catalog-card small { font-size: 10px; }
 .sandbox-v2-catalog-card span { grid-column: 1 / -1; color: #677963; font-size: 10px; line-height: 1.35; }
 .sandbox-v2-catalog-card button:last-child { flex: none; font-size: 10px; }
+
+.game-layout[data-phase="combat"][data-card-upgrade-open] .battle-column {
+  display: flex;
+  flex-direction: column;
+}
+.game-layout[data-phase="combat"][data-card-upgrade-open] .battle-area,
+.game-layout[data-phase="combat"][data-card-upgrade-open] .hand-area { width: 100%; }
+.game-layout[data-phase="combat"][data-card-upgrade-open] .hand { height: auto; max-height: 210px; }
 .sandbox-v2-deck-head { flex: none; margin: 9px 0 5px; }
 .sandbox-v2-deck-list { display: grid; align-content: start; gap: 3px; max-height: 21svh; min-height: 45px; overflow: auto; }
 .sandbox-v2-deck-list > div { display: flex; justify-content: space-between; align-items: center; padding: 3px 7px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; }

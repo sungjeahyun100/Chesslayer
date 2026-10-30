@@ -34,41 +34,81 @@ import { PROGRESS_KEY, DEVELOPER_MODE_KEY, DEVELOPER_RUN_KEY, initialProgress, r
 // Keep the original storage slot so legacy saves receive the WASM version notice.
 const SAVE_KEY = "chesslayer.run.v1";
 
-const movementNotes: Record<string, [string, string]> = {
-  amazon: ["퀸의 직선·대각선 이동", "나이트 도약"],
-  unicorn: ["나이트 도약과 포획", "임의의 빈칸으로 순간이동 (포획 불가)"],
-  emperor: ["킹의 한 칸 이동·포획", "직접 포획한 기물의 행마를 전투 중 흡수"],
-  hook: ["직교 직선 이동·포획", "빈 경유 칸에서 한 번 직각으로 꺾기"],
-  movement_god: ["직교·대각 경로 이동", "구행·텐쿠의 꺾기 행마"],
-  tempest_pawn: ["앞 한 칸 이동, 앞 대각 한 칸 포획", "좌우 빈칸 이동과 전방 두 칸 포획"],
-  drone: ["나이트 도약", "상하좌우 한 칸 이동·포획과 사격"],
-  tank: ["킹의 한 칸 행마", "직선 두 칸 이동·포획과 사격"],
-  centaur: ["킹의 한 칸 행마", "나이트 도약"],
-  rifleman: ["상하좌우 한 칸 이동·포획", "전방 세 방향 제자리 사격"],
-  mortar: ["상하좌우 한 칸 이동·포획", "장애물을 넘는 2~5칸 포격"],
-  marksman: ["킹의 한 칸 행마", "여덟 방향 일곱 칸 사격"],
-  special_commander: ["킹의 한 칸 행마", "여덟 방향 다섯 칸 사격"],
-  shadow_commander: ["킹·나이트 행마", "여덟 방향 다섯 칸 사격"],
-  tempest_rook: ["대각선 한 칸 이동·포획", "경유 칸부터 가로·세로로 계속 이동"],
-  tempest_bishop: ["직교 한 칸 이동·포획", "경유 칸부터 전진 대각선으로 계속 이동"],
-  tempest_queen: ["템페스트 룩 행마", "템페스트 비숍 행마"],
-  tempest_knight: ["대각선 한 칸 이동·포획", "같은 방향 추가 도약 또는 직교 세 칸 도약"],
-  bouncing_rook: ["직교 이동·포획", "경계·아군 바운싱 폰 앞에서 직각 반사"],
-  bouncing_bishop: ["대각 이동·포획", "경계·아군 바운싱 폰 앞에서 방향 성분 반사"],
-  bouncing_queen: ["바운싱 룩 행마", "바운싱 비숍 행마"],
-  bouncing_pawn: ["폰의 전진·대각 포획", "바운싱 기물과의 반사·포획 상호작용"],
+const simpleMovement: Record<string, string> = {
+  amazon: "퀸 + 나이트", centaur: "킹 + 나이트", mounted_officer: "킹 + 나이트",
+  knight: "나이트", scout: "나이트", bishop: "비숍", rook: "룩", queen: "퀸",
+  king: "킹", tempest_king: "킹", smiling_king: "킹", toast_lord: "킹", ecstatic_lord: "킹",
+  pawn: "폰", bouncing_pawn: "폰", hungry_follower: "폰", procession_follower: "폰",
+  unicorn: "나이트 + 빈칸 순간이동", emperor: "킹", hook: "룩 + 직각 꺾기",
+  movement_god: "직교·대각 꺾기", tempest_pawn: "폰 + 좌우 이동·2칸 포획",
+  drone: "나이트 + 직교 1칸", c4_drone: "나이트 + 직교 1칸",
+  machine_gun_drone: "나이트 + 직교 1칸", grenade_launcher_drone: "나이트 + 직교 1칸",
+  tactical_nuke_drone: "나이트 + 직교 1칸", tank: "킹 + 직선 2칸",
+  fragment_tank: "킹 + 직선 2칸", ap_tank: "킹 + 직선 2칸",
+  he_tank: "킹 + 직선 2칸", rifleman: "직교 1칸", mortar: "직교 1칸",
+  sniper: "대각 1칸", marksman: "킹", special_commander: "킹", shadow_commander: "킹 + 나이트",
+  tempest_rook: "대각 1칸 → 직교 직선", tempest_bishop: "직교 1칸 → 전방 대각",
+  tempest_queen: "템페스트 룩 + 비숍", tempest_knight: "대각 경유 도약 + 직교 3칸",
+  typhoon_rook: "템페스트 룩 + 룩", typhoon_bishop: "템페스트 비숍 + 비숍",
+  typhoon_queen: "템페스트 퀸 + 퀸", typhoon_knight: "템페스트 나이트 + 나이트",
+  bouncing_rook: "반사 룩", bouncing_bishop: "반사 비숍", bouncing_queen: "반사 룩 + 비숍",
+  bouncing_tempest_rook: "반사 템페스트 룩", bouncing_tempest_bishop: "반사 템페스트 비숍",
+  bouncing_tempest_queen: "반사 템페스트 퀸", bouncing_knightrider: "반사 나이트라이더",
+  knightrider: "나이트 연속 도약", cardinal: "연속 반사 비숍", tengu: "대각 꺾기",
+  frenzied_dancer: "나이트", masked_dancer: "나이트", tempting_dancer: "나이트",
+  vanguard_officer: "킹", vanguard_commander: "킹 + 연속 1칸", mounted_commander: "2칸 이내 도약",
+  phantom_scout: "나이트 + 대각 2칸 도약", butcher_cart: "룩", slaughter_cart: "룩",
+  funeral_cart: "룩", feast_cart: "룩", warehouse: "이동 불가", corpse: "이동 불가",
+  tribal_dictator: "킹", lobster: "직교 1칸", sword_infantry: "장창 + 전방 대각 1칸",
+  spear_infantry: "직교 1칸 + 전방 나이트", axe_infantry: "직교 1칸 + 전방 대각 2칸",
+  halberd_infantry: "장창 + 전방 대각 2칸", pistol_infantry: "검 보병",
+  elite_commando: "킹 + 전방 2칸 도약", commando: "킹 + 전방 2칸 도약",
+  masked_lady: "퀸", red_lady: "퀸", banquet_lady: "퀸", inviting_lady: "퀸",
+  intoxicated_priest: "비숍", feast_priest: "비숍", hunger_priest: "비숍", locust_high_priest: "비숍",
+  ecstatic_dancer: "나이트", glutton_follower: "폰", inviting_follower: "폰",
+  eternal_guest: "킹",
 };
-function movementInfo(piece: Piece): [string, string, string] {
-  const sentences = piece.description.split(/(?<=\.)\s+/).filter((sentence) => sentence && sentence !== "로얄.");
-  const [basic, extra] = movementNotes[piece.key] ?? [sentences[0] || piece.description, sentences.slice(1).filter((sentence) => /행마|이동|포획|도약|사격|전진|뜁니다/.test(sentence)).join(" ") || "추가 행마가 있다면 아래 전체 설명에 포함됩니다."];
-  return [basic, extra, piece.description];
-}
-function cellName(cell: number): string {
-  return `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
-}
-function squareSummary(cells: number[]): string {
-  const squares = [...new Set(cells)].sort((a, b) => a - b);
-  return squares.length ? `${squares.length}칸 · ${squares.slice(0, 8).map(cellName).join(", ")}${squares.length > 8 ? ` 외 ${squares.length - 8}칸` : ""}` : "없음";
+const specialMovement: Record<string, string> = {
+  unicorn: "빈칸 순간이동은 포획 불가", emperor: "직접 포획한 기물의 행마 흡수",
+  drone: "십자포화: 직교 인접 칸과 자신 제거", c4_drone: "광역 자폭: 주변 8칸과 자신 제거",
+  machine_gun_drone: "기관총 사격 또는 십자포화", grenade_launcher_drone: "유탄 사격 또는 십자포화",
+  tactical_nuke_drone: "광역 자폭 후 방사성 낙진", tank: "직선 사격 · 탄약 2",
+  fragment_tank: "명중 시 주변 직교 칸 폭발", ap_tank: "관통 사격",
+  he_tank: "명중 시 주변 직교 칸 폭발", rifleman: "전방 3방향 사격 · 탄약 1",
+  mortar: "장애물 너머 2~5칸 포격 · 탄약 2", marksman: "8방향 7칸 사격",
+  sniper: "8방향 7칸 사격",
+  special_commander: "8방향 5칸 사격 · 전투 시작 시 가호", shadow_commander: "8방향 5칸 사격 · 전투 시작 시 가호·민첩 1",
+  frenzied_dancer: "인접 시체 포획", masked_dancer: "주변 8칸 시체 포획",
+  tempting_dancer: "시체 포획 시 인접 적 허기 악화", scout: "전투 시작 시 민첩 1",
+  phantom_scout: "전투 시작 시 민첩 2", butcher_cart: "첫 시체 포획 시 카드 1장",
+  slaughter_cart: "첫 시체 포획 시 민첩 1", funeral_cart: "직선 경로의 시체 통과",
+  feast_cart: "시체 포획 후 다른 시체 1칸 이동", warehouse: "탄약 한계 +200 · 모두 파괴되면 패배",
+  corpse: "양 진영 모두 포획 가능", tribal_dictator: "주변 사망 시 HP·행마 흡수 · 갈고리 반격 · 샷건",
+  smiling_king: "근처 아군의 첫 시체 포획 시 카드 1장", toast_lord: "근처 아군의 첫 시체 포획 시 카드 1장·민첩 1",
+  ecstatic_lord: "아군의 첫 시체 포획 시 카드 1장·민첩 1·마나 1",
+  hungry_follower: "전방 시체 포획", procession_follower: "승격 불가",
+  bouncing_pawn: "아군 바운싱 기물 반사", pistol_infantry: "전방 사격",
+  elite_commando: "돌격 사격 · 기본 명중률 100%",
+  commando: "전방 3방향 4칸 사격",
+  masked_lady: "인접 아군 폰을 시체로 전환 · 행동 1회",
+  red_lady: "인접 아군 비로얄을 시체로 전환 · 행동 1회",
+  banquet_lady: "제물 능력 사용 시 카드 1장",
+  inviting_lady: "제물 능력 사용 시 근처 적 허기 악화",
+  intoxicated_priest: "첫 시체 포획 시 인접 아군 민첩 1",
+  feast_priest: "첫 시체 포획 시 2칸 이내 아군 민첩 1",
+  hunger_priest: "시체 포획 시 2칸 이내 적 허기 악화",
+  locust_high_priest: "시체 포획 시 아군 민첩 2",
+  ecstatic_dancer: "주변 8칸 시체 포획 · 첫 포획 시 민첩 1",
+  glutton_follower: "전방 시체 포획 · 첫 포획 시 민첩 1",
+  inviting_follower: "전방 시체 포획 · 포획 시 근처 적 허기 악화",
+  eternal_guest: "양 진영에 식재료 · 아군 시체 포획 강화 · 3·6수에 허기 악화",
+};
+function movementInfo(piece: Piece): { movement: string; special?: string } {
+  const movement = simpleMovement[piece.key] ?? (piece.description.split(".")[0] || piece.name);
+  const special = specialMovement[piece.key] ?? (piece.description.split(/(?<=\.)\s+/).slice(1)
+    .filter((sentence) => /전투당|사격|자폭|탄약|허기|민첩|카드|가호|낙진|포격|폭발|흡수|축복|제물|폭사|패배/.test(sentence))
+    .join(" ") || undefined);
+  return { movement, special };
 }
 
 function cardSelectionHint(kind: string): string {
@@ -159,7 +199,7 @@ function App() {
   const [statusOpen, setStatusOpen] = useState(false);
   const closeStatus = useCallback(() => setStatusOpen(false), []);
   const [floorTransition, setFloorTransition] = useState<{ next: Snapshot; stage: "out" | "in" } | null>(null);
-  const logRef = useRef<HTMLDivElement>(null);
+  const [lastEnemyMove, setLastEnemyMove] = useState<{ from: number; to: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const outcomeRef = useRef<HTMLElement>(null);
   const previousPhase = useRef<string | undefined>(undefined);
@@ -214,6 +254,13 @@ function App() {
     try {
       const before: Snapshot = JSON.parse(engine.current.snapshot());
       const next: Snapshot = JSON.parse(engine.current.dispatch(JSON.stringify(command)));
+      if (before.phase !== "combat" && next.phase === "combat") setLastEnemyMove(null);
+      else if (command.type === "enemy_step_selected" && next.phase === "combat") {
+        const moved = before.pieces.find((piece) => piece.owner === 1 &&
+          next.pieces.some((after) => after.id === piece.id && after.cell !== piece.cell));
+        const destination = next.pieces.find((piece) => piece.id === moved?.id)?.cell;
+        if (moved && destination !== undefined) setLastEnemyMove({ from: moved.cell, to: destination });
+      }
       if ((command.type === "choose_reward" || command.type === "continue_reward" || command.type === "advance_floor") &&
         (before.floor !== next.floor || before.final_battle !== next.final_battle) && next.phase === "map" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         setFloorTransition({ next, stage: "out" });
@@ -288,12 +335,6 @@ function App() {
     };
   }, [screen, state, send]);
   useEffect(() => {
-    logRef.current?.scrollTo({
-      top: logRef.current.scrollHeight,
-      behavior: "smooth",
-    });
-  }, [state?.log]);
-  useEffect(() => {
     const cancel = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         if (statusOpen) return;
@@ -366,6 +407,7 @@ function App() {
       engine.current?.free();
       engine.current = next;
       setState(JSON.parse(next.snapshot()));
+      setLastEnemyMove(null);
       setFloorTransition(null);
       persist(next);
       setRestChoice(null);
@@ -396,6 +438,7 @@ function App() {
       engine.current?.free();
       engine.current = next;
       const snapshot: Snapshot = JSON.parse(next.snapshot());
+      setLastEnemyMove(null);
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         setState(snapshot);
         setFloorTransition(null);
@@ -548,10 +591,7 @@ function App() {
   const enemyMoves = new Set(enemyInspection?.moves.map((m) => m.to) ?? []);
   const enemyRoutes = [...new Map((enemyInspection?.moves ?? []).filter((m) => m.route).map((m) => [m.route!.join(","), m.route!])).values()];
   const latestBattleStart = state?.log.map((line, index) => line.includes("전투 시작") ? index : -1).filter((index) => index >= 0).pop() ?? -1;
-  const recentEnemyAction = state?.phase === "combat" ? state.log.slice(latestBattleStart + 1).reverse().find((line) => line.startsWith("흑 ")) : undefined;
   const recentBossEvent = state?.boss ? state.log.slice(latestBattleStart + 1).reverse().find((line) => /부족의 독재자 HP|찢고 죽여라|제왕학|갈고리 반격|샷건/.test(line)) : undefined;
-  const enemyMoveCells = (enemyInspection?.moves ?? []).filter((move) => move.captures.length === 0).map((move) => move.to);
-  const enemyCaptureCells = (enemyInspection?.moves ?? []).flatMap((move) => move.captures);
   const selectedMovement = selectedPiece ? movementInfo(selectedPiece) : null;
   const selectedAbilities = state?.abilities?.filter((ability) => ability.piece_id === selectedPiece?.id) ?? [];
   const focusedUpgrade = state?.pieces.find((p) => p.id === upgradeFocus);
@@ -622,8 +662,8 @@ function App() {
           <strong>체크메이트 대신, 로얄을 포획하세요.</strong>
           <p>
             백 기물을 클릭하면 이동 가능한 칸이 표시됩니다. 카드 사용은 이동
-            횟수를 쓰지 않습니다. 이동을 마치거나 턴 종료를 누르면 적이
-            행동합니다. ★는 로얄, ◇는 가호입니다.
+            횟수를 쓰지 않습니다. 이동 행동을 모두 마치면 적이 행동합니다.
+            ★는 로얄, ◇는 가호입니다.
           </p>
           <p>
             맵에서 이어진 다음 노드를 선택하세요. 승리한 진형은 다음 전투로
@@ -782,7 +822,8 @@ function App() {
                           data-legal={legal || undefined}
                           data-enemy-move={enemyMove || undefined}
                           data-enemy-capture={enemyCapture || undefined}
-                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
+                          data-last-enemy-move={state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) || undefined}
+                          className={`square ${(i + Math.floor(i / 8)) % 2 ? "dark" : "light"} ${state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) ? "last-enemy-move" : ""} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
                           title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : fallout ? `방사성 낙진 · 남은 ${fallout.remaining}라운드 · 턴 종료 시 제거` : piece?.statuses?.join(" · ") || (piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined)}
                           onMouseEnter={() => { if (abilityTarget) setHoveredAbilityTarget(i); }}
                           onMouseLeave={() => { if (hoveredAbilityTarget === i) setHoveredAbilityTarget(null); }}
@@ -870,9 +911,6 @@ function App() {
                     ))}
                   </div>
                 </div>
-                {state.phase === "combat" && <div className="board-caption">
-                  <span>★ 남은 적 로얄 {state.royal_names.length}기: {state.royal_names.join(", ") || "포획됨"}{state.enemy_initiative_turns_left > 0 && ` · 선공권 ${state.enemy_initiative_turns_left}턴`}</span>
-                </div>}
                 {state.phase === "combat" && state.boss && <section className="boss-intent-panel" aria-label="부족의 독재자 상태와 행동 예고" aria-live="polite">
                   <strong key={state.boss.hp} className="boss-hp-value">부족의 독재자 · HP {state.boss.hp} · 샷건 {state.boss.ammo}/{state.boss.max_ammo}</strong>
                   <span>독재자 행동 예고: {state.boss.plan?.name ?? "행동 없음"}</span>
@@ -882,7 +920,7 @@ function App() {
                   {state.boss.learned.length > 0 && <small>습득한 행마: {state.boss.learned.join(", ")}</small>}
                   {recentBossEvent && <small key={state.log.length} className="boss-event-flash">최근 효과: {recentBossEvent}</small>}
                 </section>}
-                {state.phase === "combat" && (state.effect_choice || targetCard || activeAbility || inspectedEnemy || !turn || recentEnemyAction) && (
+                {state.phase === "combat" && (state.effect_choice || targetCard || activeAbility) && (
                   <div
                     className={`action-hint ${targetCard ? "target-hint" : ""}`}
                     aria-live="polite"
@@ -903,11 +941,7 @@ function App() {
                           취소 Esc
                         </button>
                       </>
-                    ) : activeAbility ? <><strong>{activeAbility.name}</strong><span>표시된 대상 칸을 선택하세요.</span><button className="text-button" onClick={() => setActiveAbility(null)}>취소 Esc</button></> : inspectedEnemy ? (
-                      <span>적 행마 조회 · 이동·포획 가능 칸은 보드와 기물 정보에서 확인하세요.</span>
-                    ) : (
-                      recentEnemyAction ? <span>최근 적 행동: {recentEnemyAction}</span> : "상대가 다음 수를 고르고 있습니다…"
-                    )}
+                    ) : activeAbility ? <><strong>{activeAbility.name}</strong><span>표시된 대상 칸을 선택하세요.</span><button className="text-button" onClick={() => setActiveAbility(null)}>취소 Esc</button></> : null}
                   </div>
                 )}
               </section>
@@ -982,30 +1016,17 @@ function App() {
                           owner={selectedPiece.owner}
                         />
                         <div>
-                          <small className="piece-side-label">{inspectedEnemy ? "적 기물 · 행마 조회" : "아군 기물"}</small>
                           <strong>
-                            {selectedPiece.name} · {selectedPiece.square}
+                            {selectedPiece.name} {selectedPiece.royal && <span className="royal-info">★ 로얄</span>}
                           </strong>
-                          {selectedPiece.royal && <span className="royal-info">★ 로얄 · {inspectedEnemy ? "이 기물은 승리 목표입니다." : "이 기물을 잃으면 원정이 끝납니다."}</span>}
-                          {selectedPiece.key === "tribal_dictator" && state.boss && <small className="effect-note">HP {state.boss.hp} · 탄약 {state.boss.ammo}/{state.boss.max_ammo} · 습득: {state.boss.learned.join(", ") || "없음"}</small>}
-                          {selectedPiece.key === "tribal_dictator" && state.boss && <small className="effect-note">습득한 행마와 사용형 능력이 적용됩니다. 전투 시작 효과와 상시 오라는 적용되지 않습니다.</small>}
+                          {selectedMovement && <p><b>행마:</b> {selectedMovement.movement}</p>}
+                          {selectedMovement?.special && <p>{selectedMovement.special}</p>}
+                          {selectedPiece.key === "tribal_dictator" && state.boss?.learned.length ? <small className="effect-note">습득 행마: {state.boss.learned.join(", ")}</small> : null}
                           {selectedPiece.key === "tribal_dictator" && state.boss?.learned_abilities.map((ability) => <small className="effect-note" key={ability.name}><b>제왕학 · {ability.name}</b> — {ability.description}</small>)}
-                          {inspectedEnemy && selectedMovement && <>
-                            <small className="piece-info-heading">기본 행마</small>
-                            <p>{selectedMovement[0]}</p>
-                            <small className="piece-info-heading">추가 행마</small>
-                            <p>{selectedMovement[1]}</p>
-                            <small className="piece-info-heading">이동 가능 · {squareSummary(enemyMoveCells)}</small>
-                            <small className="piece-info-heading">포획 가능 · {squareSummary(enemyCaptureCells)}</small>
-                          </>}
-                          <small className="piece-info-heading">{inspectedEnemy ? "전체 행마 · 특수 능력" : "행마법 · 특수 능력"}</small>
-                          <p>{selectedPiece.description}</p>
                           {turn && !inspectedEnemy && selectedAbilities.map((ability, index) => <button key={index} className={`ability-button ${activeAbility === ability ? "selected" : ""}`}
                             title={ability.description} onClick={() => { setTargetCard(null); setActiveAbility(activeAbility === ability ? null : ability); }}
                             disabled={ability.targets.length === 0 || !!state.effect_choice}>{ability.name} <span>{ability.targets.length ? "대상 선택 →" : "대상 없음"}</span></button>)}
-                          <small className="piece-info-heading">현재 적용 효과</small>
-                          <PieceStatuses statuses={selectedPiece.statuses} />
-                          {!selectedPiece.statuses?.length && !selectedPiece.temporary_upgrade && !selectedPiece.ward && !selectedPiece.limiter && !selectedPiece.self_defense && selectedPiece.absorbed_moves.length === 0 && initiativeRemaining === 0 && <small className="effect-note">없음</small>}
+                          <PieceStatuses statuses={selectedPiece.statuses} compact />
                           {initiativeRemaining > 0 && <small className="effect-note">선공권 보호 · 상대의 포획 제한 · 남은 상대 턴 {initiativeRemaining}회</small>}
                           {selectedPiece.temporary_upgrade && <small className="effect-note">일시 강화 · 현재 전투에서만 유지</small>}
                           {selectedPiece.ward && <small className="effect-note">가호 · 다음 포획 시 공격 무효</small>}
@@ -1015,26 +1036,10 @@ function App() {
                         </div>
                       </section>
                     )}
-                    <section className="turn-panel">
-                      <div className="section-label">
-                        TURN {state.round.toString().padStart(2, "0")}
-                        <span>{state.ammo !== null ? "탄약은 전투 간 유지" : "기본 마나 3"}</span>
-                      </div>
-                      <div className="mana">
-                        <span className="mana-orb">{state.ammo ?? state.mana}</span>
-                        <div>
-                          <strong>{state.ammo !== null ? `탄약 / ${state.ammo_capacity}` : "사용 가능한 마나"}</strong>
-                          <small>{state.mana_rule}</small>
-                        </div>
-                      </div>
-                      <button
-                        className="primary end-turn"
-                        onClick={() => send({ type: "end_turn" })}
-                        disabled={!turn || state.phase !== "combat" || !!promotion || !!state.effect_choice}
-                      >
-                        턴 종료 <span>→</span>
-                      </button>
-                    </section>
+                    <div className="combat-resource" aria-label={state.ammo !== null ? `탄약 ${state.ammo}` : `마나 ${state.mana}`}>
+                      <span className="mana-orb">{state.ammo ?? state.mana}</span>
+                      <span>{state.ammo !== null ? `탄약 / ${state.ammo_capacity}` : "마나"}</span>
+                    </div>
                     <details className="relic-panel">
                       <summary className="section-label">
                         보유 유물 <span>{state.relics.length}</span>
@@ -1049,31 +1054,6 @@ function App() {
                           </div>
                         </div>
                       ))}
-                    </details>
-                    <details className="log-panel">
-                      <summary className="section-label">
-                        전투 기록<span>최근 기록</span>
-                      </summary>
-                      <div
-                        className="battle-log"
-                        ref={logRef}
-                        role="log"
-                        aria-label="전투 기록"
-                      >
-                        {state.log.map((line, i) => (
-                          <p
-                            key={`${i}-${line}`}
-                            className={
-                              line.includes("역습") || line.includes("승리")
-                                ? "important"
-                                : ""
-                            }
-                          >
-                            <span>·</span>
-                            {line}
-                          </p>
-                        ))}
-                      </div>
                     </details>
                   </>
                 )}

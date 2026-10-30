@@ -60,11 +60,10 @@ test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 �
   await page.locator(".square").nth(enemyCell).click();
   await expect(page.locator(".square.enemy-selected")).toHaveCount(1);
   await expect(page.locator(".enemy-move-dot")).not.toHaveCount(0);
-  await expect(page.locator(".enemy-piece-info")).toContainText("승리 목표");
-  await expect(page.locator(".enemy-piece-info")).toContainText("기본 행마");
-  await expect(page.locator(".enemy-piece-info")).toContainText("추가 행마");
-  await expect(page.locator(".enemy-piece-info")).toContainText("이동 가능");
-  await expect(page.locator(".enemy-piece-info")).toContainText("포획 가능");
+  await expect(page.locator(".enemy-piece-info")).toContainText("킹 ★ 로얄");
+  await expect(page.locator(".enemy-piece-info")).toContainText("행마: 킹");
+  await expect(page.locator(".enemy-piece-info")).not.toContainText("e8");
+  await expect(page.locator(".enemy-piece-info")).not.toContainText("이동 가능");
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(saved);
   expect(await page.locator(".section-label").first().textContent()).toBe(turn);
   await page.locator(".square").nth(enemyCell).click();
@@ -77,9 +76,19 @@ test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 �
   await expect(page.locator(".enemy-piece-info")).toHaveCount(0);
 });
 
+test("손패 카드를 보드에서 사용해도 턴은 유지된다", async ({ page }) => {
+  await start(page);
+  await page.locator(".hand .playing-card:not(:disabled)").first().click();
+  await expect(page.locator(".square.targetable")).not.toHaveCount(0);
+  await page.locator(".square.targetable").first().click();
+  await expect(page.locator(".mana-orb")).toHaveText("2");
+  await expect(page.getByTestId("turn")).toContainText("나의 턴");
+  await expect(page.locator(".hand .playing-card")).toHaveCount(0);
+});
+
 test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 연출을 반복하지 않는다", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".home-version")).toHaveText("v0.3.0");
+  await expect(page.locator(".home-version")).toHaveText("v0.3.1");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.getByRole("status", { name: "제1층 진입" })).toContainText("ACT I");
@@ -259,7 +268,7 @@ test("전투 전 적 정체를 숨기고 전투 중 현황 오버레이가 상�
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(saved);
 });
 
-test("실제 WASM: 빈 초기 덱, 합법 수, 적 행동", async ({ page }) => {
+test("실제 WASM: 보드 옆 손패, 합법 수, 적 마지막 이동", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await start(page);
@@ -267,36 +276,38 @@ test("실제 WASM: 빈 초기 덱, 합법 수, 적 행동", async ({ page }) => 
   await expect(page.locator('[data-square="e8"]')).toHaveAccessibleName(
     "e8 흑 킹 로얄",
   );
-  await expect(page.getByRole("heading", { name: "손패 0/10" })).toBeVisible();
-  const handLayout = await page.locator(".hand-area").evaluate((hand) => {
-    const boardArea = hand.previousElementSibling!.getBoundingClientRect();
-    const gap = hand.getBoundingClientRect().top - boardArea.bottom;
-    return { grouped: hand.parentElement?.classList.contains("battle-column"), gap };
+  await expect(page.locator(".hand-area h2")).toContainText("손패");
+  const sideBySide = await page.locator(".hand-area").evaluate((hand) => {
+    const board = hand.previousElementSibling!.getBoundingClientRect();
+    const cards = hand.getBoundingClientRect();
+    return cards.left > board.right && Math.abs(cards.top - board.top) < 30;
   });
-  expect(handLayout.grouped).toBe(true);
-  expect(handLayout.gap).toBeGreaterThanOrEqual(12);
-  expect(handLayout.gap).toBeLessThanOrEqual(20);
-  await page.locator(".sidebar").evaluate((sidebar) => { sidebar.style.minHeight = "1200px"; });
-  expect(await page.locator(".hand-area").evaluate((hand) => hand.getBoundingClientRect().top - hand.previousElementSibling!.getBoundingClientRect().bottom)).toBe(handLayout.gap);
-  await page.locator(".sidebar").evaluate((sidebar) => { sidebar.style.minHeight = ""; });
-  await expect(page.getByTestId("deck-count")).toHaveText("0");
-  await expect(page.getByTestId("draw-count")).toHaveText("0");
+  expect(sideBySide).toBe(true);
+  await expect(page.getByRole("button", { name: "턴 종료" })).toHaveCount(0);
+  await expect(page.getByRole("log")).toHaveCount(0);
+  await expect(page.locator(".hand .playing-card")).not.toHaveCount(0);
   await expect(page.locator(".mana-orb")).toHaveText("3");
   await expect(page.getByTestId("turn")).toContainText("2회 행동");
-  await page.locator('[data-square="e2"]').click();
-  await expect(page.locator('[data-square="e4"]')).toHaveAttribute(
-    "data-legal",
-    "true",
-  );
-  await page.locator('[data-square="e4"]').click();
+  const moveOnce = async () => {
+    const move = await page.evaluate(async () => {
+      const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+      await init();
+      const game = WebGame.restore(localStorage.getItem("chesslayer.run.v1")!);
+      try { return (JSON.parse(game.snapshot()).moves as { from: number; to: number; promotion: unknown }[]).find((m) => !m.promotion)!; }
+      finally { game.free(); }
+    });
+    const square = (cell: number) => `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
+    await page.locator(`[data-square="${square(move.from)}"]`).click();
+    await expect(page.locator(`[data-square="${square(move.to)}"]`)).toHaveAttribute("data-legal", "true");
+    await page.locator(`[data-square="${square(move.to)}"]`).click();
+  };
+  await moveOnce();
   await expect(page.getByTestId("turn")).toContainText("1회 행동");
-  await page.locator('[data-square="d2"]').click();
-  await page.locator('[data-square="d4"]').click();
+  await moveOnce();
   await expect(page.getByTestId("turn")).toContainText("적의 턴");
   await expect(page.getByTestId("turn")).toContainText("나의 턴");
-  await expect(page.getByRole("log")).toContainText("흑 킹");
-  await expect(page.getByRole("heading", { name: "손패 0/10" })).toBeVisible();
-  await expect(page.getByTestId("deck-count")).toHaveText("0");
+  await expect(page.locator(".square.last-enemy-move")).toHaveCount(2);
+  await expect(page.locator(".hand-area h2")).toContainText("손패");
   await expect(page.locator(".mana-orb")).toHaveText("3");
   await page.screenshot({
     path: "test-results/battle-desktop.png",
@@ -515,7 +526,7 @@ test("킹 포획 시 패배하고 새 원정을 시작할 수 있다", async ({ 
   await expect(
     page.getByRole("heading", { name: "왕이 쓰러졌습니다." }),
   ).toBeVisible();
-  await expect(page.getByRole("button", { name: "턴 종료" })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "턴 종료" })).toHaveCount(0);
   await page.getByRole("button", { name: "새 원정 시작" }).click();
   await expect(
     page.getByRole("heading", { name: "어떤 수를 두시겠어요?" }),

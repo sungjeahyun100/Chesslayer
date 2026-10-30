@@ -1,7 +1,7 @@
 {
   "name": "chesslayer-web-ui",
   "private": true,
-  "version": "0.3.0",
+  "version": "0.3.1",
   "type": "module",
   "scripts": {
     "wasm": "cd .. && wasm-pack build crates/chesslayer-web --target web --out-dir ../../web/src/wasm --release",
