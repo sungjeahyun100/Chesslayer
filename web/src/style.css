@@ -557,6 +557,28 @@ footer span {
   inset: 0;
   pointer-events: none;
 }
+.board-annotations {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 7;
+  pointer-events: none;
+  overflow: visible;
+  fill: #e89524;
+}
+.board-annotation-mark {
+  fill: #e8952433;
+  stroke: #f2a728;
+  stroke-width: .12;
+}
+.board-annotation-arrow {
+  stroke: #e89524;
+  stroke-width: .16;
+  stroke-linecap: round;
+  opacity: .85;
+}
+.board-annotations .preview { opacity: .55; }
 .piece {
   position: absolute;
   width: 12.5%;

@@ -51,6 +51,40 @@ async function layout(page: import("@playwright/test").Page) {
   );
 }
 
+test("전투 보드 우클릭 표식과 드래그 화살표를 반복 입력으로 토글한다", async ({ page }) => {
+  await start(page);
+  const saved = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"));
+  const turn = await page.getByTestId("turn").textContent();
+  const point = async (cell: number) => {
+    const box = await page.locator(".board .square").nth(cell).boundingBox();
+    return { x: box!.x + box!.width / 2, y: box!.y + box!.height / 2 };
+  };
+  const from = await point(27);
+  const to = await point(36);
+
+  await page.mouse.click(from.x, from.y, { button: "right" });
+  await expect(page.locator('.board-annotation-mark[data-cell="27"]:not(.preview)')).toHaveCount(1);
+  await page.mouse.click(from.x, from.y, { button: "right" });
+  await expect(page.locator(".board-annotation-mark")).toHaveCount(0);
+
+  const drag = async () => {
+    await page.mouse.move(from.x, from.y);
+    await page.mouse.down({ button: "right" });
+    await page.mouse.move(to.x, to.y, { steps: 5 });
+    await page.mouse.up({ button: "right" });
+  };
+  await drag();
+  await expect(page.locator('.board-annotation-arrow[data-from="27"][data-to="36"]:not(.preview)')).toHaveCount(1);
+  await drag();
+  await expect(page.locator(".board-annotation-arrow")).toHaveCount(0);
+  await page.locator(".board .square").nth(27).evaluate((square) => { (square as HTMLButtonElement).disabled = true; });
+  await page.mouse.click(from.x, from.y, { button: "right" });
+  await expect(page.locator('.board-annotation-mark[data-cell="27"]:not(.preview)')).toHaveCount(1);
+  expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(saved);
+  expect(await page.getByTestId("turn").textContent()).toBe(turn);
+  await expect(page.locator(".square.selected, .square.enemy-selected")).toHaveCount(0);
+});
+
 test("적 로얄 조회는 행마와 정보를 표시하지만 턴·저장을 바꾸지 않는다", async ({ page }) => {
   await start(page);
   const enemyCell = Number(await page.locator(".piece.owner-1").first().getAttribute("data-cell"));

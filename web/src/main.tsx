@@ -33,6 +33,15 @@ import { PROGRESS_KEY, DEVELOPER_MODE_KEY, DEVELOPER_RUN_KEY, initialProgress, r
 
 // Keep the original storage slot so legacy saves receive the WASM version notice.
 const SAVE_KEY = "chesslayer.run.v1";
+type BoardAnnotation = { from: number; to: number };
+
+function boardCellAt(board: HTMLDivElement, clientX: number, clientY: number): number | null {
+  const bounds = board.getBoundingClientRect();
+  const x = (clientX - bounds.left - board.clientLeft) / board.clientWidth;
+  const y = (clientY - bounds.top - board.clientTop) / board.clientHeight;
+  if (x < 0 || x >= 1 || y < 0 || y >= 1) return null;
+  return Math.floor(y * 8) * 8 + Math.floor(x * 8);
+}
 
 const simpleMovement: Record<string, string> = {
   amazon: "퀸 + 나이트", centaur: "킹 + 나이트", mounted_officer: "킹 + 나이트",
@@ -200,6 +209,9 @@ function App() {
   const closeStatus = useCallback(() => setStatusOpen(false), []);
   const [floorTransition, setFloorTransition] = useState<{ next: Snapshot; stage: "out" | "in" } | null>(null);
   const [lastEnemyMove, setLastEnemyMove] = useState<{ from: number; to: number } | null>(null);
+  const [boardAnnotations, setBoardAnnotations] = useState<BoardAnnotation[]>([]);
+  const [annotationPreview, setAnnotationPreview] = useState<BoardAnnotation | null>(null);
+  const annotationDrag = useRef<{ pointerId: number; from: number } | null>(null);
   const boardRef = useRef<HTMLDivElement>(null);
   const outcomeRef = useRef<HTMLElement>(null);
   const previousPhase = useRef<string | undefined>(undefined);
@@ -232,6 +244,11 @@ function App() {
   // The browser releases the WASM instance when this document closes.
   useEffect(() => {
     if (state?.phase && state.phase !== previousPhase.current) {
+      if (state.phase !== "combat") {
+        setBoardAnnotations([]);
+        setAnnotationPreview(null);
+        annotationDrag.current = null;
+      }
       if (state.phase !== "combat" && state.phase !== "rest")
         outcomeRef.current?.scrollIntoView({
           behavior: "smooth",
@@ -245,6 +262,39 @@ function App() {
     }
     previousPhase.current = state?.phase;
   }, [state?.phase]);
+  function startBoardAnnotation(event: React.PointerEvent<HTMLDivElement>) {
+    if (state?.phase !== "combat" || event.button !== 2) return;
+    const from = boardCellAt(event.currentTarget, event.clientX, event.clientY);
+    if (from === null) return;
+    event.preventDefault();
+    annotationDrag.current = { pointerId: event.pointerId, from };
+    setAnnotationPreview({ from, to: from });
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+  function moveBoardAnnotation(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = annotationDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const to = boardCellAt(event.currentTarget, event.clientX, event.clientY);
+    setAnnotationPreview(to === null ? null : { from: drag.from, to });
+  }
+  function endBoardAnnotation(event: React.PointerEvent<HTMLDivElement>) {
+    const drag = annotationDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const to = boardCellAt(event.currentTarget, event.clientX, event.clientY);
+    if (to !== null) {
+      setBoardAnnotations((current) => current.some((mark) => mark.from === drag.from && mark.to === to)
+        ? current.filter((mark) => mark.from !== drag.from || mark.to !== to)
+        : [...current, { from: drag.from, to }]);
+    }
+    annotationDrag.current = null;
+    setAnnotationPreview(null);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+  }
+  function cancelBoardAnnotation(event: React.PointerEvent<HTMLDivElement>) {
+    if (annotationDrag.current?.pointerId !== event.pointerId) return;
+    annotationDrag.current = null;
+    setAnnotationPreview(null);
+  }
   useEffect(() => {
     if (targetCard)
       boardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -254,8 +304,10 @@ function App() {
     try {
       const before: Snapshot = JSON.parse(engine.current.snapshot());
       const next: Snapshot = JSON.parse(engine.current.dispatch(JSON.stringify(command)));
-      if (before.phase !== "combat" && next.phase === "combat") setLastEnemyMove(null);
-      else if (command.type === "enemy_step_selected" && next.phase === "combat") {
+      if (before.phase !== "combat" && next.phase === "combat") {
+        setLastEnemyMove(null);
+        setBoardAnnotations([]);
+      } else if (command.type === "enemy_step_selected" && next.phase === "combat") {
         const moved = before.pieces.find((piece) => piece.owner === 1 &&
           next.pieces.some((after) => after.id === piece.id && after.cell !== piece.cell));
         const destination = next.pieces.find((piece) => piece.id === moved?.id)?.cell;
@@ -408,6 +460,7 @@ function App() {
       engine.current = next;
       setState(JSON.parse(next.snapshot()));
       setLastEnemyMove(null);
+      setBoardAnnotations([]);
       setFloorTransition(null);
       persist(next);
       setRestChoice(null);
@@ -439,6 +492,7 @@ function App() {
       engine.current = next;
       const snapshot: Snapshot = JSON.parse(next.snapshot());
       setLastEnemyMove(null);
+      setBoardAnnotations([]);
       if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
         setState(snapshot);
         setFloorTransition(null);
@@ -665,6 +719,7 @@ function App() {
             횟수를 쓰지 않습니다. 이동 행동을 모두 마치면 적이 행동합니다.
             ★는 로얄, ◇는 가호입니다.
           </p>
+          <p>전투 보드에서 칸을 우클릭하면 표식을 남기고, 우클릭한 채 다른 칸으로 드래그하면 화살표를 그립니다. 같은 표식이나 화살표를 반복하면 지워집니다.</p>
           <p>
             맵에서 이어진 다음 노드를 선택하세요. 승리한 진형은 다음 전투로
             이어집니다. 적의 시작 칸과 겹친 아군은 역습으로 사라집니다. 로얄을
@@ -795,7 +850,12 @@ function App() {
                       <span key={r}>{r}</span>
                     ))}
                   </div>
-                  <div className="board" role="group" aria-label="체스 보드">
+                  <div className="board" role="group" aria-label="체스 보드"
+                    onContextMenu={(event) => { if (state.phase === "combat") event.preventDefault(); }}
+                    onPointerDown={startBoardAnnotation}
+                    onPointerMove={moveBoardAnnotation}
+                    onPointerUp={endBoardAnnotation}
+                    onPointerCancel={cancelBoardAnnotation}>
                     {Array.from({ length: 64 }, (_, i) => {
                       const piece = boardPieces.find((p) => p.cell === i);
                       const legal =
@@ -889,6 +949,15 @@ function App() {
                           </span>
                         )}
                     </div>
+                    {state.phase === "combat" && (boardAnnotations.length > 0 || annotationPreview) &&
+                      <svg className="board-annotations" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
+                        <defs><marker id="board-annotation-head" markerWidth=".42" markerHeight=".42" refX=".36" refY=".21" viewBox="0 0 .42 .42" orient="auto" markerUnits="userSpaceOnUse"><path d="M 0 0 L .42 .21 L 0 .42 Z" /></marker></defs>
+                        {[...boardAnnotations, ...(annotationPreview ? [annotationPreview] : [])].map(({ from, to }, index) =>
+                          from === to
+                            ? <circle key={`${from}-${to}-${index}`} className={`board-annotation-mark ${index === boardAnnotations.length ? "preview" : ""}`} data-cell={from} cx={from % 8 + .5} cy={Math.floor(from / 8) + .5} r=".38" />
+                            : <line key={`${from}-${to}-${index}`} className={`board-annotation-arrow ${index === boardAnnotations.length ? "preview" : ""}`} data-from={from} data-to={to}
+                                x1={from % 8 + .5} y1={Math.floor(from / 8) + .5} x2={to % 8 + .5} y2={Math.floor(to / 8) + .5} markerEnd="url(#board-annotation-head)" />)}
+                      </svg>}
                   </div>
                   {promotion && (
                     <PromotionPicker
