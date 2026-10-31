@@ -1432,6 +1432,7 @@ impl Game {
         selection: &content::cards::CardSelection,
         d: CardDefinition,
     ) -> Result<(), String> {
+        let side = self.battle.turn;
         let (cost, removed) = crate::cards::resolve_selection(
             &mut self.battle,
             &mut self.cards,
@@ -1461,6 +1462,13 @@ impl Game {
         ));
         self.events();
         self.check_finish()?;
+        if self.phase == RunPhase::Combat && self.battle.turn != side {
+            if side == PLAYER {
+                self.cards.end_turn();
+            } else {
+                self.begin_player_turn();
+            }
+        }
         Ok(())
     }
     pub fn enemy_recommendation(&self) -> Result<Option<(usize, usize)>, String> {

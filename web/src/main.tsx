@@ -997,7 +997,7 @@ function App() {
                     {state.effect_choice ? <><strong>{state.effect_choice.name}</strong><span>표시된 대상을 선택하세요.</span>{state.effect_choice.can_finish && <button className="primary" onClick={() => send({ type: "resolve_effect", target: 0 })}>배치 완료</button>}</> : targetCard ? (
                       <>
                         <strong>{targetCard.definition.name}</strong>
-                        {targetCard.definition.kind === "limiter_release" && <span>세 번째 이동 직후 대상 사망 · 턴 종료</span>}
+                        {targetCard.definition.kind === "limiter_release" && <span>세 번째 이동 직후 대상 사망 · 턴 종료 · 다음 전투 시작 시 살아 있다면 즉사</span>}
                         <span>선택 {stagedCount}개 · 비용 {stagedCost} / {state.ammo !== null ? `탄약 ${state.ammo}` : `마나 ${state.mana}`}</span>
                         {targetCard.definition.selection_mode === "multiple" && <span className="card-target-instruction">{cardSelectionHint(targetCard.definition.kind)}</span>}
                         {targetCard.definition.kind === "emergency_conscription" && <span className="staged-upgrades">{state.rest_options.filter((piece) => piece.dead && targetCard.targets.includes(piece.id)).map((piece) => <button key={piece.id} onClick={() => setCardTargets((ids) => ids.includes(piece.id) ? ids.filter((id) => id !== piece.id) : [...ids.filter((id) => !state.rest_options.some((p) => p.dead && p.id === id)), piece.id])}>{cardTargets.includes(piece.id) ? "✓ " : ""}{piece.name} #{piece.id}</button>)}</span>}

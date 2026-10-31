@@ -29,7 +29,7 @@ pub const C4_DEFINITION: PieceDefinition = PieceDefinition {
 };
 pub const MACHINE_GUN_DEFINITION: PieceDefinition = PieceDefinition {
     value: 60,
-    description: "기존 드론 행마. 직교 4칸 이내 명중률 90% 기관총 사격(탄약 1) 또는 십자포화 자폭을 선택합니다.",
+    description: "기존 드론 행마. 직교 4칸 이내 명중률 90%에서 거리당 5%p 감소하는 기관총 사격(탄약 1) 또는 십자포화 자폭을 선택합니다.",
     upgrades: &[super::UpgradeDefinition { target: GRENADE_LAUNCHER_DRONE, key: "grenade_launcher_drone", effect: GRENADE_LAUNCHER_DEFINITION.description, requirement: "살아 있는 기관총 드론 · 쉼터 행동 1회" }],
     ..PieceDefinition::new(MACHINE_GUN_DRONE, "machine_gun_drone", "기관총 드론", movement)
 };
@@ -40,7 +40,7 @@ pub const TACTICAL_NUKE_DEFINITION: PieceDefinition = PieceDefinition {
 };
 pub const GRENADE_LAUNCHER_DEFINITION: PieceDefinition = PieceDefinition {
     value: 75,
-    description: "기존 드론 행마. 직교 4칸 이내 유탄 사격은 명중 지점과 직교 인접 칸을 폭발시킵니다. 십자포화 자폭도 사용할 수 있습니다.",
+    description: "기존 드론 행마. 직교 4칸 이내 유탄 사격은 명중률 90%에서 거리당 5%p 감소하며 명중 지점과 직교 인접 칸을 폭발시킵니다. 십자포화 자폭도 사용할 수 있습니다.",
     ..PieceDefinition::new(GRENADE_LAUNCHER_DRONE, "grenade_launcher_drone", "유탄발사기 드론", movement)
 };
 

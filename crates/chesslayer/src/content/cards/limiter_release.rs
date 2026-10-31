@@ -3,7 +3,7 @@ use crate::{game::engine_error, Battle, PieceId};
 
 pub fn definition() -> CardDefinition {
     CardDefinition::new(CardKind::LimiterRelease, "리미터 해제", 6,
-        "선택한 양측 기물 하나에 즉시 효과를 적용합니다. 대상은 총 3번 움직일 수 있으며, 세 번째 이동 직후 사망하고 턴이 넘어갑니다. 로얄도 사망합니다.", effect)
+        "선택한 양측 기물 하나에 즉시 효과를 적용합니다. 대상은 총 3번 움직일 수 있으며, 세 번째 이동 직후 사망하고 턴이 넘어갑니다. 로얄도 사망합니다. 죽음의 문턱을 부여해 다음 전투 시작 시 살아 있다면 즉시 사망합니다.", effect)
         .with_targets(targets)
 }
 fn targets(battle: &Battle) -> Vec<PieceId> {

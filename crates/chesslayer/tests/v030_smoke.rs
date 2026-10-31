@@ -128,7 +128,8 @@ fn ingredient_capture_stays_then_corpse_capture_grants_agility_and_cures_hunger(
         2
     );
     assert_eq!(battle.status(2).hunger, 0);
-    assert!(battle.status(2).agility > 0);
+    assert_eq!(battle.turn, ENEMY);
+    assert_eq!(battle.status(2).agility, 0);
 }
 
 #[test]

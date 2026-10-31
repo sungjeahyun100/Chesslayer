@@ -133,6 +133,7 @@ pub struct Battle {
     pub actions_left: u8,
     normal_actions_used: u8,
     limiter_turn: bool,
+    forced_turn_end: bool,
     pub events: Vec<String>,
     actions_per_turn: u8,
     wards: HashSet<PieceId>,
@@ -173,6 +174,7 @@ impl Battle {
         self.actions_left.hash(&mut h);
         self.normal_actions_used.hash(&mut h);
         self.limiter_turn.hash(&mut h);
+        self.forced_turn_end.hash(&mut h);
         self.initiative_turns_left.hash(&mut h);
         self.enemy_initiative_turns_left.hash(&mut h);
         self.self_defense_target.hash(&mut h);
@@ -372,6 +374,7 @@ impl Battle {
             actions_left: options.actions_per_turn,
             normal_actions_used: 0,
             limiter_turn: false,
+            forced_turn_end: false,
             actions_per_turn: options.actions_per_turn,
             board,
             turn: PLAYER,
@@ -389,6 +392,7 @@ impl Battle {
             sandbox,
         };
         battle.initialize_statuses();
+        battle.trigger_death_thresholds()?;
         battle.mechanics.enemy_actions = options.actions_per_turn;
         battle.update_result(ResultReason::Counterattack);
         if options.self_defense && battle.phase == Phase::Active {
@@ -590,6 +594,7 @@ impl Battle {
         self.wards.clear();
         self.temporary_upgrades.clear();
         self.limiter.clear();
+        self.forced_turn_end = false;
         self.self_defense_target = None;
         self.initiative_turns_left = 0;
         self.enemy_initiative_turns_left = 0;
@@ -922,9 +927,11 @@ impl Battle {
         // Shooting spends ammunition and rolls accuracy before a ward can absorb a hit.
         let shooting = action.continuation.is_empty()
             && action.first.effect == crate::Effect::Catch
-            && (self
-                .hit_chance(action.first.from, action.first.take)
-                .is_some()
+            && action.first.move_to == action.first.from
+            && (action.first.transition.as_deref() == Some("boss_shot")
+                || self
+                    .hit_chance(action.first.from, action.first.take)
+                    .is_some()
                 || action
                     .first
                     .transition
@@ -950,6 +957,7 @@ impl Battle {
         } else {
             self.apply_effect(action, ActionSource::PieceMove)?;
         }
+        self.forced_turn_end |= shooting;
         self.complete_piece_action(piece)
     }
     pub(super) fn complete_piece_action(&mut self, piece: Piece) -> Result<(), Error> {
@@ -977,13 +985,19 @@ impl Battle {
             self.events
                 .push("리미터 해제: 이동 횟수를 모두 사용해 기물이 사망했습니다.".into());
             if self.phase == Phase::Active {
+                self.forced_turn_end = true;
+                self.finish_forced_turn()?;
+            }
+        } else {
+            let side = self.turn;
+            self.finish_forced_turn()?;
+            if self.turn == side
+                && self.phase == Phase::Active
+                && self.actions_left == 0
+                && self.pending_choice().is_none()
+            {
                 self.end_turn()?;
             }
-        } else if self.phase == Phase::Active
-            && self.actions_left == 0
-            && self.pending_choice().is_none()
-        {
-            self.end_turn()?;
         }
         Ok(())
     }
@@ -1025,6 +1039,7 @@ impl Battle {
         if self.phase != Phase::Active {
             return Err(Error::Finished);
         }
+        self.forced_turn_end = false;
         if self.turn == ENEMY && self.initiative_turns_left > 0 {
             self.initiative_turns_left -= 1;
             if self.initiative_turns_left == 0 {
@@ -1048,7 +1063,14 @@ impl Battle {
         if self.phase != Phase::Active {
             return Ok(());
         }
+        self.forced_turn_end = false;
         self.reset_turn_budget();
+        Ok(())
+    }
+    pub(crate) fn finish_forced_turn(&mut self) -> Result<(), Error> {
+        if self.forced_turn_end && self.phase == Phase::Active && self.pending_choice().is_none() {
+            self.end_turn()?;
+        }
         Ok(())
     }
     pub fn limiter_status(&self, id: PieceId) -> Option<(bool, u8)> {
@@ -1076,10 +1098,31 @@ impl Battle {
                 moves_left: 3,
             },
         );
+        self.grant_death_threshold(id)?;
         if owner == self.turn {
             self.limiter_turn = true;
             self.actions_left = self.actions_left.saturating_add(3);
         }
+        Ok(())
+    }
+    pub fn grant_death_threshold(&mut self, id: PieceId) -> Result<(), Error> {
+        if self.phase != Phase::Active {
+            return Err(Error::Finished);
+        }
+        if !self
+            .board
+            .cells()
+            .iter()
+            .flatten()
+            .any(|piece| piece.id == id)
+        {
+            return Err(Error::IllegalAction);
+        }
+        self.mechanics
+            .statuses
+            .entry(id)
+            .or_default()
+            .death_threshold = true;
         Ok(())
     }
     pub fn forward_pawn_candidates(&self) -> Vec<PieceId> {
@@ -1287,6 +1330,7 @@ impl Battle {
         let mut enemy_captured = false;
         let mut absorbed = vec![];
         let mut captures = vec![];
+        let mut corpse_captured = false;
         let self_defense_target = self.self_defense_target;
         if source == ActionSource::ResolvedCardEffect {
             for step in action.steps() {
@@ -1308,6 +1352,9 @@ impl Battle {
                     continue;
                 }
                 apply_default_action(next, &DefaultAction::one(step.clone()))?;
+                corpse_captured |= victim.is_some_and(|p| p.kind == pieces::CORPSE)
+                    && !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                    && victim.is_some_and(|p| next.cells().iter().flatten().all(|q| q.id != p.id));
                 if let Some(victim) = victim {
                     if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                         && next.cells().iter().flatten().all(|p| p.id != victim.id)
@@ -1364,6 +1411,9 @@ impl Battle {
                     continue;
                 }
                 apply_default_action(next, &DefaultAction::one(step.clone()))?;
+                corpse_captured |= victim.is_some_and(|p| p.kind == pieces::CORPSE)
+                    && !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
+                    && victim.is_some_and(|p| next.cells().iter().flatten().all(|q| q.id != p.id));
                 if let Some(victim) = victim {
                     if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
                         && next.cells().iter().flatten().all(|p| p.id != victim.id)
@@ -1417,6 +1467,7 @@ impl Battle {
         if let Some(next) = staged {
             self.board = next;
         }
+        self.forced_turn_end |= corpse_captured;
         for (id, kind) in absorbed {
             if self.board.cells().iter().flatten().any(|p| p.id == id) {
                 self.absorbed.entry(id).or_default().insert(kind);

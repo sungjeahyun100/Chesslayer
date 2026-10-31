@@ -133,6 +133,8 @@ pub fn resolve_selection(
     if cards.mana < cost.saturating_add(next.pending_ammo_spend()) {
         return Err("카드 비용과 사격 탄약이 부족합니다.".into());
     }
+    next.finish_forced_turn()
+        .map_err(crate::game::engine_error)?;
     *battle = next;
     cards.spend_with_cost(index, &d, cost);
     Ok((cost, removed))

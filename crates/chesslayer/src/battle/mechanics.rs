@@ -45,6 +45,7 @@ pub struct PieceStatus {
     pub agility: u8,
     pub weakness: u8,
     pub dining: bool,
+    pub death_threshold: bool,
 }
 #[derive(Clone)]
 pub(super) struct Mechanics {
@@ -259,8 +260,23 @@ fn pistol_and_rifle_accuracy_keep_existing_ranges() {
     );
     assert_eq!(
         shot_preview(pieces::PISTOL_INFANTRY, ENEMY, from, Position::new(4, 2)),
-        Some(90)
+        Some(95)
     );
+    assert_eq!(
+        shot_preview(pieces::PISTOL_INFANTRY, ENEMY, from, Position::new(4, 7)),
+        Some(70)
+    );
+    for kind in [pieces::MACHINE_GUN_DRONE, pieces::GRENADE_LAUNCHER_DRONE] {
+        assert_eq!(
+            shot_preview(kind, ENEMY, from, Position::new(4, 1)),
+            Some(90)
+        );
+        assert_eq!(
+            shot_preview(kind, ENEMY, from, Position::new(4, 4)),
+            Some(75)
+        );
+        assert_eq!(shot_preview(kind, ENEMY, from, Position::new(4, 5)), None);
+    }
     assert_eq!(
         shot_preview(pieces::RIFLEMAN, ENEMY, from, Position::new(4, 1)),
         Some(95)
@@ -294,10 +310,10 @@ fn is_lady(k: &str) -> bool {
 }
 fn shot_profile(k: &str) -> Option<(u8, u8, i32)> {
     match k {
-        "pistol_infantry" => Some((100, 10, 7)),
+        "pistol_infantry" => Some((100, 5, 7)),
         "rifleman" => Some((100, 5, 6)),
         "mortar" => Some((80, 0, 5)),
-        "machine_gun_drone" | "grenade_launcher_drone" => Some((90, 0, 4)),
+        "machine_gun_drone" | "grenade_launcher_drone" => Some((90, 5, 4)),
         "tank" | "he_tank" | "ap_tank" | "fragment_tank" | "double_barrel" => Some((90, 0, 7)),
         "sniper" => Some((95, 3, 7)),
         "marksman" => Some((100, 2, 7)),
@@ -601,6 +617,7 @@ impl Battle {
                     guilt: get("guilt"),
                     incapacitated: get("incapacitated") > 0,
                     blessing: get("blessing") > 0,
+                    death_threshold: get("death_threshold") > 0,
                     ..PieceStatus::default()
                 },
             );
@@ -621,6 +638,31 @@ impl Battle {
                 )
                 .expect("existing corpse");
         }
+    }
+    pub(super) fn trigger_death_thresholds(&mut self) -> Result<(), Error> {
+        let targets: Vec<_> = self
+            .players
+            .iter()
+            .filter(|p| p.position.is_some() && self.status(p.id).death_threshold)
+            .filter_map(|p| p.position.map(|pos| (p.id, pos)))
+            .collect();
+        for (id, pos) in targets {
+            self.mechanics
+                .statuses
+                .entry(id)
+                .or_default()
+                .death_threshold = false;
+            if let Some(p) = self.players.iter_mut().find(|p| p.id == id) {
+                p.persistent.remove("death_threshold");
+            }
+            self.kill_at(pos, false)?;
+            self.events.push(format!(
+                "죽음의 문턱: {}의 기물이 전투 시작 시 사망했습니다.",
+                square(pos)
+            ));
+        }
+        self.sync_players();
+        Ok(())
     }
     pub fn configure_v030(&mut self, relics: &[Relic]) {
         self.mechanics.relics = relics.to_vec();
@@ -791,6 +833,9 @@ impl Battle {
         if s.dining {
             result.push("식사의 예법".into());
         }
+        if s.death_threshold {
+            result.push("죽음의 문턱".into());
+        }
         if self.mechanics.bell_target == Some(id) {
             result.push("다음 수 만찬의 종소리".into());
         }
@@ -944,6 +989,7 @@ impl Battle {
             .ok_or("반격 가능한 행마가 없습니다.")?;
         self.apply_effect(&action, ActionSource::PieceMove)
             .map_err(|e| format!("{e:?}"))?;
+        self.forced_turn_end |= shooting;
         self.events.push(format!("{} 반격.", piece_name(p.kind)));
         Ok(())
     }
@@ -1194,6 +1240,7 @@ impl Battle {
                     ("guilt", i32::from(s.guilt)),
                     ("incapacitated", i32::from(s.incapacitated)),
                     ("blessing", i32::from(s.blessing)),
+                    ("death_threshold", i32::from(s.death_threshold)),
                 ] {
                     if n > 0 {
                         p.persistent.insert(k.into(), n);
@@ -1539,6 +1586,7 @@ impl Battle {
                     apply_default_action(&mut self.board, &DefaultAction::one(step.clone()))?;
                     self.boss_on_death(victim, step.take);
                     self.eat_corpse(captor.id)?;
+                    self.forced_turn_end = true;
                 } else if !self.boss_hit(victim, Some(captor.id)) {
                     break;
                 } else if self.status(victim.id).ingredient
@@ -1735,6 +1783,9 @@ impl Battle {
             && !self.is_royal_piece(p.id))
         {
             self.boss_on_death(p, at);
+        }
+        if p.kind == pieces::CORPSE {
+            self.forced_turn_end = true;
         }
         if ingredient
             && self.status(p.id).ingredient
@@ -2204,11 +2255,12 @@ impl Battle {
         }
         self.sync_players();
         self.update_result(ResultReason::RoyalCaptured);
-        if self.mechanics.choices.is_empty()
-            && self.actions_left == 0
-            && self.phase == Phase::Active
-        {
-            self.end_turn().map_err(|e| format!("{e:?}"))?;
+        if self.mechanics.choices.is_empty() && self.phase == Phase::Active {
+            let side = self.turn;
+            self.finish_forced_turn().map_err(|e| format!("{e:?}"))?;
+            if self.turn == side && self.actions_left == 0 {
+                self.end_turn().map_err(|e| format!("{e:?}"))?;
+            }
         }
         Ok(())
     }
@@ -2895,6 +2947,7 @@ impl Battle {
                     return Err("사거리와 사선을 확인하세요.".into());
                 }
                 let killed = self.kill_at_by(to, true, Some(p.id)).map_err(err)?;
+                self.forced_turn_end = true;
                 if killed {
                     self.record_kill(p, q);
                 }
@@ -3028,7 +3081,7 @@ mod smoke {
         .unwrap()
     }
     #[test]
-    fn ingredient_capture_stays_then_corpse_capture_grants_extra_actions() {
+    fn ingredient_capture_stays_then_corpse_capture_ends_turn_after_effects() {
         let mut b = fixture(ROOK);
         b.configure_v030(&[Relic::CarnivalFlare]);
         let from = Position::new(3, 4);
@@ -3050,9 +3103,9 @@ mod smoke {
         b.apply_piece_action(&actions[0]).unwrap();
         assert_eq!(b.board.piece_at(to).unwrap().unwrap().id, 1);
         assert_eq!(b.status(1).hunger, 0);
-        assert_eq!(b.status(1).agility, 3);
-        assert_eq!(b.actions_left, 3);
-        assert_eq!(b.turn, PLAYER);
+        assert_eq!(b.mechanics.corpse_eaten[0], 1);
+        assert_eq!(b.status(1).agility, 0);
+        assert_eq!(b.turn, ENEMY);
     }
     #[test]
     fn conscience_and_hunger_persist_once() {
@@ -3089,6 +3142,10 @@ mod smoke {
             .into_iter()
             .find(|a| a.first.effect == Effect::Catch && a.first.take == Position::new(3, 3))
             .unwrap();
+        b.set_ammunition(0);
+        assert_eq!(b.apply_piece_action(&shot), Err(Error::IllegalAction));
+        assert_eq!(b.turn, PLAYER);
+        b.set_ammunition(1);
         b.apply_piece_action(&shot).unwrap();
         assert_eq!(b.board.piece_at(from).unwrap().unwrap().id, 1);
         assert_eq!(b.take_resource_effects().2, -1);
@@ -3096,6 +3153,146 @@ mod smoke {
         assert_eq!(
             b.board.piece_at(Position::new(3, 3)).unwrap().unwrap().kind,
             PAWN
+        );
+    }
+    #[test]
+    fn missed_shot_ends_turn_despite_remaining_actions() {
+        let mut b = fixture(pieces::RIFLEMAN);
+        b.set_ammunition(1);
+        b.actions_left = 3;
+        b.force_search_shot(false);
+        let from = Position::new(3, 4);
+        let shot = b
+            .special_actions(from)
+            .into_iter()
+            .find(|a| a.first.take == Position::new(3, 3))
+            .unwrap();
+        b.apply_piece_action(&shot).unwrap();
+        assert_eq!(b.turn, ENEMY);
+        assert_eq!(
+            b.board.piece_at(Position::new(3, 3)).unwrap().unwrap().id,
+            101
+        );
+    }
+    #[test]
+    fn pistol_range_falloff_precedes_accuracy_bonuses() {
+        let mut b = Battle::sandbox().unwrap();
+        let from = Position::new(3, 6);
+        let to = Position::new(3, 2);
+        b.sandbox_place(1, pieces::PISTOL_INFANTRY, PLAYER, from)
+            .unwrap();
+        b.sandbox_place(2, PAWN, ENEMY, to).unwrap();
+        assert_eq!(b.hit_chance(from, to), Some(85));
+        b.configure_v030(&[Relic::FireControl]);
+        assert_eq!(b.hit_chance(from, to), Some(95));
+    }
+    #[test]
+    fn card_shot_and_card_corpse_capture_end_turn() {
+        let mut shot = fixture(pieces::RIFLEMAN);
+        shot.set_ammunition(1);
+        shot.actions_left = 3;
+        shot.force_search_shot(false);
+        shot.free_counterattack(1, 101, true).unwrap();
+        shot.finish_forced_turn().unwrap();
+        assert_eq!(shot.turn, ENEMY);
+
+        let mut corpse = fixture(ROOK);
+        let from = Position::new(3, 4);
+        let to = Position::new(3, 3);
+        corpse
+            .board
+            .set_piece(
+                to,
+                Some(Piece {
+                    id: 101,
+                    kind: pieces::CORPSE,
+                    owner: 2,
+                }),
+            )
+            .unwrap();
+        corpse.actions_left = 3;
+        let action = DefaultAction::one(ActionStep::new(from, to, to, Effect::Take));
+        corpse.apply_resolved_card_effect(&action).unwrap();
+        corpse.finish_forced_turn().unwrap();
+        assert_eq!(corpse.turn, ENEMY);
+    }
+    #[test]
+    fn delivered_supper_ends_turn_after_card_resolution() {
+        let mut b = fixture(ROOK);
+        let to = Position::new(3, 3);
+        b.board
+            .set_piece(
+                to,
+                Some(Piece {
+                    id: 101,
+                    kind: pieces::CORPSE,
+                    owner: 2,
+                }),
+            )
+            .unwrap();
+        let kind = CardKind::DeliveredSupper;
+        let mut cards = crate::cards::CardCombat {
+            hand: vec![crate::cards::Card { id: 1, kind }],
+            mana: 10,
+            ..Default::default()
+        };
+        let selection = CardSelection {
+            target: None,
+            targets: vec![1, 101],
+            upgrades: vec![],
+        };
+        crate::cards::resolve_selection(&mut b, &mut cards, 0, &selection, kind.definition())
+            .unwrap();
+        assert_eq!(b.turn, ENEMY);
+        assert!(b.board.piece_at(to).unwrap().is_none());
+        assert_eq!(b.mechanics.corpse_eaten[0], 1);
+    }
+    #[test]
+    fn death_threshold_persists_then_triggers_once_before_next_action() {
+        let mut first = fixture(ROOK);
+        first.grant_limiter(1).unwrap();
+        first.grant_death_threshold(1).unwrap();
+        assert!(first.piece_position(1).is_some());
+        assert!(first.status(1).death_threshold);
+        let players = first.outcome();
+        assert_eq!(
+            players
+                .iter()
+                .find(|p| p.id == 1)
+                .unwrap()
+                .persistent
+                .get("death_threshold"),
+            Some(&1)
+        );
+        let second = Battle::new(BattleStart {
+            players,
+            encounter: Encounter {
+                enemies: vec![EnemyPiece {
+                    id: 100,
+                    kind: KING,
+                    position: Position::new(7, 0),
+                }],
+                royal_id: 100,
+                additional_royal_ids: vec![],
+            },
+        })
+        .unwrap();
+        assert!(second.piece_position(1).is_none());
+        assert!(!second.status(1).death_threshold);
+        assert!(!second
+            .outcome()
+            .iter()
+            .find(|p| p.id == 1)
+            .unwrap()
+            .persistent
+            .contains_key("death_threshold"));
+        assert_eq!(
+            second
+                .events
+                .iter()
+                .filter(|event| event.contains("죽음의 문턱"))
+                .count(),
+            1
         );
     }
 }
