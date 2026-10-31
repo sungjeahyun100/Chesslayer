@@ -352,6 +352,33 @@ pub(crate) fn shot_preview(
     aligned.then(|| (i32::from(base) - i32::from(falloff) * falloff_steps).clamp(0, 100) as u8)
 }
 impl Battle {
+    pub fn volley_shot_count(&self) -> usize {
+        self.volley_shots().len()
+    }
+
+    fn volley_shots(&self) -> Vec<(Position, Piece, Position, Piece, u8)> {
+        let mut shots = Vec::new();
+        for (from, shooter) in self.living(PLAYER) {
+            if !pieces::is_infantry(shooter.kind) || !self.can_act(shooter) {
+                continue;
+            }
+            for (to, target) in self.living(ENEMY) {
+                if let Some(chance) = self.hit_chance(from, to) {
+                    shots.push((from, shooter, to, target, chance));
+                }
+            }
+        }
+        shots
+    }
+
+    fn roll_shot(&mut self, chance: u8) -> bool {
+        let roll = self.mechanics.rng.index(100);
+        self.mechanics
+            .search_shot_outcome
+            .take()
+            .unwrap_or(roll < usize::from(chance))
+    }
+
     fn blast_cells(&self, at: Position, shape: BlastShape) -> Vec<Position> {
         let mut offsets = vec![(0, 0)];
         offsets.extend([(1, 0), (-1, 0), (0, 1), (0, -1)]);
@@ -1463,12 +1490,7 @@ impl Battle {
                         self.mechanics.ammo -= cost;
                         self.mechanics.pending_ammo -= cost as i32;
                     }
-                    let roll = self.mechanics.rng.index(100);
-                    let hit = self
-                        .mechanics
-                        .search_shot_outcome
-                        .take()
-                        .unwrap_or(roll < usize::from(chance));
+                    let hit = self.roll_shot(chance);
                     if !hit {
                         self.events.push(format!(
                             "{} 사격 빗나감 (명중률 {}%).",
@@ -2801,35 +2823,54 @@ impl Battle {
                 self.mechanics.endless = true;
             }
             Volley => {
-                let mut victims = HashSet::new();
-                for (from, p) in self.living(PLAYER) {
-                    if !self.can_act(p) {
+                let shots = self.volley_shots();
+                if shots.is_empty() {
+                    return Err("사격 범위 안에 적이 있는 아군 보병이 없습니다.".into());
+                }
+                let count = shots.len();
+                for (from, shooter, to, target, planned_chance) in shots {
+                    let target_alive = self
+                        .board
+                        .piece_at(to)
+                        .map_err(|e| format!("{e:?}"))?
+                        .is_some_and(|p| p.id == target.id);
+                    let chance = if target_alive {
+                        self.hit_chance(from, to).unwrap_or(planned_chance)
+                    } else {
+                        planned_chance
+                    };
+                    *self.mechanics.shot_counts.entry(shooter.id).or_default() += 1;
+                    self.mechanics.aimed.remove(&shooter.id);
+                    if self.mechanics.fire_data_sharing
+                        && self.mechanics.shared_target == Some(target.id)
+                    {
+                        self.mechanics.shared_target = None;
+                    }
+                    let hit = self.roll_shot(chance);
+                    self.events.push(format!(
+                        "{} 일제사격 {} (명중률 {}%).",
+                        piece_name(shooter.kind),
+                        if hit { "명중" } else { "빗나감" },
+                        chance
+                    ));
+                    if !hit || !target_alive {
                         continue;
                     }
-                    for a in self.actions_from(from, false).map_err(err)? {
-                        for s in a.steps() {
-                            if !matches!(s.effect, Effect::Move | Effect::Shift) {
-                                if let Some(q) =
-                                    self.board.piece_at(s.take).map_err(|e| format!("{e:?}"))?
-                                {
-                                    if q.owner == ENEMY && !self.is_royal_piece(q.id) {
-                                        victims.insert(q.id);
-                                    }
-                                }
-                            }
-                        }
+                    if self.mechanics.fire_data_sharing {
+                        self.mechanics.shared_target = Some(target.id);
+                    }
+                    self.mechanics.shot_hits_this_turn =
+                        self.mechanics.shot_hits_this_turn.saturating_add(1);
+                    if self.wards.remove(&target.id) {
+                        self.events.push(format!(
+                            "가호: {}에게 명중한 사격을 한 번 막았습니다.",
+                            piece_name(target.kind)
+                        ));
+                    } else if self.kill_at_by(to, true, Some(shooter.id)).map_err(err)? {
+                        self.record_kill(shooter, target);
                     }
                 }
-                if victims.is_empty() {
-                    return Err("아군의 포획 범위 안에 적이 없습니다.".into());
-                }
-                for id in &victims {
-                    if let Some((pos, _)) = self.piece_position(*id) {
-                        self.kill_at(pos, true).map_err(err)?;
-                    }
-                }
-                self.mechanics.killed_this_turn = true;
-                removed = Some(victims.len());
+                removed = Some(count);
             }
             SmokeScreen => {
                 let id = one()?;
@@ -2870,6 +2911,96 @@ impl Battle {
 #[cfg(test)]
 mod smoke {
     use super::*;
+    #[test]
+    fn volley_counts_infantry_shots_and_updates_with_board_positions() {
+        let mut b = Battle::sandbox().unwrap();
+        b.sandbox_place(1, pieces::RIFLEMAN, PLAYER, Position::new(2, 6))
+            .unwrap();
+        b.sandbox_place(2, pieces::PISTOL_INFANTRY, PLAYER, Position::new(4, 6))
+            .unwrap();
+        b.sandbox_place(3, pieces::TANK, PLAYER, Position::new(7, 6))
+            .unwrap();
+        b.sandbox_place(101, PAWN, ENEMY, Position::new(3, 5))
+            .unwrap();
+        b.sandbox_place(102, PAWN, ENEMY, Position::new(2, 5))
+            .unwrap();
+        b.sandbox_place(103, PAWN, ENEMY, Position::new(7, 5))
+            .unwrap();
+        assert_eq!(b.volley_shot_count(), 3);
+        let chances: Vec<_> = b
+            .volley_shots()
+            .into_iter()
+            .filter(|(_, _, _, target, _)| target.id == 101)
+            .map(|(_, shooter, _, _, chance)| (shooter.kind, chance))
+            .collect();
+        assert_eq!(
+            chances,
+            vec![(pieces::RIFLEMAN, 95), (pieces::PISTOL_INFANTRY, 100)]
+        );
+        let mut firing = b.clone();
+        let kind = CardKind::Volley;
+        let mut cards = crate::cards::CardCombat {
+            hand: vec![crate::cards::Card { id: 1, kind }],
+            mana: 3,
+            ..Default::default()
+        };
+        let (cost, shots) = crate::cards::resolve_selection(
+            &mut firing,
+            &mut cards,
+            0,
+            &CardSelection::default(),
+            kind.definition(),
+        )
+        .unwrap();
+        assert_eq!((cost, shots, cards.mana), (3, Some(3), 0));
+        assert_eq!(
+            firing
+                .events
+                .iter()
+                .filter(|event| event.contains("일제사격"))
+                .count(),
+            3
+        );
+        b.sandbox_remove(Position::new(3, 5)).unwrap();
+        assert_eq!(b.volley_shot_count(), 1);
+    }
+
+    #[test]
+    fn volley_pays_for_each_shot_even_when_it_misses() {
+        let mut b = Battle::sandbox().unwrap();
+        b.sandbox_place(1, pieces::RIFLEMAN, PLAYER, Position::new(3, 6))
+            .unwrap();
+        b.sandbox_place(101, PAWN, ENEMY, Position::new(3, 5))
+            .unwrap();
+        b.set_ammunition(0);
+        assert_eq!(b.volley_shot_count(), 1);
+        b.force_search_shot(false);
+        let kind = CardKind::Volley;
+        let mut cards = crate::cards::CardCombat {
+            hand: vec![crate::cards::Card { id: 1, kind }],
+            mana: 0,
+            ..Default::default()
+        };
+        let selection = CardSelection::default();
+        assert!(crate::cards::resolve_selection(
+            &mut b,
+            &mut cards,
+            0,
+            &selection,
+            kind.definition()
+        )
+        .is_err());
+        assert_eq!(cards.hand.len(), 1);
+        cards.mana = 1;
+        let (cost, shots) =
+            crate::cards::resolve_selection(&mut b, &mut cards, 0, &selection, kind.definition())
+                .unwrap();
+        assert_eq!((cost, shots), (1, Some(1)));
+        assert_eq!(cards.mana, 0);
+        assert_eq!(b.piece_position(101).unwrap().1.kind, PAWN);
+        assert_eq!(b.turn, PLAYER);
+    }
+
     fn fixture(kind: PieceType) -> Battle {
         let mut roster = Battle::standard_roster();
         roster.retain(|p| p.id == 1 || p.id == 5);

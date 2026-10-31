@@ -1452,7 +1452,11 @@ impl Game {
             },
             cost,
             removed
-                .map(|n| format!(" · {n}기 처리"))
+                .map(|n| if d.kind == CardKind::Volley {
+                    format!(" · {n}회 사격")
+                } else {
+                    format!(" · {n}기 처리")
+                })
                 .unwrap_or_default()
         ));
         self.events();
@@ -1665,7 +1669,10 @@ impl Game {
             .hand
             .iter()
             .map(|c| {
-                let d = c.kind.definition();
+                let mut d = c.kind.definition();
+                if c.kind == CardKind::Volley {
+                    d.cost = self.battle.volley_shot_count() as u32;
+                }
                 let targets = if d.targeted {
                     (d.target_candidates)(&self.battle)
                         .into_iter()
@@ -1680,6 +1687,8 @@ impl Game {
                     Some("발동 효과의 대상을 먼저 선택하세요.")
                 } else if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
                     Some("내 턴을 기다리세요.")
+                } else if c.kind == CardKind::Volley && d.cost == 0 {
+                    Some("사격할 적이 없습니다.")
                 } else if self.cards.mana < if d.cost_per_target { 1 } else { d.cost } {
                     Some("마나가 부족합니다.")
                 } else if d.targeted && targets.is_empty() {
@@ -2295,6 +2304,32 @@ pub struct RequiredPieceView {
 #[cfg(test)]
 mod relic_resource_tests {
     use super::*;
+
+    #[test]
+    fn volley_hand_cost_tracks_the_current_board() {
+        let mut game = Game::new("artillery", 2026).unwrap();
+        game.phase = RunPhase::Combat;
+        game.battle = Battle::sandbox().unwrap();
+        game.cards.hand = vec![Card {
+            id: 1,
+            kind: CardKind::Volley,
+        }];
+        game.cards.mana = 2;
+        let empty = &game.snapshot().hand[0];
+        assert_eq!(empty.definition.cost, 0);
+        assert!(empty.disabled_reason.is_some());
+        game.battle
+            .sandbox_place(1, content::pieces::RIFLEMAN, PLAYER, Position::new(3, 6))
+            .unwrap();
+        game.battle
+            .sandbox_place(101, content::pieces::PAWN, ENEMY, Position::new(3, 5))
+            .unwrap();
+        let ready = &game.snapshot().hand[0];
+        assert_eq!(ready.definition.cost, 1);
+        assert!(ready.disabled_reason.is_none());
+        game.battle.sandbox_remove(Position::new(3, 5)).unwrap();
+        assert_eq!(game.snapshot().hand[0].definition.cost, 0);
+    }
 
     #[test]
     fn six_cost_card_uses_the_same_resolution_and_payment_path() {

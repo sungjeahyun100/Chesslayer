@@ -385,3 +385,11 @@ pub fn previous_upgrade(kind: PieceType) -> Option<PieceType> {
         })
         .map(|definition| definition.kind)
 }
+
+pub fn is_infantry(kind: PieceType) -> bool {
+    let mut current = kind;
+    while let Some(parent) = previous_upgrade(current) {
+        current = parent;
+    }
+    matches!(current, AXE_INFANTRY | RIFLEMAN)
+}
