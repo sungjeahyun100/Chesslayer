@@ -37,6 +37,7 @@ pub struct SandboxPiece {
     pub owner: PlayerId,
     pub cell: usize,
     pub statuses: Vec<String>,
+    pub dice_roll: Option<u8>,
     pub ward: bool,
 }
 #[derive(Serialize)]
@@ -307,6 +308,7 @@ impl Sandbox {
                     owner: piece.owner,
                     cell: at,
                     statuses: self.battle.status_labels(piece.id),
+                    dice_roll: self.battle.gambler_die(piece.id),
                     ward: self.battle.has_ward(piece.id),
                 })
             })

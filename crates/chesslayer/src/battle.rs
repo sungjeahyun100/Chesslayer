@@ -137,6 +137,8 @@ pub struct Battle {
     pub events: Vec<String>,
     actions_per_turn: u8,
     wards: HashSet<PieceId>,
+    kind_passives: HashMap<PieceId, KindPassive>,
+    gambler_dice: HashMap<PieceId, u8>,
     temporary_upgrades: HashSet<PieceId>,
     limiter: HashMap<PieceId, LimiterState>,
     self_defense_target: Option<PieceId>,
@@ -156,6 +158,11 @@ pub struct Battle {
 struct LimiterState {
     owner: PlayerId,
     moves_left: u8,
+}
+#[derive(Clone, Copy, Default)]
+struct KindPassive {
+    agility: u8,
+    ward: bool,
 }
 impl Battle {
     pub(crate) fn force_search_shot(&mut self, hit: bool) {
@@ -188,6 +195,9 @@ impl Battle {
             ids.sort();
             ids.hash(&mut h);
         }
+        let mut dice: Vec<_> = self.gambler_dice.iter().collect();
+        dice.sort_by_key(|(id, _)| **id);
+        dice.hash(&mut h);
         let mut limiter: Vec<_> = self.limiter.iter().collect();
         limiter.sort_by_key(|(id, _)| **id);
         for (id, state) in limiter {
@@ -347,6 +357,8 @@ impl Battle {
         let mut battle = Self {
             events,
             wards: HashSet::new(),
+            kind_passives: HashMap::new(),
+            gambler_dice: HashMap::new(),
             temporary_upgrades: HashSet::new(),
             limiter: HashMap::new(),
             self_defense_target: None,
@@ -392,6 +404,7 @@ impl Battle {
             sandbox,
         };
         battle.initialize_statuses();
+        battle.roll_all_gambler_dice();
         battle.trigger_death_thresholds()?;
         battle.mechanics.enemy_actions = options.actions_per_turn;
         battle.update_result(ResultReason::Counterattack);
@@ -457,6 +470,7 @@ impl Battle {
             self.sandbox_ally_added();
         }
         self.mechanics.statuses.insert(id, PieceStatus::default());
+        self.roll_gambler_die(Piece { id, kind, owner });
         Ok(())
     }
     pub fn sandbox_remove(&mut self, at: Position) -> Result<(), Error> {
@@ -470,6 +484,7 @@ impl Battle {
         self.moved_ids.remove(&piece.id);
         self.wards.remove(&piece.id);
         self.limiter.remove(&piece.id);
+        self.gambler_dice.remove(&piece.id);
         Ok(())
     }
     pub fn sandbox_change_kind(&mut self, at: Position, kind: PieceType) -> Result<(), Error> {
@@ -485,6 +500,7 @@ impl Battle {
         self.mechanics
             .statuses
             .insert(piece.id, PieceStatus::default());
+        self.roll_gambler_die(piece);
         Ok(())
     }
     pub fn sandbox_actions(&self, from: Position) -> Result<Vec<DefaultAction>, Error> {
@@ -540,6 +556,24 @@ impl Battle {
     }
     fn reset_turn_budget(&mut self) {
         self.normal_actions_used = 0;
+        for piece in self
+            .board
+            .cells()
+            .iter()
+            .flatten()
+            .copied()
+            .filter(|piece| piece.owner == self.turn)
+        {
+            let bonus = match piece.kind {
+                pieces::DOUBLE_KING => 1,
+                pieces::TRIPLE_KING => 2,
+                _ => 0,
+            };
+            if bonus > 0 {
+                let status = self.mechanics.statuses.entry(piece.id).or_default();
+                status.agility = status.agility.max(bonus);
+            }
+        }
         self.actions_left = self.side_actions(self.turn);
         let bonus = self
             .board
@@ -592,6 +626,8 @@ impl Battle {
             }
         }
         self.wards.clear();
+        self.kind_passives.clear();
+        self.gambler_dice.clear();
         self.temporary_upgrades.clear();
         self.limiter.clear();
         self.forced_turn_end = false;
@@ -604,6 +640,61 @@ impl Battle {
         self.players = roster;
         self.clear_fallout();
         self.initialize_statuses();
+        Ok(())
+    }
+    /// Change a permanent kind without moving the piece or resetting combat state.
+    pub(crate) fn set_permanent_upgrade(
+        &mut self,
+        id: PieceId,
+        kind: PieceType,
+        upgrades: Vec<String>,
+        in_combat: bool,
+    ) -> Result<(), Error> {
+        let player = self
+            .players
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or(Error::IllegalAction)?;
+        let position = player.position;
+        if let Some(at) = position {
+            let piece = self.board.piece_at(at)?.ok_or(Error::IllegalAction)?;
+            if piece.owner != PLAYER || piece.id != id {
+                return Err(Error::IllegalAction);
+            }
+            self.board.set_piece(at, Some(Piece { kind, ..piece }))?;
+        }
+        let player = self.players.iter_mut().find(|p| p.id == id).unwrap();
+        player.kind = kind;
+        player.upgrades = upgrades;
+        self.temporary_upgrades.remove(&id);
+        if position.is_some() && in_combat {
+            self.roll_gambler_die(Piece {
+                id,
+                kind,
+                owner: PLAYER,
+            });
+        } else {
+            self.gambler_dice.remove(&id);
+        }
+        if let Some(passive) = self.kind_passives.remove(&id) {
+            if passive.ward {
+                self.wards.remove(&id);
+            }
+            if let Some(status) = self.mechanics.statuses.get_mut(&id) {
+                let removed = status.agility.min(passive.agility);
+                status.agility -= removed;
+                if position.is_some() && self.phase == Phase::Active && self.turn == PLAYER {
+                    self.actions_left = self.actions_left.saturating_sub(removed);
+                }
+            }
+        }
+        if position.is_some() && in_combat && self.phase == Phase::Active {
+            self.apply_kind_passive(Piece {
+                id,
+                kind,
+                owner: PLAYER,
+            });
+        }
         Ok(())
     }
     pub fn player_pieces(&self) -> &[PlayerPiece] {
@@ -628,6 +719,150 @@ impl Battle {
     }
     pub fn legal_actions(&self, from: Position) -> Result<Vec<DefaultAction>, Error> {
         self.actions_from(from, true)
+    }
+    pub fn gambler_die(&self, id: PieceId) -> Option<u8> {
+        self.piece_position(id)
+            .filter(|(_, piece)| matches!(piece.kind, pieces::GAMBLER | pieces::JOCKEY))
+            .and_then(|_| self.gambler_dice.get(&id).copied())
+    }
+    fn roll_gambler_die(&mut self, piece: Piece) {
+        if !matches!(piece.kind, pieces::GAMBLER | pieces::JOCKEY) {
+            self.gambler_dice.remove(&piece.id);
+            return;
+        }
+        let die = (self.mechanics.rng.index(6) + 1) as u8;
+        self.gambler_dice.insert(piece.id, die);
+        let kind = [
+            pieces::PAWN,
+            pieces::KNIGHT,
+            pieces::BISHOP,
+            pieces::ROOK,
+            pieces::QUEEN,
+            pieces::KING,
+        ][usize::from(die - 1)];
+        self.events.push(format!(
+            "{}: 주사위 {} · {} 행마",
+            piece_name(piece.kind),
+            die,
+            piece_name(kind)
+        ));
+    }
+    fn roll_all_gambler_dice(&mut self) {
+        let pieces: Vec<_> = self.board.cells().iter().flatten().copied().collect();
+        for piece in pieces {
+            if matches!(piece.kind, pieces::GAMBLER | pieces::JOCKEY) {
+                self.roll_gambler_die(piece);
+            }
+        }
+    }
+    fn roll_current_side_gambler_dice(&mut self) {
+        let pieces: Vec<_> = self
+            .board
+            .cells()
+            .iter()
+            .flatten()
+            .copied()
+            .filter(|p| p.owner == self.turn)
+            .collect();
+        for piece in pieces {
+            if matches!(piece.kind, pieces::GAMBLER | pieces::JOCKEY) {
+                self.roll_gambler_die(piece);
+            }
+        }
+    }
+    /// Targets for a king's board manipulation ability. This uses the same action
+    /// budget and status restrictions as an ordinary piece action.
+    pub fn king_reposition_targets(&self, from: Position) -> Result<Vec<Position>, Error> {
+        let actor = self.board.piece_at(from)?.ok_or(Error::IllegalAction)?;
+        if !matches!(actor.kind, pieces::TEMPEST_KING | pieces::TYPHOON_KING)
+            || self.phase != Phase::Active
+            || actor.owner != self.turn
+            || self.pending_choice().is_some()
+            || !self.can_act(actor)
+            || (self.normal_actions_used >= self.side_actions(actor.owner)
+                && self.agility(actor.id) == 0
+                && !self.limiter.contains_key(&actor.id))
+            || self
+                .limiter
+                .get(&actor.id)
+                .is_some_and(|state| state.moves_left == 0)
+            || (self.limiter_turn
+                && !self.limiter.contains_key(&actor.id)
+                && self.agility(actor.id) == 0
+                && self.normal_actions_used >= self.actions_per_turn)
+        {
+            return Ok(vec![]);
+        }
+        Ok(self
+            .board
+            .cells()
+            .iter()
+            .enumerate()
+            .filter_map(|(index, piece)| {
+                piece
+                    .filter(|p| p.owner != actor.owner && p.owner != 2)
+                    .map(|_| {
+                        Position::new(
+                            (index % self.board.width()) as i32,
+                            (index / self.board.width()) as i32,
+                        )
+                    })
+            })
+            .collect())
+    }
+
+    /// Permute complete piece identities on their occupied squares, bypassing move,
+    /// capture, and death hooks. Statuses and royal IDs remain attached to IDs.
+    pub fn reposition_enemies(
+        &mut self,
+        from: Position,
+        targets: &[Position],
+    ) -> Result<(), Error> {
+        let actor = self.board.piece_at(from)?.ok_or(Error::IllegalAction)?;
+        let required = if actor.kind == pieces::TEMPEST_KING {
+            2
+        } else if actor.kind == pieces::TYPHOON_KING && (2..=6).contains(&targets.len()) {
+            targets.len()
+        } else {
+            return Err(Error::IllegalAction);
+        };
+        if targets.len() != required {
+            return Err(Error::IllegalAction);
+        }
+        let available = self.king_reposition_targets(from)?;
+        let mut unique = HashSet::new();
+        if !targets
+            .iter()
+            .all(|p| unique.insert(*p) && available.contains(p))
+        {
+            return Err(Error::IllegalAction);
+        }
+        let pieces: Vec<_> = targets
+            .iter()
+            .map(|&p| {
+                self.board
+                    .piece_at(p)
+                    .map(|piece| piece.expect("validated target"))
+            })
+            .collect::<Result<_, _>>()?;
+        let mut shuffled = pieces.clone();
+        if actor.kind == pieces::TEMPEST_KING {
+            shuffled.swap(0, 1);
+        } else {
+            self.mechanics.rng.shuffle(&mut shuffled);
+            if shuffled == pieces {
+                shuffled.rotate_left(1);
+            }
+        }
+        for (&position, piece) in targets.iter().zip(shuffled) {
+            self.board.set_piece(position, Some(piece))?;
+        }
+        self.events.push(format!(
+            "{}: 적 기물 {}기의 위치를 바꾸었습니다.",
+            piece_name(actor.kind),
+            targets.len()
+        ));
+        self.complete_nonmovement_action(actor)
     }
     pub(crate) fn generated_legal_actions(
         &self,
@@ -751,7 +986,20 @@ impl Battle {
         {
             return Ok(vec![]);
         }
-        let mut actions = self.piece_actions(piece.kind, from)?;
+        let rolled_kind = self.gambler_die(piece.id).map(|die| {
+            [
+                pieces::PAWN,
+                pieces::KNIGHT,
+                pieces::BISHOP,
+                pieces::ROOK,
+                pieces::QUEEN,
+                pieces::KING,
+            ][usize::from(die - 1)]
+        });
+        let mut actions = self.piece_actions(rolled_kind.unwrap_or(piece.kind), from)?;
+        if piece.kind == pieces::JOCKEY && rolled_kind.is_some_and(|kind| kind != pieces::KING) {
+            actions.extend(self.piece_actions(pieces::KING, from)?);
+        }
         actions.extend(self.special_actions(from));
         if piece.owner == PLAYER
             && self.turn == PLAYER
@@ -803,7 +1051,8 @@ impl Battle {
                 }
             }
         }
-        if pieces::definition(piece.kind).is_some_and(|d| d.initial_double_step)
+        if (pieces::definition(piece.kind).is_some_and(|d| d.initial_double_step)
+            || rolled_kind == Some(pieces::PAWN))
             && !self.moved_ids.contains(&piece.id)
             && from.rank == if piece.owner == PLAYER { 6 } else { 1 }
         {
@@ -956,13 +1205,22 @@ impl Battle {
             ));
         } else {
             self.apply_effect(action, ActionSource::PieceMove)?;
+            self.check_king_goal(piece, action.first.from);
         }
         self.forced_turn_end |= shooting;
         self.complete_piece_action(piece)
     }
     pub(super) fn complete_piece_action(&mut self, piece: Piece) -> Result<(), Error> {
+        self.complete_action(piece, true)
+    }
+    fn complete_nonmovement_action(&mut self, piece: Piece) -> Result<(), Error> {
+        self.complete_action(piece, false)
+    }
+    fn complete_action(&mut self, piece: Piece, moved: bool) -> Result<(), Error> {
         self.mechanics.statuses.entry(piece.id).or_default().dining = false;
-        self.moved_ids.insert(piece.id);
+        if moved {
+            self.moved_ids.insert(piece.id);
+        }
         let limiter_expired = if let Some(state) = self.limiter.get_mut(&piece.id) {
             state.moves_left = state.moves_left.saturating_sub(1);
             state.moves_left == 0
@@ -976,8 +1234,10 @@ impl Battle {
             }
             false
         };
-        if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
-            p.moved = true;
+        if moved {
+            if let Some(p) = self.players.iter_mut().find(|p| p.id == piece.id) {
+                p.moved = true;
+            }
         }
         self.actions_left = self.actions_left.saturating_sub(1);
         if limiter_expired && self.phase == Phase::Active {
@@ -1063,6 +1323,7 @@ impl Battle {
         if self.phase != Phase::Active {
             return Ok(());
         }
+        self.roll_current_side_gambler_dice();
         self.forced_turn_end = false;
         self.reset_turn_budget();
         Ok(())
@@ -1225,6 +1486,11 @@ impl Battle {
         self.board = next;
         self.temporary_upgrades
             .extend(choices.iter().map(|(id, _)| *id));
+        for &(id, _) in choices {
+            if let Some((_, piece)) = self.piece_position(id) {
+                self.roll_gambler_die(piece);
+            }
+        }
         Ok(())
     }
     /// Applies a resolved card action atomically, preserving both royal identities and the turn.
@@ -1567,6 +1833,43 @@ impl Battle {
         } else {
             GameResult::Ongoing
         };
+        self.finalize_result();
+    }
+    fn check_king_goal(&mut self, actor: Piece, from: Position) {
+        if self.sandbox || self.result != GameResult::Ongoing {
+            return;
+        }
+        let Some((at, current)) = self.piece_position(actor.id) else {
+            return;
+        };
+        if at == from || current.kind != actor.kind {
+            return;
+        }
+        let racing = matches!(actor.kind, pieces::RACING_KING | pieces::JOCKEY);
+        let reached_racing_goal = racing && at.rank == if actor.owner == PLAYER { 0 } else { 7 };
+        let reached_hill = actor.kind == pieces::HILL_KING
+            && (3..=4).contains(&at.file)
+            && (3..=4).contains(&at.rank);
+        let reason = if reached_hill {
+            Some(ResultReason::HillGoal)
+        } else if reached_racing_goal {
+            Some(ResultReason::RacingGoal)
+        } else {
+            None
+        };
+        if let Some(reason) = reason {
+            self.result = GameResult::Win {
+                winner: actor.owner,
+                reason,
+            };
+            self.events.push(format!(
+                "{}: 목표 칸에 도달했습니다.",
+                piece_name(actor.kind)
+            ));
+            self.finalize_result();
+        }
+    }
+    fn finalize_result(&mut self) {
         self.phase = if self.result == GameResult::Ongoing {
             Phase::Active
         } else {

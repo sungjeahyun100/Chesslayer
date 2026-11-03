@@ -626,7 +626,13 @@ fn real_rest_branches_promotion_validation_and_enemy_ai() {
 fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
     let rest = guardian_rest_scene();
     assert_eq!(rest.phase, RunPhase::Rest);
-    assert_eq!(rest.snapshot().upgrade_paths.len(), 59);
+    assert_eq!(
+        rest.snapshot().upgrade_paths.len(),
+        pieces::ALL
+            .iter()
+            .map(|definition| definition.upgrades.len())
+            .sum::<usize>()
+    );
     for (id, source, targets) in [
         (1, ROOK, vec![TEMPEST_ROOK, BOUNCING_ROOK]),
         (3, BISHOP, vec![TEMPEST_BISHOP, BOUNCING_BISHOP]),
@@ -704,7 +710,6 @@ fn standard_piece_rest_branches_preserve_state_and_reject_other_paths() {
         pieces::MOVEMENT_GOD,
         pieces::BOUNCING_TEMPEST_QUEEN,
         pieces::TYPHOON_QUEEN,
-        KING,
         AMAZON,
     ] {
         assert!(pieces::definition(kind).unwrap().upgrades.is_empty());

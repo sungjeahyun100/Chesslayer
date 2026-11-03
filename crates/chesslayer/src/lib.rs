@@ -17,6 +17,8 @@ pub enum ResultReason {
     RoyalCaptured,
     Counterattack,
     SelfDefense,
+    RacingGoal,
+    HillGoal,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GameResult {

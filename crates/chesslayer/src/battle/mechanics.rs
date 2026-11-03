@@ -702,19 +702,8 @@ impl Battle {
             }
         }
         let pieces: Vec<_> = self.board.cells().iter().flatten().copied().collect();
-        for p in pieces {
-            match key(p.kind) {
-                "scout" => self.grant_agility(p.id, 1),
-                "phantom_scout" => self.grant_agility(p.id, 2),
-                "special_commander" => {
-                    self.wards.insert(p.id);
-                }
-                "shadow_commander" => {
-                    self.wards.insert(p.id);
-                    self.grant_agility(p.id, 1);
-                }
-                _ => {}
-            }
+        for piece in pieces {
+            self.apply_kind_passive(piece);
         }
         if relics.contains(&Relic::TornMenu) {
             if let Some(id) = self
@@ -725,6 +714,30 @@ impl Battle {
             {
                 self.worsen_hunger(id);
             }
+        }
+    }
+    pub(super) fn apply_kind_passive(&mut self, piece: Piece) {
+        let mut passive = KindPassive::default();
+        match key(piece.kind) {
+            "scout" => passive.agility = 1,
+            "phantom_scout" => passive.agility = 2,
+            "special_commander" => passive.ward = true,
+            "shadow_commander" => {
+                passive.ward = true;
+                passive.agility = 1;
+            }
+            "double_king" => passive.agility = 1,
+            "triple_king" => passive.agility = 2,
+            _ => {}
+        }
+        if passive.ward {
+            self.wards.insert(piece.id);
+        }
+        if passive.agility > 0 {
+            self.grant_agility(piece.id, passive.agility);
+        }
+        if passive.ward || passive.agility > 0 {
+            self.kind_passives.insert(piece.id, passive);
         }
     }
     pub fn sandbox_set_relic(&mut self, relic: Relic, enabled: bool) -> Result<(), String> {

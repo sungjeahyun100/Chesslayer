@@ -31,6 +31,7 @@ export interface Piece {
   limiter: { active: boolean; moves_left: number } | null;
   absorbed_moves: string[];
   statuses: string[];
+  dice_roll: number | null;
 }
 export interface Ability {
   piece_id: number;
@@ -150,11 +151,13 @@ export type Command =
   | { type: "continue_reward" | "advance_floor" }
   | { type: "claim_upgrade"; id: number; target: number }
   | { type: "rest_upgrade"; id: number; target: number }
+  | { type: "developer_set_upgrade"; id: number; target: number }
   | { type: "rest_revive" | "rest_confess" | "rest_supply" | "reinforce"; id: number }
   | { type: "event_choice"; choice: "eat" | "leave" }
   | { type: "shop_buy"; index: number }
   | { type: "shop_leave" }
   | { type: "special_action"; from: number; to: number }
+  | { type: "king_reposition"; from: number; targets: number[] }
   | { type: "protect_hunger"; id: number }
   | { type: "resolve_effect"; target: number };
 

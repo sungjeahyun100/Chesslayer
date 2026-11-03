@@ -2041,5 +2041,149 @@
     "sha256": "6a5874640ff1a2519dc97aaf142175ce76dbaf70c7f2ca8855c592d1687f167c",
     "changes": "Distinct branch marking for Chesslayer drone/tank upgrade.",
     "license": "original"
+  },
+  {
+    "key": "racing_king",
+    "side": "white",
+    "file": "racing_king-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "6c6d3975cdfbeb551edcca9d5de7dd73374fbba0d56cb05bc19f873099103ab7",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "racing_king",
+    "side": "black",
+    "file": "racing_king-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "945a69a1af01502bd1d031f303b17e817b0a7d9c13cdf53f5132e8beefc1c565",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "gambler",
+    "side": "white",
+    "file": "gambler-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "a66e57ca1ea1ef57d6e75c2ac52441a69e46322d07d6372ecc23fd60205eeb28",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "gambler",
+    "side": "black",
+    "file": "gambler-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "d55af02471f46162be04436ef6779eb0d462fdc56491c80ec533385a756ee9bb",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "jockey",
+    "side": "white",
+    "file": "jockey-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "5b2d8fea3a312b1d32257f197926a06fe618454cbe1ad9e7760d51aea420880d",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "jockey",
+    "side": "black",
+    "file": "jockey-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "e90dea0b11fd72ba8716966e0d72f43df9319ae0db3308b16ddc5b12a6e02e0e",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "hill_king",
+    "side": "white",
+    "file": "hill_king-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "7f4a583b5f835bd63794f46da934df2c27fc2a49e98ad8be641346eec584a221",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "hill_king",
+    "side": "black",
+    "file": "hill_king-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "c69d73e2af6baca6b084d92b665c2613e6b749ab27ceb288b994f80b322b0fda",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "royal_knight",
+    "side": "white",
+    "file": "royal_knight-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "f067b358ecb6d30375cd864dc39ec8ef42e967d3b44526ff54d45c91156326e7",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "royal_knight",
+    "side": "black",
+    "file": "royal_knight-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "f51242f06bf205b3204da92eff1aa21880701c2455bce4136a0e4df54b7133d7",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "double_king",
+    "side": "white",
+    "file": "double_king-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "2ed2bb4716048232d6d1015e770f6f3db86fbda74dbdb5f7ad196c715533bf4f",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "double_king",
+    "side": "black",
+    "file": "double_king-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "08ebf8fbfa633a4e4eae905d60ce3b6d4e4613ac99d71a79d36e46fafe87a48f",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "triple_king",
+    "side": "white",
+    "file": "triple_king-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "35e5c8ce86ab7f0316a13df16bc762ad669f61fa2ef1c827c561391736e07584",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "triple_king",
+    "side": "black",
+    "file": "triple_king-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "930d87f4f15bc271f17cfe935d2acabda67436fad043f241f7a67bb93aad46f1",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "typhoon_king",
+    "side": "white",
+    "file": "typhoon_king-white.svg",
+    "source": "king-white.svg with an original branch mark",
+    "sha256": "f9e15833b06086f2c003df746f4b23157d58a0ba6b610bfe767bf1a8b2d7444a",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
+  },
+  {
+    "key": "typhoon_king",
+    "side": "black",
+    "file": "typhoon_king-black.svg",
+    "source": "king-black.svg with an original branch mark",
+    "sha256": "287e35aa219af3a4d7446940c1c4766d296866f3786661659329d406e1729228",
+    "changes": "Distinct branch mark over the existing king asset.",
+    "license": "unverified-extracted-source"
   }
 ]

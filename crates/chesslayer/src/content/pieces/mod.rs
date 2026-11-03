@@ -11,8 +11,12 @@ mod bouncing_tempest_queen;
 mod bouncing_tempest_rook;
 mod cardinal;
 mod centaur;
+mod double_king;
 mod emperor;
+mod gambler;
+mod hill_king;
 mod hook;
+mod jockey;
 mod king;
 mod knight;
 mod knightrider;
@@ -21,7 +25,9 @@ pub mod movement;
 mod movement_god;
 mod pawn;
 mod queen;
+mod racing_king;
 mod rook;
+mod royal_knight;
 mod tempest_bishop;
 mod tempest_king;
 mod tempest_knight;
@@ -29,7 +35,9 @@ mod tempest_pawn;
 mod tempest_queen;
 mod tempest_rook;
 mod tengu;
+mod triple_king;
 mod typhoon_bishop;
+mod typhoon_king;
 mod typhoon_knight;
 mod typhoon_queen;
 mod typhoon_rook;
@@ -147,8 +155,12 @@ pub use bouncing_tempest_queen::BOUNCING_TEMPEST_QUEEN;
 pub use bouncing_tempest_rook::BOUNCING_TEMPEST_ROOK;
 pub use cardinal::CARDINAL;
 pub use centaur::CENTAUR;
+pub use double_king::DOUBLE_KING;
 pub use emperor::EMPEROR;
+pub use gambler::GAMBLER;
+pub use hill_king::HILL_KING;
 pub use hook::HOOK;
+pub use jockey::JOCKEY;
 pub use king::KING;
 pub use knight::KNIGHT;
 pub use knightrider::KNIGHTRIDER;
@@ -156,7 +168,9 @@ pub use lobster::LOBSTER;
 pub use movement_god::MOVEMENT_GOD;
 pub use pawn::PAWN;
 pub use queen::QUEEN;
+pub use racing_king::RACING_KING;
 pub use rook::ROOK;
+pub use royal_knight::ROYAL_KNIGHT;
 pub use tempest_bishop::TEMPEST_BISHOP;
 pub use tempest_king::TEMPEST_KING;
 pub use tempest_knight::TEMPEST_KNIGHT;
@@ -164,7 +178,9 @@ pub use tempest_pawn::TEMPEST_PAWN;
 pub use tempest_queen::TEMPEST_QUEEN;
 pub use tempest_rook::TEMPEST_ROOK;
 pub use tengu::TENGU;
+pub use triple_king::TRIPLE_KING;
 pub use typhoon_bishop::TYPHOON_BISHOP;
+pub use typhoon_king::TYPHOON_KING;
 pub use typhoon_knight::TYPHOON_KNIGHT;
 pub use typhoon_queen::TYPHOON_QUEEN;
 pub use typhoon_rook::TYPHOON_ROOK;
@@ -229,6 +245,14 @@ pub const ALL: &[PieceDefinition] = &[
     rook::DEFINITION,
     queen::DEFINITION,
     king::DEFINITION,
+    racing_king::DEFINITION,
+    gambler::DEFINITION,
+    jockey::DEFINITION,
+    hill_king::DEFINITION,
+    royal_knight::DEFINITION,
+    double_king::DEFINITION,
+    triple_king::DEFINITION,
+    typhoon_king::DEFINITION,
     amazon::DEFINITION,
     tempest_pawn::DEFINITION,
     tempest_rook::DEFINITION,
@@ -349,6 +373,14 @@ pub fn is_royal(kind: PieceType) -> bool {
     matches!(
         kind,
         KING | TEMPEST_KING
+            | RACING_KING
+            | GAMBLER
+            | JOCKEY
+            | HILL_KING
+            | ROYAL_KNIGHT
+            | DOUBLE_KING
+            | TRIPLE_KING
+            | TYPHOON_KING
             | VANGUARD_COMMANDER
             | MOUNTED_COMMANDER
             | SMILING_KING

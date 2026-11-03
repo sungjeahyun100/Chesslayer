@@ -4,9 +4,15 @@ import { PieceImage } from "./PieceImage";
 import { PieceStatuses } from "./PieceStatuses";
 import { CardFace } from "./CardFace";
 import { RelicIcon } from "./ContentArt";
+import { UpgradeTree } from "./UpgradeTree";
 import type { RestOption, Snapshot } from "./types";
 
-export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose: () => void }) {
+export function ExpeditionStatus({ state, onClose, developerMode = false, onUpgrade }: {
+  state: Snapshot;
+  onClose: () => void;
+  developerMode?: boolean;
+  onUpgrade?: (id: number, target: number) => void;
+}) {
   const closeRef = useRef<HTMLButtonElement>(null);
   const dialogRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<number | null>(null);
@@ -29,10 +35,17 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
   const upgradeSteps = selectedPiece?.upgrades.map((key) => ({ key, path: undefined as typeof state.upgrade_paths[number] | undefined })) ?? [];
   let upgradeKind = selectedPiece?.kind;
   for (let index = upgradeSteps.length - 1; index >= 0; index--) {
-    const path = state.upgrade_paths.find((candidate) => candidate.key === upgradeSteps[index].key && candidate.to === upgradeKind);
+    const path = state.upgrade_paths.find((candidate) => candidate.to === upgradeKind &&
+      (candidate.key === upgradeSteps[index].key || candidate.to_key === upgradeSteps[index].key));
     upgradeSteps[index].path = path;
     if (path) upgradeKind = path.from;
   }
+  const family = new Set<number>(upgradeKind === undefined ? [] : [upgradeKind]);
+  for (let pass = 0; pass < state.upgrade_paths.length; pass++) {
+    for (const path of state.upgrade_paths) if (family.has(path.from)) family.add(path.to);
+  }
+  const familyPaths = state.upgrade_paths.filter((path) => family.has(path.from) && family.has(path.to));
+  const acquired = upgradeSteps.map(({ path }) => path?.to).filter((kind): kind is number => kind !== undefined);
 
   useEffect(() => {
     const previousFocus = document.activeElement as HTMLElement | null;
@@ -93,6 +106,12 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
               })}
             </div>
             {(state.phase === "victory" || state.phase === "defeat") && <p className="status-formation-note">다음 전투가 없습니다.</p>}
+            {developerMode && <div className="status-instance-list status-roster-list" aria-label="아군 기물 선택">
+              {state.rest_options.map((piece) => <button key={piece.id} className={piece.id === selectedId ? "is-selected" : ""}
+                onClick={() => setSelectedId(piece.id)} aria-pressed={piece.id === selectedId}>
+                {piece.name} #{piece.id}{piece.dead ? " · 전투 불가" : ""}
+              </button>)}
+            </div>}
             {selectedPiece && selectedGroup && <div className="status-piece-detail">
               <div className="status-instance-list" aria-label={`${selectedPiece.name} 개별 기물`}>
                 {selectedGroup.map((piece, index) => <button key={piece.id} className={piece.id === selectedPiece.id ? "is-selected" : ""}
@@ -111,6 +130,11 @@ export function ExpeditionStatus({ state, onClose }: { state: Snapshot; onClose:
               </ol>}
             </div>}
           </section>
+          {developerMode && selectedPiece && onUpgrade && <section className="status-section status-upgrade-tree" aria-label={`${selectedPiece.name} 개발자 강화`}>
+            <UpgradeTree key={selectedPiece.id} piece={selectedPiece} paths={familyPaths} acquired={acquired}
+              onSelect={() => {}} onConfirm={(target) => onUpgrade(selectedPiece.id, target)} completed={false}
+              instant selectedKind={selectedPiece.kind} />
+          </section>}
           <section className="status-section status-relics" aria-labelledby="status-relics-title">
             <h3 id="status-relics-title">보유 유물 <span>{state.relics.length}</span></h3>
             <div className="status-relic-list">

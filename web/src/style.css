@@ -1339,7 +1339,10 @@ body:has(.expedition-status-trigger) .top-right { padding-right: 125px; }
 .status-piece-detail > strong, .status-relic-detail > strong { font: 700 15px "Noto Serif KR", Georgia, serif; }
 .status-piece-detail p, .status-relic-detail p { margin: 5px 0; }
 .status-piece-detail > small, .status-relic-detail > small { color: #856b3a; }
+.status-upgrade-tree { grid-column: 1 / -1; min-width: 0; }
+.status-upgrade-tree .skill-viewport { min-height: 360px; }
 .status-instance-list { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 11px; }
+.status-roster-list { margin-top: 12px; }
 .status-instance-list button { border: 1px solid #c8d4bf; border-radius: 4px; padding: 3px 6px; background: #f6f8f0; color: #35523b; font-size: 10px; }
 .status-upgrade-history { margin: 9px 0 0; padding-left: 18px; }
 .status-upgrade-history li { margin-top: 5px; }
@@ -1643,6 +1646,20 @@ body:has(.expedition-status-trigger) .top-right { padding-right: 125px; }
   transition:
     transform 0.2s ease,
     opacity 0.2s ease;
+}
+.dice-mark {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  z-index: 7;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: #211e35;
+  color: #fff;
+  font-size: clamp(9px, 1.5vw, 13px);
+  font-weight: 800;
+  line-height: 1.25;
+  pointer-events: none;
 }
 .missing-piece {
   display: grid;

@@ -124,3 +124,26 @@ test("resuming a developer run does not write its unlocks into campaign progress
   await expect(page.locator(".character").nth(4)).toBeDisabled();
   expect(await page.evaluate((key) => localStorage.getItem(key), modeKey)).toBe("false");
 });
+
+test("developer mode changes a piece's upgrade branch directly from expedition status and saves it", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await page.getByRole("button", { name: "개발자 모드 켜기" }).click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await page.getByRole("button", { name: "원정 현황", exact: true }).click();
+  await page.getByRole("button", { name: /아군 킹$/ }).click();
+  const tree = page.getByRole("region", { name: /강화 경로 지도/ });
+  await tree.getByRole("button", { name: /기수가 된 경마사 · 즉시 변경/ }).click();
+  await expect(page.getByRole("button", { name: /아군 기수가 된 경마사$/ })).toBeVisible();
+  await tree.getByRole("button", { name: /언덕의 왕 · 즉시 변경/ }).click();
+  await expect(page.getByRole("button", { name: /아군 언덕의 왕$/ })).toBeVisible();
+  await tree.getByRole("button", { name: "킹 · 즉시 변경 · 클릭하여 적용", exact: true }).click();
+  await expect(page.getByRole("button", { name: /아군 킹$/ })).toBeVisible();
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("chesslayer.run.v1")!));
+  expect(saved.commands.filter((command: { type: string }) => command.type === "developer_set_upgrade")).toHaveLength(3);
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  await page.getByRole("button", { name: "원정 현황", exact: true }).click();
+  await expect(page.getByRole("button", { name: /아군 킹$/ })).toBeVisible();
+});

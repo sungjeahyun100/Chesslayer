@@ -7,7 +7,7 @@ use crate::{
     *,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::HashSet;
+use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -71,6 +71,10 @@ pub enum Command {
         from: usize,
         to: usize,
     },
+    KingReposition {
+        from: usize,
+        targets: Vec<usize>,
+    },
     ResolveEffect {
         target: u32,
     },
@@ -116,6 +120,10 @@ pub enum Command {
     },
     ClaimTreasure,
     RestUpgrade {
+        id: u32,
+        target: PieceType,
+    },
+    DeveloperSetUpgrade {
         id: u32,
         target: PieceType,
     },
@@ -498,6 +506,69 @@ impl Game {
         ));
         Ok(())
     }
+    fn developer_set_upgrade(&mut self, id: u32, target: PieceType) -> Result<(), String> {
+        let roster = self.battle.outcome();
+        let piece = roster
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or("아군 기물을 선택하세요.")?;
+        let previous_kind = piece.kind;
+        // Upgrade keys are shared by families. Resolve each recorded edge from
+        // its destination, then search only this piece's actual family tree.
+        let mut root = previous_kind;
+        for key in piece.upgrades.iter().rev() {
+            let edge = content::pieces::ALL
+                .iter()
+                .flat_map(|d| d.upgrades.iter().map(move |u| (d.kind, u)))
+                .find(|(_, upgrade)| {
+                    upgrade.target == root
+                        && (upgrade.key == key
+                            || content::pieces::definition(root).is_some_and(|d| d.key == key))
+                })
+                .ok_or("기물의 기존 강화 경로를 찾을 수 없습니다.")?;
+            root = edge.0;
+        }
+        let mut queue = VecDeque::from([(root, Vec::new())]);
+        let mut visited = HashSet::new();
+        let path = loop {
+            let Some((kind, path)) = queue.pop_front() else {
+                return Err("이 기물에 정의된 강화 상태가 아닙니다.".into());
+            };
+            if kind == target {
+                break path;
+            }
+            if !visited.insert(kind) {
+                continue;
+            }
+            if let Some(definition) = content::pieces::definition(kind) {
+                for upgrade in definition.upgrades {
+                    let mut next = path.clone();
+                    next.push(upgrade.key.to_string());
+                    queue.push_back((upgrade.target, next));
+                }
+            }
+        };
+        let board_matches = piece.position.is_none_or(|at| {
+            self.battle
+                .board
+                .piece_at(at)
+                .ok()
+                .flatten()
+                .is_some_and(|on_board| on_board.kind == target)
+        });
+        if previous_kind == target && piece.upgrades == path && board_matches {
+            return Ok(());
+        }
+        self.battle
+            .set_permanent_upgrade(id, target, path, self.phase == RunPhase::Combat)
+            .map_err(engine_error)?;
+        self.log(format!(
+            "개발자 강화: {} → {}",
+            piece_name(previous_kind),
+            piece_name(target)
+        ));
+        Ok(())
+    }
     fn continue_reward(&mut self) -> Result<(), String> {
         if self.phase != RunPhase::Reward {
             return Err("지금은 다음으로 진행할 수 없습니다.".into());
@@ -836,6 +907,22 @@ impl Game {
                     return Err("사용할 수 없는 특수 능력 대상입니다.".into());
                 }
             }
+            Command::KingReposition { from, targets } => {
+                self.require_player()?;
+                let side = self.battle.turn;
+                let positions = targets
+                    .into_iter()
+                    .map(pos)
+                    .collect::<Result<Vec<_>, _>>()?;
+                self.battle
+                    .reposition_enemies(pos(from)?, &positions)
+                    .map_err(engine_error)?;
+                self.events();
+                self.check_finish()?;
+                if self.phase == RunPhase::Combat && self.battle.turn != side {
+                    self.cards.end_turn();
+                }
+            }
             Command::RestConfess { id } => {
                 if self.phase != RunPhase::Rest {
                     return Err("쉼터에서만 고해성사할 수 있습니다.".into());
@@ -1047,6 +1134,9 @@ impl Game {
                 self.upgrade_piece(id, target, "휴식")?;
                 self.complete_node();
             }
+            Command::DeveloperSetUpgrade { id, target } => {
+                self.developer_set_upgrade(id, target)?;
+            }
             Command::RestRevive { id } => {
                 if self.phase != RunPhase::Rest {
                     return Err("쉼터에서만 부활할 수 있습니다.".into());
@@ -1192,6 +1282,8 @@ impl Game {
                 self.upgrade_claimed = false;
                 self.log(match reason {
                     ResultReason::SelfDefense => "승리! 호신용품으로 적 로얄이 사망했습니다.",
+                    ResultReason::RacingGoal => "승리! 킹이 상대 진영 끝 랭크에 도달했습니다.",
+                    ResultReason::HillGoal => "승리! 언덕의 왕이 중앙에 도달했습니다.",
                     _ => "승리! 적 로얄을 직접 포획했습니다.",
                 });
                 self.log("생존 기물이 시작 칸으로 복귀합니다.");
@@ -1199,6 +1291,12 @@ impl Game {
                 self.phase = RunPhase::Defeat;
                 self.log(match reason {
                     ResultReason::Counterattack => "역습으로 킹을 잃었습니다. 원정이 끝났습니다.",
+                    ResultReason::RacingGoal => {
+                        "적 킹이 아군 진영 끝 랭크에 도달했습니다. 원정이 끝났습니다."
+                    }
+                    ResultReason::HillGoal => {
+                        "적 언덕의 왕이 중앙에 도달했습니다. 원정이 끝났습니다."
+                    }
                     _ => "킹이 포획되었습니다. 원정이 끝났습니다.",
                 });
             }
@@ -1632,6 +1730,7 @@ impl Game {
                             .limiter_status(p.id)
                             .map(|(active, moves_left)| LimiterView { active, moves_left }),
                         statuses: self.battle.status_labels(p.id),
+                        dice_roll: self.battle.gambler_die(p.id),
                         absorbed_moves: self
                             .battle
                             .absorbed_kinds(p.id)
@@ -1741,6 +1840,7 @@ impl Game {
                                     limiter: None,
                                     absorbed_moves: vec![],
                                     statuses: self.battle.status_labels(p.id),
+                                    dice_roll: None,
                                 }
                             })
                         })
@@ -1826,6 +1926,16 @@ impl Game {
         let abilities = if self.phase == RunPhase::Combat && self.battle.turn == PLAYER {
             pieces.iter().filter(|p| p.owner == PLAYER).flat_map(|p| {
                 let from = pos(p.cell).unwrap();
+                if matches!(p.kind, content::pieces::TEMPEST_KING | content::pieces::TYPHOON_KING) {
+                    let targets: Vec<_> = self.battle.king_reposition_targets(from).unwrap_or_default().into_iter().map(|position| AbilityTarget { cell: cell(position), chance: None, blast: vec![], paths: vec![] }).collect();
+                    return if targets.len() >= 2 { vec![AbilityView {
+                        piece_id: p.id,
+                        kind: "king_reposition",
+                        name: if p.kind == content::pieces::TEMPEST_KING { "위치 교환" } else { "위치 뒤섞기" },
+                        description: if p.kind == content::pieces::TEMPEST_KING { "적 기물 2기의 위치를 교환합니다. 행동 1회를 소모합니다." } else { "적 기물 2~6기의 위치를 뒤섞습니다. 행동 1회를 소모합니다." },
+                        targets,
+                    }] } else { vec![] };
+                }
                 let actions = self.battle.legal_actions(from).unwrap_or_default();
                 let has_self_destruct = actions.iter().any(|a| a.first.effect == Effect::Catch && a.first.take == from);
                 let targets: Vec<_> = actions.into_iter().filter(|a| a.first.effect == Effect::Catch && a.first.take != from).map(|a| {
@@ -2221,6 +2331,7 @@ pub enum RewardView {
 #[derive(Serialize)]
 pub struct PieceView {
     pub statuses: Vec<String>,
+    pub dice_roll: Option<u8>,
     pub id: u32,
     pub kind: u16,
     pub name: &'static str,
@@ -2307,6 +2418,75 @@ pub struct RequiredPieceView {
     pub kind: PieceType,
     pub name: &'static str,
     pub owned: bool,
+}
+
+#[cfg(test)]
+mod developer_upgrade_tests {
+    use super::*;
+
+    #[test]
+    fn changes_branches_and_resets_the_permanent_king_without_moving_it() {
+        let mut game = Game::new("guardian", 2026).unwrap();
+        let king = game
+            .battle
+            .player_pieces()
+            .iter()
+            .find(|p| p.kind == content::pieces::KING)
+            .unwrap()
+            .clone();
+        game.phase = RunPhase::Combat;
+        game.battle.configure_v030(&[]);
+        for target in [
+            content::pieces::JOCKEY,
+            content::pieces::HILL_KING,
+            content::pieces::KING,
+        ] {
+            game.dispatch(Command::DeveloperSetUpgrade {
+                id: king.id,
+                target,
+            })
+            .unwrap();
+            let current = game
+                .battle
+                .player_pieces()
+                .iter()
+                .find(|p| p.id == king.id)
+                .unwrap();
+            assert_eq!(current.kind, target);
+            assert_eq!(current.position, king.position);
+            assert_eq!(
+                game.battle
+                    .board
+                    .piece_at(king.position.unwrap())
+                    .unwrap()
+                    .unwrap()
+                    .kind,
+                target
+            );
+            if target == content::pieces::HILL_KING {
+                assert!(!game.battle.has_ward(king.id));
+                assert!(!game
+                    .battle
+                    .status_labels(king.id)
+                    .iter()
+                    .any(|label| label.contains("민첩")));
+            }
+        }
+        assert!(game
+            .battle
+            .player_pieces()
+            .iter()
+            .find(|p| p.id == king.id)
+            .unwrap()
+            .upgrades
+            .is_empty());
+        assert!(game
+            .dispatch(Command::DeveloperSetUpgrade {
+                id: king.id,
+                target: content::pieces::PAWN
+            })
+            .is_err());
+    }
 }
 
 #[cfg(test)]

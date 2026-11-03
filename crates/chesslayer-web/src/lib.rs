@@ -20,6 +20,7 @@ const SAVE_VERSION: u32 = 19;
 pub struct WebGame {
     game: Game,
     save: SavedRun,
+    developer_mode: bool,
 }
 #[wasm_bindgen]
 impl WebGame {
@@ -44,6 +45,7 @@ impl WebGame {
             .map_err(|e| JsValue::from_str(&e))?;
         Ok(Self {
             game,
+            developer_mode: false,
             save: SavedRun {
                 version: SAVE_VERSION,
                 character: character.into(),
@@ -75,11 +77,19 @@ impl WebGame {
     pub fn dispatch(&mut self, command: &str) -> Result<String, JsValue> {
         let command: Command = serde_json::from_str(command)
             .map_err(|_| JsValue::from_str("잘못된 게임 명령입니다."))?;
+        if matches!(&command, Command::DeveloperSetUpgrade { .. }) && !self.developer_mode {
+            return Err(JsValue::from_str(
+                "개발자 모드에서만 강화 상태를 바꿀 수 있습니다.",
+            ));
+        }
         self.game
             .dispatch(command.clone())
             .map_err(|e| JsValue::from_str(&e))?;
         self.save.commands.push(command);
         Ok(self.snapshot())
+    }
+    pub fn set_developer_mode(&mut self, enabled: bool) {
+        self.developer_mode = enabled;
     }
     pub fn save(&self) -> String {
         serde_json::to_string(&self.save).expect("run history is serializable")
@@ -105,7 +115,11 @@ impl WebGame {
             game.dispatch(command.clone())
                 .map_err(|_| JsValue::from_str("저장된 원정의 진행 기록이 올바르지 않습니다."))?;
         }
-        Ok(Self { game, save })
+        Ok(Self {
+            game,
+            save,
+            developer_mode: false,
+        })
     }
 }
 #[wasm_bindgen]

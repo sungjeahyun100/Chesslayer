@@ -7,7 +7,7 @@ import { buildUpgradeTree } from "./upgradeTree";
 import type { CompendiumPiece, CompendiumSquad } from "./Compendium";
 import type { CardDefinition, Character, RestOption, UpgradePath } from "./types";
 
-type BoardPiece = { id: number; kind: number; key: string; name: string; description: string; owner: number; cell: number; statuses: string[]; ward: boolean };
+type BoardPiece = { id: number; kind: number; key: string; name: string; description: string; owner: number; cell: number; statuses: string[]; dice_roll: number | null; ward: boolean };
 type BoardAction = { index: number; target: number; destination: number; capture: boolean; special: boolean; promotion: number | null; route: number[] | null; chance: number | null; blast: number[]; paths: number[][] };
 type SandboxCard = { id: number; definition: CardDefinition };
 type HandCard = SandboxCard & { targets: number[]; disabled_reason: string | null };
@@ -192,13 +192,14 @@ export function PieceSandbox({ choices, entries, onBack }: { choices: Character[
             const effectCandidate = snapshot.choice?.targets.includes(piece?.id ?? 10000 + cell);
             return <button key={cell} data-square={squareName(cell)} data-legal={!!action || undefined}
               className={`square ${(cell + Math.floor(cell / 8)) % 2 ? "dark" : "light"} ${selected === cell ? "selected" : ""} ${action || (detonateMode && selected === cell) ? "legal" : ""} ${cardCandidate || effectCandidate ? "targetable" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(cell) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""}`}
-              aria-label={`${squareName(cell)} ${piece ? `${piece.owner === 0 ? "백" : "흑"} ${piece.name}` : "빈 칸"}${fallout ? ` 방사성 낙진 ${fallout.remaining}라운드` : ""}${action ? action.capture ? " 포획 가능" : " 이동 가능" : ""}`}
+              aria-label={`${squareName(cell)} ${piece ? `${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.dice_roll ? ` 주사위 ${piece.dice_roll}` : ""}` : "빈 칸"}${fallout ? ` 방사성 낙진 ${fallout.remaining}라운드` : ""}${action ? action.capture ? " 포획 가능" : " 이동 가능" : ""}`}
               onMouseEnter={() => { if (action) setHoveredAction(cell); }}
               onMouseLeave={() => { if (hoveredAction === cell) setHoveredAction(null); }}
               onClick={() => clickCell(cell)}>
               {action && <span className={action.capture ? "capture-dot" : "move-dot"} />}
               {detonateMode && selected === cell && <span className="aim-target">자폭</span>}
               {piece && <PieceImage pieceKey={piece.key} owner={piece.owner} name={piece.name} />}
+              {piece?.dice_roll && <span className="dice-mark" title={`주사위 ${piece.dice_roll} · 현재 행마`}>🎲{piece.dice_roll}</span>}
               {piece?.ward && <span className="sandbox-v2-ward" title="가호">✦</span>}
               {fallout && <span className="fallout-badge" title={`방사성 낙진 · 남은 ${fallout.remaining}라운드`}>{fallout.remaining}</span>}
             </button>;
@@ -207,7 +208,7 @@ export function PieceSandbox({ choices, entries, onBack }: { choices: Character[
         <div className="sandbox-v2-selection">
           {snapshot.choice ? <><strong>{snapshot.choice.name}</strong>{snapshot.choice.can_finish && <button onClick={() => run(() => engine.current!.resolve_choice(0))}>능력 완료</button>}</> :
             boardPiece ? <><strong>{boardPiece.owner === 0 ? "백" : "흑"} {boardPiece.name} · {squareName(boardPiece.cell)}</strong>
-              <span>{[boardPiece.ward ? "가호" : "", ...boardPiece.statuses].filter(Boolean).join(" · ") || (snapshot.actions.length ? "표시된 칸으로 이동할 수 있습니다." : "현재 배치에서 가능한 행동이 없습니다.")}</span>
+              <span>{[boardPiece.dice_roll ? `🎲 ${boardPiece.dice_roll} · ${["폰", "나이트", "비숍", "룩", "퀸", "킹"][boardPiece.dice_roll - 1]} 행마` : "", boardPiece.ward ? "가호" : "", ...boardPiece.statuses].filter(Boolean).join(" · ") || (snapshot.actions.length ? "표시된 칸으로 이동할 수 있습니다." : "현재 배치에서 가능한 행동이 없습니다.")}</span>
               {specialActions.length > 0 && <button className={abilityMode ? "selected" : ""} onClick={() => { setAbilityMode(!abilityMode); setDetonateMode(false); }}>특수 능력 · {boardPiece.key === "machine_gun_drone" ? "기관총 사격" : boardPiece.key === "grenade_launcher_drone" ? "유탄 발사" : specialActions.some((action) => action.chance !== null) ? "사격" : "대상 선택"} · {specialActions.length}곳</button>}
               {snapshot.self_destruct && <button className={detonateMode ? "selected" : ""} onClick={() => { setDetonateMode(!detonateMode); setAbilityMode(false); }}>{snapshot.self_destruct.name} · 범위 보기</button>}
               <button onClick={() => run(() => engine.current!.remove(boardPiece.cell))}>기물 제거</button></> :
