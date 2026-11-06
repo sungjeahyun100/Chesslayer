@@ -1,0 +1,92 @@
+import type { Piece } from "../types";
+
+const simpleMovement: Record<string, string> = {
+  amazon: "퀸 + 나이트", centaur: "킹 + 나이트", mounted_officer: "킹 + 나이트",
+  knight: "나이트", scout: "나이트", bishop: "비숍", rook: "룩", queen: "퀸",
+  king: "킹", tempest_king: "킹", typhoon_king: "킹", racing_king: "킹",
+  gambler: "주사위 행마", jockey: "킹 + 주사위 행마",
+  hill_king: "킹", royal_knight: "킹 + 나이트",
+  double_king: "킹 + 나이트", triple_king: "킹 + 나이트",
+  smiling_king: "킹", toast_lord: "킹", ecstatic_lord: "킹",
+  pawn: "폰", bouncing_pawn: "폰", hungry_follower: "폰", procession_follower: "폰",
+  unicorn: "나이트 + 빈칸 순간이동", emperor: "킹", hook: "룩 + 직각 꺾기",
+  movement_god: "직교·대각 꺾기", tempest_pawn: "폰 + 좌우 이동·2칸 포획",
+  drone: "나이트 + 직교 1칸", c4_drone: "나이트 + 직교 1칸",
+  machine_gun_drone: "나이트 + 직교 1칸", grenade_launcher_drone: "나이트 + 직교 1칸",
+  tactical_nuke_drone: "나이트 + 직교 1칸", tank: "킹 + 직선 2칸",
+  fragment_tank: "킹 + 직선 2칸", ap_tank: "킹 + 직선 2칸",
+  he_tank: "킹 + 직선 2칸", rifleman: "직교 1칸", mortar: "직교 1칸",
+  sniper: "대각 1칸", marksman: "킹", special_commander: "킹", shadow_commander: "킹 + 나이트",
+  tempest_rook: "대각 1칸 → 직교 직선", tempest_bishop: "직교 1칸 → 전방 대각",
+  tempest_queen: "템페스트 룩 + 비숍", tempest_knight: "대각 경유 도약 + 직교 3칸",
+  typhoon_rook: "템페스트 룩 + 룩", typhoon_bishop: "템페스트 비숍 + 비숍",
+  typhoon_queen: "템페스트 퀸 + 퀸", typhoon_knight: "템페스트 나이트 + 나이트",
+  bouncing_rook: "반사 룩", bouncing_bishop: "반사 비숍", bouncing_queen: "반사 룩 + 비숍",
+  bouncing_tempest_rook: "반사 템페스트 룩", bouncing_tempest_bishop: "반사 템페스트 비숍",
+  bouncing_tempest_queen: "반사 템페스트 퀸", bouncing_knightrider: "반사 나이트라이더",
+  knightrider: "나이트 연속 도약", cardinal: "연속 반사 비숍", tengu: "대각 꺾기",
+  frenzied_dancer: "나이트", masked_dancer: "나이트", tempting_dancer: "나이트",
+  vanguard_officer: "킹", vanguard_commander: "킹 + 연속 1칸", mounted_commander: "2칸 이내 도약",
+  phantom_scout: "나이트 + 대각 2칸 도약", butcher_cart: "룩", slaughter_cart: "룩",
+  funeral_cart: "룩", feast_cart: "룩", warehouse: "이동 불가", corpse: "이동 불가",
+  tribal_dictator: "킹", lobster: "직교 1칸", sword_infantry: "장창 + 전방 대각 1칸",
+  spear_infantry: "직교 1칸 + 전방 나이트", axe_infantry: "직교 1칸 + 전방 대각 2칸",
+  halberd_infantry: "장창 + 전방 대각 2칸", pistol_infantry: "검 보병",
+  elite_commando: "킹 + 전방 2칸 도약", commando: "킹 + 전방 2칸 도약",
+  masked_lady: "퀸", red_lady: "퀸", banquet_lady: "퀸", inviting_lady: "퀸",
+  intoxicated_priest: "비숍", feast_priest: "비숍", hunger_priest: "비숍", locust_high_priest: "비숍",
+  ecstatic_dancer: "나이트", glutton_follower: "폰", inviting_follower: "폰",
+  eternal_guest: "킹",
+};
+const specialMovement: Record<string, string> = {
+  tempest_king: "적 기물 2기의 위치 교환", typhoon_king: "적 기물 2~6기의 위치 뒤섞기",
+  racing_king: "상대 진영의 끝 랭크에 도달하면 승리",
+  gambler: "매 자신의 턴 주사위를 굴림",
+  jockey: "매 자신의 턴 주사위를 굴림 · 끝 랭크 도달 승리",
+  hill_king: "중앙 네 칸 도달 시 승리",
+  double_king: "자신의 턴마다 민첩 1", triple_king: "자신의 턴마다 민첩 2",
+  unicorn: "빈칸 순간이동은 포획 불가", emperor: "직접 포획한 기물의 행마 흡수",
+  drone: "십자포화: 직교 인접 칸과 자신 제거", c4_drone: "광역 자폭: 주변 8칸과 자신 제거",
+  machine_gun_drone: "기관총 사격 또는 십자포화", grenade_launcher_drone: "유탄 사격 또는 십자포화",
+  tactical_nuke_drone: "광역 자폭 후 방사성 낙진", tank: "직선 사격 · 탄약 2",
+  fragment_tank: "명중 시 주변 직교 칸 폭발", ap_tank: "관통 사격",
+  he_tank: "명중 시 주변 직교 칸 폭발", rifleman: "전방 3방향 사격 · 탄약 1",
+  mortar: "장애물 너머 2~5칸 포격 · 탄약 2", marksman: "8방향 7칸 사격",
+  sniper: "8방향 7칸 사격",
+  special_commander: "8방향 5칸 사격 · 전투 시작 시 가호", shadow_commander: "8방향 5칸 사격 · 전투 시작 시 가호·민첩 1",
+  frenzied_dancer: "인접 시체 포획", masked_dancer: "주변 8칸 시체 포획",
+  tempting_dancer: "시체 포획 시 인접 적 허기 악화", scout: "전투 시작 시 민첩 1",
+  phantom_scout: "전투 시작 시 민첩 2", butcher_cart: "첫 시체 포획 시 카드 1장",
+  slaughter_cart: "첫 시체 포획 시 민첩 1", funeral_cart: "직선 경로의 시체 통과",
+  feast_cart: "시체 포획 후 다른 시체 1칸 이동", warehouse: "탄약 한계 +200 · 모두 파괴되면 패배",
+  corpse: "양 진영 모두 포획 가능", tribal_dictator: "주변 사망 시 HP·행마 흡수 · 갈고리 반격 · 샷건",
+  smiling_king: "근처 아군의 첫 시체 포획 시 카드 1장", toast_lord: "근처 아군의 첫 시체 포획 시 카드 1장·민첩 1",
+  ecstatic_lord: "아군의 첫 시체 포획 시 카드 1장·민첩 1·마나 1",
+  hungry_follower: "전방 시체 포획", procession_follower: "승격 불가",
+  bouncing_pawn: "아군 바운싱 기물 반사", pistol_infantry: "전방 사격",
+  elite_commando: "돌격 사격 · 기본 명중률 100%",
+  commando: "전방 3방향 4칸 사격",
+  masked_lady: "인접 아군 폰을 시체로 전환 · 행동 1회",
+  red_lady: "인접 아군 비로얄을 시체로 전환 · 행동 1회",
+  banquet_lady: "제물 능력 사용 시 카드 1장",
+  inviting_lady: "제물 능력 사용 시 근처 적 허기 악화",
+  intoxicated_priest: "첫 시체 포획 시 인접 아군 민첩 1",
+  feast_priest: "첫 시체 포획 시 2칸 이내 아군 민첩 1",
+  hunger_priest: "시체 포획 시 2칸 이내 적 허기 악화",
+  locust_high_priest: "시체 포획 시 아군 민첩 2",
+  ecstatic_dancer: "주변 8칸 시체 포획 · 첫 포획 시 민첩 1",
+  glutton_follower: "전방 시체 포획 · 첫 포획 시 민첩 1",
+  inviting_follower: "전방 시체 포획 · 포획 시 근처 적 허기 악화",
+  eternal_guest: "양 진영에 식재료 · 아군 시체 포획 강화 · 3·6수에 허기 악화",
+};
+export function movementInfo(piece: Piece): { movement: string; special?: string } {
+  const diceMovement = piece.dice_roll ? ["폰", "나이트", "비숍", "룩", "퀸", "킹"][piece.dice_roll - 1] : null;
+  const movement = diceMovement
+    ? `${piece.key === "jockey" ? "킹 + " : ""}🎲 ${piece.dice_roll} · ${diceMovement}`
+    : simpleMovement[piece.key] ?? (piece.description.split(".")[0] || piece.name);
+  const special = specialMovement[piece.key] ?? (piece.description.split(/(?<=\.)\s+/).slice(1)
+    .filter((sentence) => /전투당|사격|자폭|탄약|허기|민첩|카드|가호|낙진|포격|폭발|흡수|축복|제물|폭사|패배/.test(sentence))
+    .join(" ") || undefined);
+  return { movement, special };
+}
+

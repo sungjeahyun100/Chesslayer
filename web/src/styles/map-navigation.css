@@ -1,0 +1,18 @@
+/* The whole Act is a stable map, laid out from the entrance upward to the boss. */
+.node-navigation {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 0 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 11px;
+  color: #7d8c71;
+}
+.act-map-screen {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 32px 30px;
+}
+.act-map-screen.map-overlay { position: fixed; inset: 0; z-index: 70; overflow-y: auto; max-width: none; width: 100%; padding-top: 88px; background: #f5f3ec; }
+.act-map-screen.map-overlay[data-floor="2"] { background: #f5f3ec; }

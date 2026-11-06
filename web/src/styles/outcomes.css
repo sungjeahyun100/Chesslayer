@@ -1,0 +1,48 @@
+.outcome {
+  grid-column: 1/-1;
+  margin: 0 0 0 20px;
+  padding: 32px;
+  background: #e9eee1;
+  border: 1px solid #d7e0cd;
+  border-radius: 5px;
+}
+.outcome h2 {
+  font-family: "Noto Serif KR", serif;
+  font-size: 29px;
+  margin: 10px 0;
+}
+.outcome > p:not(.eyebrow) {
+  font-size: 13px;
+  line-height: 1.8;
+  color: #7e8d72;
+  max-width: 700px;
+}
+.outcome > .primary {
+  margin-top: 23px;
+}
+.reward-cards {
+  display: flex;
+  gap: 18px;
+  margin-top: 26px;
+  flex-wrap: wrap;
+}
+.reward-cards .playing-card {
+  width: 220px;
+  min-height: 250px;
+}
+.reward-select {
+  margin-top: 18px;
+  font-size: 11px;
+  color: #567648;
+  border-top: 1px solid #dde5d1;
+  padding-top: 10px;
+}
+.end-symbol {
+  font-size: 65px;
+  color: #4b704a;
+  display: block;
+  margin-bottom: 15px;
+}
+.end-symbol + .eyebrow {
+  color: #7f916c;
+}

@@ -1,0 +1,238 @@
+@media (max-width: 620px) { .map-heading { align-items: start; } }
+.map-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.map-heading h1 {
+  font-family: "Noto Serif KR", serif;
+  font-size: 34px;
+  margin: 7px 0;
+}
+.map-heading p:not(.eyebrow) {
+  font-size: 13px;
+  color: #88927e;
+}
+.map-progress {
+  font-size: 11px;
+  color: #87927c;
+  text-align: right;
+}
+.map-progress strong {
+  font-family: Georgia, serif;
+  font-size: 30px;
+  color: var(--green);
+}
+.map-progress .primary {
+  display: block;
+  margin-top: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+}
+.map-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+}
+.map-chart {
+  position: relative;
+  height: 720px;
+  margin: 10px 0;
+  background: radial-gradient(ellipse at 50% 50%, #e8eddf66, transparent 75%);
+}
+.map-direction {
+  position: absolute;
+  top: 15px;
+  left: 12px;
+  font-size: 9px;
+  letter-spacing: 0.07em;
+  color: #a1aa97;
+}
+.map-connections {
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  width: 100%;
+  overflow: visible;
+}
+.map-connections path {
+  fill: none;
+  stroke: #789073;
+  stroke-width: 2.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+.map-connections path.taken {
+  stroke: #285e43;
+  stroke-width: 4.5;
+}
+.map-connections path.next {
+  stroke: #5d873e;
+  stroke-width: 4;
+  stroke-dasharray: 9 5;
+}
+.map-connections path.skipped {
+  stroke: #c7cfc1;
+  stroke-width: 2;
+}
+.map-node-slot {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 62px;
+  text-align: center;
+}
+.map-node {
+  position: relative;
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: 1px solid #9daf96;
+  background: #f3f3e9;
+  color: #567451;
+  display: grid;
+  place-items: center;
+  margin: auto;
+  box-shadow: 0 0 0 5px #f5f3ec;
+  padding: 0;
+}
+.map-node span {
+  font:
+    26px "DejaVu Sans",
+    serif;
+  line-height: 1;
+}
+.kind-elite .map-node {
+  color: #a56c51;
+  border-color: #cfb5a2;
+}
+.kind-treasure .map-node {
+  color: #9b884d;
+  border-color: #cfc7a6;
+}
+.kind-rest .map-node {
+  color: #5f8b70;
+}
+.kind-boss .map-node {
+  height: 55px;
+  width: 55px;
+  color: #936b2f;
+  border: 2px solid #be9f64;
+  background: #eee5ce;
+  box-shadow: 0 0 0 6px #f5f3ec;
+}
+.is-available .map-node {
+  background: #e7efd8;
+  border: 2px solid #829b61;
+  color: #365e35;
+  box-shadow:
+    0 0 0 5px #f5f3ec,
+    0 0 0 7px #dae3c9;
+}
+.is-available .map-node:hover {
+  transform: translateY(-3px);
+  background: #d7e7bf;
+}
+.is-visited .map-node {
+  background: #dce7d5;
+  border-color: #9ab28a;
+  color: #628455;
+}
+.is-visited .map-node span {
+  font-family: inherit;
+  font-size: 20px;
+}
+.is-current .map-node {
+  background: #2d5843;
+  border: 2px solid #234a37;
+  color: #fff7d4;
+  box-shadow:
+    0 0 0 5px #f5f3ec,
+    0 0 0 7px #90a57c;
+}
+.is-skipped {
+  opacity: 0.4;
+}
+.current-marker {
+  position: absolute;
+  top: -24px;
+  left: 0;
+  right: 0;
+  font-size: 9px;
+  color: #315c43;
+  font-weight: 700;
+}
+.map-start {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  font-size: 10px;
+  padding: 7px 15px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  color: #8c9b80;
+  background: #f5f3ec;
+  white-space: nowrap;
+}
+.map-start.at-start {
+  background: #284d3b;
+  color: #f4f1dd;
+  border-color: #284d3b;
+}
+.treasure-relic {
+  font-size: 65px;
+  color: #a18b45;
+  margin: 20px 0;
+}
+.outcome .elite-reward {
+  background: #e7dccb;
+  padding: 12px 15px;
+  margin-top: 15px;
+  color: #806741;
+  border-radius: 4px;
+}
+@media (max-width: 750px) {
+  .act-map-screen {
+    padding: 24px 16px;
+  }
+  .map-heading h1 {
+    font-size: 27px;
+  }
+  .map-heading p:not(.eyebrow) {
+    font-size: 11px;
+  }
+  .map-progress {
+    font-size: 9px;
+  }
+  .map-progress strong {
+    font-size: 22px;
+  }
+  .map-progress .primary {
+    font-size: 10px;
+    max-width: 150px;
+  }
+ .map-content {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+  .map-chart {
+    height: 720px;
+    margin: 0 0 10px;
+  }
+  .map-node {
+    width: clamp(30px, 9vw, 38px);
+    height: clamp(30px, 9vw, 38px);
+    box-shadow: 0 0 0 2px #f5f3ec;
+  }
+  .map-node-slot {
+    width: clamp(32px, 10vw, 44px);
+  }
+  .map-node span {
+    font-size: clamp(18px, 5vw, 22px);
+  }
+ .node-navigation {
+    font-size: 9px;
+  }
+}
+

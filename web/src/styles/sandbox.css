@@ -1,0 +1,90 @@
+/* Compact sandbox workspace: board and hand stay together while catalogs scroll locally. */
+.sandbox-v2 { max-width: 1660px; padding: 12px 18px 22px; }
+.sandbox-v2 .sandbox-heading { margin-bottom: 10px; align-items: center; }
+.sandbox-v2 .sandbox-heading h1 { display: inline; margin-left: 16px; font-size: 25px; }
+.sandbox-v2-layout { display: grid; grid-template-columns: minmax(235px, 275px) minmax(440px, 1fr) minmax(270px, 330px); gap: 12px; align-items: start; }
+.sandbox-v2-layout > * { min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 8px; background: #fafbf4; padding: 12px; }
+.sandbox-v2-layout h2 { margin: 0 0 9px; font: 600 17px "Noto Serif KR", serif; }
+.sandbox-v2-pieces, .sandbox-v2-cards { height: calc(100svh - 155px); display: flex; flex-direction: column; overflow: hidden; }
+.sandbox-mini-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 9px; }
+.sandbox-mini-tabs button, .sandbox-v2-toolbar button, .sandbox-v2-selection button, .sandbox-v2-hand-tools button, .sandbox-v2-card-action button, .sandbox-v2-upgrade-choice button, .sandbox-v2-deck-head button { border: 1px solid var(--line); border-radius: 4px; background: #f2f5e9; color: var(--green); padding: 6px 8px; font-size: 11px; cursor: pointer; }
+.sandbox-mini-tabs button.selected, .sandbox-v2-toolbar button.selected, .sandbox-v2-selection button.selected { background: #345640; color: white; }
+.sandbox-v2-starters { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 6px; flex: none; }
+.sandbox-v2-starters button { flex: none; display: grid; justify-items: center; width: 62px; gap: 1px; border: 1px solid var(--line); border-radius: 5px; background: #f5f7ed; color: var(--green); padding: 4px; cursor: pointer; font-size: 10px; }
+.sandbox-v2-starters button.selected { border-color: #557649; background: #e2ead7; }
+.sandbox-v2-starters .piece-image { width: 39px; height: 39px; object-fit: contain; }
+.sandbox-v2-piece-info { display: flex; align-items: start; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.sandbox-v2-piece-info > .piece-image { width: 52px; height: 52px; object-fit: contain; flex: none; }
+.sandbox-v2-piece-info strong { font-size: 14px; }
+.sandbox-v2-piece-info p { margin: 3px 0 0; font-size: 11px; line-height: 1.45; color: #657563; }
+.sandbox-v2-tree { display: flex; flex-direction: column; gap: 4px; overflow: auto; padding: 9px 4px 5px 0; }
+.sandbox-v2-tree > strong { font-size: 12px; margin-bottom: 2px; }
+.sandbox-v2-tree button { display: flex; align-items: center; gap: 7px; min-height: 39px; padding: 3px 7px; border: 1px solid var(--line); border-radius: 5px; background: #f5f7ed; color: var(--green); text-align: left; cursor: pointer; font-size: 11px; flex: none; }
+.sandbox-v2-tree button.selected { border-color: #536d43; background: #e1ead5; }
+.sandbox-v2-tree .piece-image { width: 31px; height: 31px; object-fit: contain; }
+.sandbox-v2-tree small { display: block; color: #788875; font-size: 9px; }
+.sandbox-v2-center { display: flex; flex-direction: column; align-items: stretch; }
+.sandbox-v2-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-bottom: 8px; }
+.sandbox-v2-toolbar > div { display: flex; gap: 4px; }
+.sandbox-v2-board { width: min(100%, 49svh, 510px); margin: 0 auto; }
+.sandbox-v2-board .square .piece-image { width: 92%; height: 92%; object-fit: contain; z-index: 2; }
+.sandbox-v2-board .square .capture-dot { z-index: 3; pointer-events: none; }
+.sandbox-v2-selection { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; min-height: 44px; padding: 6px 0; font-size: 11px; }
+.sandbox-v2-selection span { color: #60725f; }
+.sandbox-v2-selection button { margin-left: auto; }
+.sandbox-v2-error { margin: 2px 0; padding: 7px 9px; border-radius: 4px; background: #f8e7dd; color: #9a3d2b; font-size: 11px; }
+.sandbox-v2-event { margin: 2px 0 5px; color: #637b60; font-size: 11px; }
+.sandbox-v2-hand { min-height: 0; border-top: 1px solid var(--line); padding-top: 8px; }
+.sandbox-v2-section-title, .sandbox-v2-deck-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.sandbox-v2-section-title h2, .sandbox-v2-deck-head h3 { margin: 0; font-size: 14px; }
+.sandbox-v2-section-title span { color: #64735e; font-size: 10px; }
+.sandbox-v2-hand-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 4px; margin: 7px 0; }
+.sandbox-v2-hand-tools label { font-size: 10px; color: #60725f; }
+.sandbox-v2-hand-tools input { width: 58px; padding: 5px; border: 1px solid var(--line); border-radius: 4px; background: white; color: var(--green); }
+.sandbox-v2-hand-list { display: flex; gap: 7px; overflow-x: auto; min-height: 100px; padding-bottom: 5px; }
+.sandbox-v2-hand-card { flex: 0 0 122px; width: 122px; padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: #f4f5e9; color: var(--green); text-align: left; cursor: pointer; }
+.sandbox-v2-hand-card.selected { border-color: #b68c32; box-shadow: inset 0 0 0 2px #e6ca7a; }
+.sandbox-v2-hand-card .card-top { font-size: 9px; }
+.sandbox-v2-hand-card .card-symbol { display: none; }
+.sandbox-v2-hand-card h3 { margin: 4px 0; font-size: 12px; }
+.sandbox-v2-hand-card p { margin: 0; max-height: 43px; overflow: auto; font-size: 9px; line-height: 1.35; }
+.sandbox-v2-hand-card .tags { font-size: 8px; }
+.sandbox-v2-card-action, .sandbox-v2-upgrade-choice { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; margin-top: 6px; font-size: 11px; }
+.sandbox-v2-card-action span { color: #61745f; }
+.sandbox-v2-staged { margin: 5px 0; font-size: 10px; }
+.sandbox-v2-cards .sandbox-mini-tabs { flex: none; }
+.sandbox-v2-card-catalog { display: grid; align-content: start; gap: 4px; min-height: 130px; flex: 1; overflow: auto; }
+.sandbox-v2-catalog-card { display: flex; gap: 3px; }
+.sandbox-v2-catalog-card button { border: 1px solid var(--line); border-radius: 4px; background: #f4f6ec; color: var(--green); padding: 6px; cursor: pointer; }
+.sandbox-v2-catalog-card button:first-child { flex: 1; display: grid; grid-template-columns: 1fr auto; gap: 3px; text-align: left; }
+.sandbox-v2-catalog-card strong { font-size: 11px; }
+.sandbox-v2-catalog-card small { font-size: 10px; }
+.sandbox-v2-catalog-card span { grid-column: 1 / -1; color: #677963; font-size: 10px; line-height: 1.35; }
+.sandbox-v2-catalog-card button:last-child { flex: none; font-size: 10px; }
+
+.game-layout[data-phase="combat"][data-card-upgrade-open] .battle-column {
+  display: flex;
+  flex-direction: column;
+}
+.game-layout[data-phase="combat"][data-card-upgrade-open] .battle-area,
+.game-layout[data-phase="combat"][data-card-upgrade-open] .hand-area { width: 100%; }
+.game-layout[data-phase="combat"][data-card-upgrade-open] .hand { height: auto; max-height: 210px; }
+.sandbox-v2-deck-head { flex: none; margin: 9px 0 5px; }
+.sandbox-v2-deck-list { display: grid; align-content: start; gap: 3px; max-height: 21svh; min-height: 45px; overflow: auto; }
+.sandbox-v2-deck-list > div { display: flex; justify-content: space-between; align-items: center; padding: 3px 7px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; }
+.sandbox-v2-deck-list > label { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 2px 6px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 4px; font-size: 11px; cursor: pointer; }
+.sandbox-v2-deck-list > label small { grid-column: 2; color: var(--muted); line-height: 1.35; }
+.sandbox-v2-deck-list button { border: none; background: transparent; color: #9a4c3c; cursor: pointer; }
+.sandbox-v2-empty { color: #73836f; font-size: 11px; padding: 8px; }
+@media (max-width: 1120px) {
+  .sandbox-v2-layout { grid-template-columns: minmax(205px, 255px) minmax(0, 1fr); }
+  .sandbox-v2-cards { grid-column: 1 / -1; height: 330px; }
+  .sandbox-v2-card-catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 720px) {
+  .sandbox-v2-layout { grid-template-columns: 1fr; }
+  .sandbox-v2-center { grid-row: 1; }
+  .sandbox-v2-pieces, .sandbox-v2-cards { height: auto; max-height: 440px; }
+  .sandbox-v2-board { width: min(100%, 52svh); }
+}
+.sandbox-v2-ward { position: absolute; right: 3%; top: 1%; z-index: 4; color: #fff7bf; text-shadow: 0 0 3px #17422d, 0 0 4px #17422d; font-size: clamp(10px, 1.2vw, 18px); }

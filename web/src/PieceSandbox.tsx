@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { WebSandbox } from "./wasm/chesslayer_web";
+import { ChessBoard, BoardSquare, squareName } from "./board/ChessBoard";
 import { CardFace } from "./CardFace";
 import { PieceImage } from "./PieceImage";
 import { PromotionPicker } from "./PromotionPicker";
@@ -19,7 +20,6 @@ type BoardSnapshot = {
   relics: string[]; dead_pawns: { id: number; name: string }[];
 };
 type CardSelection = { target?: number; targets?: number[]; upgrades?: { id: number; target: number }[] };
-const squareName = (cell: number) => `${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}`;
 
 function rootsFor(entries: CompendiumSquad[], kind: number, preferred: string) {
   for (const entry of [...entries].sort((a, b) => Number(b.id === preferred) - Number(a.id === preferred))) {
@@ -181,8 +181,8 @@ export function PieceSandbox({ choices, entries, onBack }: { choices: Character[
           <button className={placing ? "selected" : ""} onClick={() => { setPlacing(true); setSelected(null); }}>기물 배치</button>
           <button onClick={() => run(() => engine.current!.progress_effects(), true)}>효과 진행</button>
           <button onClick={() => { if (run(() => engine.current!.clear())) origins.current.clear(); }}>보드 초기화</button></div>
-        <div className="sandbox-v2-board board" role="group" aria-label="기물 테스트 체스판">
-          {Array.from({ length: 64 }, (_, cell) => {
+        <ChessBoard className="sandbox-v2-board" role="group" aria-label="기물 테스트 체스판"
+          renderSquare={(cell) => {
             const piece = snapshot.pieces.find((piece) => piece.cell === cell);
             const action = actionTargets.get(cell);
             const preview = detonateMode ? snapshot.self_destruct : visibleActions.find((candidate) => candidate.target === hoveredAction);
@@ -190,8 +190,8 @@ export function PieceSandbox({ choices, entries, onBack }: { choices: Character[
             const pathIndex = "paths" in (preview ?? {}) ? (preview as BoardAction).paths.findIndex((path) => path.includes(cell)) : -1;
             const cardCandidate = cardTarget(piece, cell);
             const effectCandidate = snapshot.choice?.targets.includes(piece?.id ?? 10000 + cell);
-            return <button key={cell} data-square={squareName(cell)} data-legal={!!action || undefined}
-              className={`square ${(cell + Math.floor(cell / 8)) % 2 ? "dark" : "light"} ${selected === cell ? "selected" : ""} ${action || (detonateMode && selected === cell) ? "legal" : ""} ${cardCandidate || effectCandidate ? "targetable" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(cell) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""}`}
+            return <BoardSquare cell={cell} key={cell} data-legal={!!action || undefined}
+              className={`${selected === cell ? "selected" : ""} ${action || (detonateMode && selected === cell) ? "legal" : ""} ${cardCandidate || effectCandidate ? "targetable" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(cell) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""}`}
               aria-label={`${squareName(cell)} ${piece ? `${piece.owner === 0 ? "백" : "흑"} ${piece.name}${piece.dice_roll ? ` 주사위 ${piece.dice_roll}` : ""}` : "빈 칸"}${fallout ? ` 방사성 낙진 ${fallout.remaining}라운드` : ""}${action ? action.capture ? " 포획 가능" : " 이동 가능" : ""}`}
               onMouseEnter={() => { if (action) setHoveredAction(cell); }}
               onMouseLeave={() => { if (hoveredAction === cell) setHoveredAction(null); }}
@@ -202,9 +202,9 @@ export function PieceSandbox({ choices, entries, onBack }: { choices: Character[
               {piece?.dice_roll && <span className="dice-mark" title={`주사위 ${piece.dice_roll} · 현재 행마`}>🎲{piece.dice_roll}</span>}
               {piece?.ward && <span className="sandbox-v2-ward" title="가호">✦</span>}
               {fallout && <span className="fallout-badge" title={`방사성 낙진 · 남은 ${fallout.remaining}라운드`}>{fallout.remaining}</span>}
-            </button>;
-          })}
-        </div>
+            </BoardSquare>;
+          }}
+        />
         <div className="sandbox-v2-selection">
           {snapshot.choice ? <><strong>{snapshot.choice.name}</strong>{snapshot.choice.can_finish && <button onClick={() => run(() => engine.current!.resolve_choice(0))}>능력 완료</button>}</> :
             boardPiece ? <><strong>{boardPiece.owner === 0 ? "백" : "흑"} {boardPiece.name} · {squareName(boardPiece.cell)}</strong>
