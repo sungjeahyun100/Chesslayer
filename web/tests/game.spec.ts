@@ -122,7 +122,7 @@ test("손패 카드를 보드에서 사용해도 턴은 유지된다", async ({ 
 
 test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 연출을 반복하지 않는다", async ({ page }) => {
   await page.goto("/");
-  await expect(page.locator(".home-version")).toHaveText("v0.3.2");
+  await expect(page.locator(".home-version")).toHaveText("v0.3.3");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.getByRole("status", { name: "제1층 진입" })).toContainText("ACT I");
