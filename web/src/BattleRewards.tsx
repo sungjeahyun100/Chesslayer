@@ -86,7 +86,7 @@ export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snap
         </button>)}</div>
       </section>}
       <button className="primary large reward-continue" onClick={() => send({ type: "continue_reward" })}>
-        {state.node_kind === "boss" ? "원정 마치기 →" : revisit ? "맵으로 돌아가기 →" : "다음으로 진행 →"}
+        {state.node_kind === "boss" ? state.mode === "endless" ? "다음 층으로 →" : "원정 마치기 →" : revisit ? "맵으로 돌아가기 →" : "다음으로 진행 →"}
       </button>
     </div>
     </div>,

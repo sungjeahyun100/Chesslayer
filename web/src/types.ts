@@ -1,5 +1,6 @@
 export type Phase =
   "map" | "combat" | "reward" | "treasure" | "rest" | "event" | "shop" | "victory" | "defeat";
+export type RunMode = "campaign" | "endless";
 export interface Progress {
   // Kept to read earlier browser saves; ordinary floor progression ignores both.
   highest_floor: number;
@@ -45,6 +46,13 @@ export interface EnemyInspection {
   cell: number;
   moves: { to: number; captures: number[]; route: number[] | null }[];
 }
+export interface BossActionPlan {
+  name: string;
+  from: number;
+  to: number;
+  area: number[];
+  targets: { cell: number; chance: number; name: string }[];
+}
 export interface BossState {
   hp: number;
   ammo: number;
@@ -53,8 +61,14 @@ export interface BossState {
   hook_name: string | null;
   learned: string[];
   learned_abilities: { name: string; description: string }[];
-  plan: { name: string; from: number; to: number; area: number[]; targets: { cell: number; chance: number; name: string }[] } | null;
+  plan: BossActionPlan | null;
+  plans: BossActionPlan[];
 }
+export type CombatEvent =
+  | { kind: "shotgun"; actor_id: number; from: number; toward: number; area: number[];
+      rays: { direction: [number, number]; cells: number[] }[];
+      hits: { cell: number; piece_id: number; result: "hit" | "miss" | "ward" | "corpse" }[] }
+  | { kind: "chain_pull"; boss_id: number; boss_cell: number; piece_id: number; from: number; to: number };
 export interface CardDefinition {
   kind: string;
   name: string;
@@ -86,6 +100,7 @@ export type Reward =
   | { type: "relic"; definition: Relic };
 export interface Snapshot {
   boss: BossState | null;
+  combat_events: CombatEvent[];
   phase: Phase;
   map: {
     rows: number;
@@ -125,6 +140,8 @@ export interface Snapshot {
   royal_names: string[];
   seed: number;
   floor: number;
+  mode: RunMode;
+  cleared_stages: number;
   squad_id: string;
   progress: Progress;
   final_battle: boolean;

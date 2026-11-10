@@ -85,6 +85,44 @@ pub struct ActionPreview {
     pub captures: Vec<Position>,
     pub route: Option<Vec<Position>>,
 }
+/// Resolved presentation data. These records never participate in battle rules.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CombatEvent {
+    Shotgun {
+        actor_id: PieceId,
+        from: Position,
+        toward: Position,
+        rays: Vec<ShotgunRay>,
+        hits: Vec<ShotgunHit>,
+    },
+    ChainPull {
+        boss_id: PieceId,
+        boss_at: Position,
+        piece_id: PieceId,
+        from: Position,
+        to: Position,
+    },
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShotgunRay {
+    pub direction: (i32, i32),
+    /// Traversed cells, including the first blocker and never extending past it.
+    pub cells: Vec<Position>,
+}
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ShotgunHit {
+    pub at: Position,
+    pub piece_id: PieceId,
+    pub result: ShotgunResult,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ShotgunResult {
+    Hit,
+    Miss,
+    Ward,
+    Corpse,
+}
 /// Can only be obtained from this battle while it is immutably borrowed.
 pub(crate) struct GeneratedAction<'a> {
     battle: &'a Battle,
@@ -135,6 +173,7 @@ pub struct Battle {
     limiter_turn: bool,
     forced_turn_end: bool,
     pub events: Vec<String>,
+    pub combat_events: Vec<CombatEvent>,
     actions_per_turn: u8,
     wards: HashSet<PieceId>,
     kind_passives: HashMap<PieceId, KindPassive>,
@@ -168,6 +207,12 @@ impl Battle {
     pub(crate) fn force_search_shot(&mut self, hit: bool) {
         self.mechanics.force_search_shot(hit);
     }
+    pub(crate) fn force_search_boss_shots(&mut self, hits: Vec<bool>) {
+        self.mechanics.force_search_boss_shots(hits);
+    }
+    pub(crate) fn take_search_boss_shot_chance(&mut self) -> Option<u8> {
+        self.mechanics.take_search_boss_shot_chance()
+    }
     pub(crate) fn force_search_random(&mut self, index: usize) {
         self.mechanics.force_search_random(index);
     }
@@ -189,6 +234,8 @@ impl Battle {
             boss.hp.hash(&mut h);
             boss.ammo.hash(&mut h);
             boss.hook.hash(&mut h);
+            boss.movement_used.hash(&mut h);
+            boss.special_used.hash(&mut h);
         }
         for set in [&self.wards, &self.temporary_upgrades, &self.moved_ids] {
             let mut ids: Vec<_> = set.iter().collect();
@@ -356,6 +403,7 @@ impl Battle {
             .collect();
         let mut battle = Self {
             events,
+            combat_events: vec![],
             wards: HashSet::new(),
             kind_passives: HashMap::new(),
             gambler_dice: HashMap::new(),
@@ -382,6 +430,8 @@ impl Battle {
                     hp: 5,
                     ammo: 2,
                     hook: None,
+                    movement_used: false,
+                    special_used: false,
                 }),
             actions_left: options.actions_per_turn,
             normal_actions_used: 0,
@@ -481,6 +531,7 @@ impl Battle {
         self.board.set_piece(at, None)?;
         self.players.retain(|p| p.id != piece.id);
         self.mechanics.statuses.remove(&piece.id);
+        self.mechanics.pending_agility.remove(&piece.id);
         self.moved_ids.remove(&piece.id);
         self.wards.remove(&piece.id);
         self.limiter.remove(&piece.id);
@@ -500,6 +551,7 @@ impl Battle {
         self.mechanics
             .statuses
             .insert(piece.id, PieceStatus::default());
+        self.mechanics.pending_agility.remove(&piece.id);
         self.roll_gambler_die(piece);
         Ok(())
     }
@@ -556,6 +608,10 @@ impl Battle {
     }
     fn reset_turn_budget(&mut self) {
         self.normal_actions_used = 0;
+        if let Some(boss) = self.boss.as_mut() {
+            boss.movement_used = false;
+            boss.special_used = false;
+        }
         for piece in self
             .board
             .cells()
@@ -564,17 +620,19 @@ impl Battle {
             .copied()
             .filter(|piece| piece.owner == self.turn)
         {
-            let bonus = match piece.kind {
-                pieces::DOUBLE_KING => 1,
-                pieces::TRIPLE_KING => 2,
-                _ => 0,
-            };
-            if bonus > 0 {
+            if let Some(bonus) = self.mechanics.pending_agility.remove(&piece.id) {
                 let status = self.mechanics.statuses.entry(piece.id).or_default();
-                status.agility = status.agility.max(bonus);
+                // Match grant_agility's stacking; the budget is summed once below.
+                status.agility = status.agility.saturating_add(bonus);
             }
         }
         self.actions_left = self.side_actions(self.turn);
+        if self.turn == ENEMY && self.boss.is_some() {
+            // The dictator has exactly one movement and one stationary ability;
+            // agility and limiter budgets cannot grant a third boss action.
+            self.limiter_turn = false;
+            return;
+        }
         let bonus = self
             .board
             .cells()
@@ -1099,6 +1157,9 @@ impl Battle {
             }
         }
         self.filter_hunger(piece, &mut result);
+        if enforce_turn && self.is_boss_actor(piece) {
+            result.retain(|action| self.boss_action_available(action));
+        }
         Ok(result)
     }
     fn piece_actions(&self, kind: PieceType, from: Position) -> Result<Vec<DefaultAction>, Error> {
@@ -1172,6 +1233,10 @@ impl Battle {
         if piece.owner != self.turn {
             return Err(Error::WrongTurn);
         }
+        let boss_actor = self.is_boss_actor(piece);
+        if boss_actor && !self.boss_action_available(action) {
+            return Err(Error::IllegalAction);
+        }
         // A ward cancels the whole capture action; the attack still spends one action.
         // Shooting spends ammunition and rolls accuracy before a ward can absorb a hit.
         let shooting = action.continuation.is_empty()
@@ -1207,7 +1272,10 @@ impl Battle {
             self.apply_effect(action, ActionSource::PieceMove)?;
             self.check_king_goal(piece, action.first.from);
         }
-        self.forced_turn_end |= shooting;
+        if boss_actor {
+            self.spend_boss_action(action);
+        }
+        self.forced_turn_end |= shooting && !boss_actor;
         self.complete_piece_action(piece)
     }
     pub(super) fn complete_piece_action(&mut self, piece: Piece) -> Result<(), Error> {
@@ -1240,6 +1308,9 @@ impl Battle {
             }
         }
         self.actions_left = self.actions_left.saturating_sub(1);
+        if self.is_boss_actor(piece) && self.boss_actions_spent() {
+            self.forced_turn_end = true;
+        }
         if limiter_expired && self.phase == Phase::Active {
             self.remove_for_limiter(&[piece.id])?;
             self.events
@@ -1776,6 +1847,13 @@ impl Battle {
         Ok(())
     }
     fn sync_players(&mut self) {
+        self.mechanics.pending_agility.retain(|id, _| {
+            self.board
+                .cells()
+                .iter()
+                .flatten()
+                .any(|p| p.id == *id && p.kind != pieces::CORPSE)
+        });
         let previous: Vec<_> = self.players.iter().map(|p| p.position).collect();
         for p in &mut self.players {
             p.position = None;

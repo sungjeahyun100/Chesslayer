@@ -1,7 +1,13 @@
 import { PieceImage } from "../PieceImage";
 import { version } from "../../package.json";
+import type { RunMode } from "../types";
+import { formatEndlessRecord, type EndlessRecord } from "../endless";
 
-export function HomeScreen({ ready, hasSave, resume, onNavigate }: { ready: boolean; hasSave: boolean; resume: () => void; onNavigate: (screen: "choose" | "compendium" | "sandbox") => void }) {
+export function HomeScreen({ ready, hasSave, hasEndlessSave, endlessBest, resume, onStart, onNavigate }: {
+  ready: boolean; hasSave: boolean; hasEndlessSave: boolean; endlessBest: EndlessRecord;
+  resume: (mode: RunMode) => void; onStart: (mode: RunMode) => void;
+  onNavigate: (screen: "choose" | "compendium" | "sandbox") => void;
+}) {
   return (
     <main className="home">
       <section className="home-copy">
@@ -13,18 +19,24 @@ export function HomeScreen({ ready, hasSave, resume, onNavigate }: { ready: bool
           <br />
           다섯 부대가 펼치는 네 층의 원정.
         </p>
-        <button
-          className="primary large"
-          disabled={!ready}
-          onClick={() => onNavigate("choose")}
-        >
-          {ready ? "새 게임 시작" : "엔진 불러오는 중…"} <span>↗</span>
-        </button>
-        {ready && hasSave && (
-          <button className="resume-button" onClick={resume}>
-            저장된 원정 이어하기 →
-          </button>
-        )}
+        <div className="expedition-modes">
+          <section className="expedition-mode" aria-label="일반 원정">
+            <h2>일반 원정</h2>
+            <p>네 층을 지나 마지막 왕관까지.</p>
+            <button className="primary large" disabled={!ready} onClick={() => onStart("campaign")}>
+              {ready ? "새 게임 시작" : "엔진 불러오는 중…"} <span>↗</span>
+            </button>
+            {ready && hasSave && <button className="resume-button" onClick={() => resume("campaign")}>
+              저장된 원정 이어하기 →
+            </button>}
+          </section>
+          <section className="expedition-mode" aria-label="무한 모드">
+            <h2>무한 모드</h2>
+            <p>최고기록: {formatEndlessRecord(endlessBest)}</p>
+            <button className="primary large" disabled={!ready} onClick={() => onStart("endless")}>무한 원정 시작 <span>↗</span></button>
+            {ready && hasEndlessSave && <button className="resume-button" onClick={() => resume("endless")}>무한 원정 이어하기 →</button>}
+          </section>
+        </div>
         <button className="resume-button" disabled={!ready} onClick={() => onNavigate("compendium")}>도감 보기 →</button>
         <button className="resume-button" disabled={!ready} onClick={() => onNavigate("sandbox")}>기물 테스트장 →</button>
         <div className="home-facts">

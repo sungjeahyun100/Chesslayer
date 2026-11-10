@@ -79,7 +79,7 @@ export function ExpeditionStatus({ state, onClose, developerMode = false, onUpgr
     <div className="expedition-status-overlay" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <div className="expedition-status-dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="expedition-status-title">
         <header className="expedition-status-heading">
-          <div><p className="eyebrow">CHESSLAYER / {state.final_battle ? "FINALE" : `ACT ${["", "I", "II", "III", "IV"][state.floor]}`} / {state.character}</p><h2 id="expedition-status-title">원정 현황</h2></div>
+          <div><p className="eyebrow">CHESSLAYER / {state.mode === "endless" ? `무한 ${state.floor}층 · ${state.cleared_stages}단계 클리어` : state.final_battle ? "FINALE" : `ACT ${["", "I", "II", "III", "IV"][state.floor]}`} / {state.character}</p><h2 id="expedition-status-title">원정 현황</h2></div>
           <button className="expedition-status-close" ref={closeRef} onClick={onClose} aria-label="원정 현황 닫기">닫기 ×</button>
         </header>
         <div className="expedition-status-content">

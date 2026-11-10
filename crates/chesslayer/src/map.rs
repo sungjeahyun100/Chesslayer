@@ -71,6 +71,30 @@ impl ActMap {
     pub fn generate(seed: u32) -> Self {
         Self::generate_for_floor(seed, 1)
     }
+    pub fn generate_endless(seed: u32, floor: u32) -> Self {
+        let seed = seed ^ floor.wrapping_mul(0x9e37_79b9);
+        let mut map = Self::generate(seed);
+        let mut rng = Rng::new(seed ^ 0xe0d1_e55a);
+        // Catalog IDs already identify normal, elite and boss encounters across
+        // every floor (including the finale). Reuse their original definitions.
+        let pools = ["-N", "-E", "-B"].map(|category| {
+            ENCOUNTERS
+                .iter()
+                .enumerate()
+                .filter_map(|(index, encounter)| encounter.id.contains(category).then_some(index))
+                .collect::<Vec<_>>()
+        });
+        for node in &mut map.nodes {
+            let pool = match node.kind {
+                NodeKind::Combat => &pools[0],
+                NodeKind::Elite => &pools[1],
+                NodeKind::Boss => &pools[2],
+                _ => continue,
+            };
+            node.encounter = Some(pool[rng.index(pool.len())]);
+        }
+        map
+    }
     pub fn generate_for_floor(seed: u32, floor: u8) -> Self {
         // Map creation never consumes the combat/deck RNG stream.
         let mut rng = Rng::new(seed ^ 0x41c7_9e35 ^ (u32::from(floor - 1) << 24));

@@ -50,6 +50,8 @@ pub struct PieceStatus {
 #[derive(Clone)]
 pub(super) struct Mechanics {
     pub statuses: HashMap<PieceId, PieceStatus>,
+    // Corpse rewards activate only when the recipient's side next starts a turn.
+    pub(super) pending_agility: HashMap<PieceId, u8>,
     pub(super) rng: Rng,
     relics: Vec<Relic>,
     used: HashSet<String>,
@@ -71,6 +73,8 @@ pub(super) struct Mechanics {
     ammo: u32,
     choices: VecDeque<PendingChoice>,
     pub(super) search_shot_outcome: Option<bool>,
+    search_boss_shots: Option<VecDeque<bool>>,
+    search_boss_shot_chance: Option<u8>,
     search_random_index: Option<usize>,
     search_random_arity: Option<usize>,
     temporary_pieces: HashSet<PieceId>,
@@ -136,7 +140,7 @@ impl Mechanics {
             ids.sort();
             ids.hash(h);
         }
-        for map in [&self.aimed, &self.propellant] {
+        for map in [&self.aimed, &self.propellant, &self.pending_agility] {
             let mut values: Vec<_> = map.iter().collect();
             values.sort_by_key(|(id, _)| **id);
             values.hash(h);
@@ -160,6 +164,28 @@ impl Mechanics {
     pub(super) fn force_search_shot(&mut self, hit: bool) {
         self.search_shot_outcome = Some(hit);
     }
+    pub(super) fn force_search_boss_shots(&mut self, hits: Vec<bool>) {
+        self.search_boss_shots = Some(hits.into());
+        self.search_boss_shot_chance = None;
+    }
+    pub(super) fn take_search_boss_shot_chance(&mut self) -> Option<u8> {
+        self.search_boss_shots = None;
+        self.search_boss_shot_chance.take()
+    }
+    pub(super) fn boss_shot_hit(&mut self, chance: u8) -> bool {
+        if let Some(hits) = &mut self.search_boss_shots {
+            // Keep later engine randomness aligned with the live transition.
+            // The search branches only replace this roll's hit/miss result.
+            self.rng.index(100);
+            return hits.pop_front().unwrap_or_else(|| {
+                self.search_boss_shot_chance.get_or_insert(chance);
+                false
+            });
+        }
+        self.search_shot_outcome
+            .take()
+            .unwrap_or_else(|| self.rng.index(100) < chance as usize)
+    }
     pub(super) fn force_search_random(&mut self, index: usize) {
         self.search_random_index = Some(index);
         self.search_random_arity = None;
@@ -171,6 +197,7 @@ impl Mechanics {
     pub(super) fn new(rng: Rng) -> Self {
         Self {
             statuses: HashMap::new(),
+            pending_agility: HashMap::new(),
             rng,
             relics: vec![],
             used: HashSet::new(),
@@ -192,6 +219,8 @@ impl Mechanics {
             ammo: 400,
             choices: VecDeque::new(),
             search_shot_outcome: None,
+            search_boss_shots: None,
+            search_boss_shot_chance: None,
             search_random_index: None,
             search_random_arity: None,
             temporary_pieces: HashSet::new(),
@@ -604,6 +633,7 @@ impl Battle {
     }
     pub(super) fn initialize_statuses(&mut self) {
         self.mechanics.statuses.clear();
+        self.mechanics.pending_agility.clear();
         self.mechanics.player_artillery = self.players.iter().any(|p| key(p.kind) == "warehouse");
         self.mechanics.initial_allies =
             self.players.iter().filter(|p| p.position.is_some()).count();
@@ -726,8 +756,6 @@ impl Battle {
                 passive.ward = true;
                 passive.agility = 1;
             }
-            "double_king" => passive.agility = 1,
-            "triple_king" => passive.agility = 2,
             _ => {}
         }
         if passive.ward {
@@ -1008,7 +1036,11 @@ impl Battle {
     }
     pub(super) fn side_actions(&self, owner: PlayerId) -> u8 {
         if owner == ENEMY {
-            self.mechanics.enemy_actions
+            if self.boss.is_some() {
+                2
+            } else {
+                self.mechanics.enemy_actions
+            }
         } else {
             self.actions_per_turn
         }
@@ -1880,9 +1912,12 @@ impl Battle {
         }
         self.mechanics.statuses.entry(id).or_default().hunger = 0;
         if self.status(id).blessing {
-            self.grant_agility(id, 3);
-            self.events
-                .push(format!("{} 과흥분: 민첩 3.", piece_name(p.kind)));
+            let pending = self.mechanics.pending_agility.entry(id).or_default();
+            *pending = pending.saturating_add(3);
+            self.events.push(format!(
+                "{} 과흥분: 다음 자기 진영 턴에 민첩 3.",
+                piece_name(p.kind)
+            ));
         } else {
             let draw = self.mechanics.rng.index(2);
             let selected = self.mechanics.search_random_index.take().unwrap_or(draw) % 2;
@@ -3119,6 +3154,38 @@ mod smoke {
         assert_eq!(b.mechanics.corpse_eaten[0], 1);
         assert_eq!(b.status(1).agility, 0);
         assert_eq!(b.turn, ENEMY);
+    }
+    #[test]
+    fn pending_blessing_agility_stacks_and_is_paid_once_on_either_side() {
+        for (id, owner) in [(1, PLAYER), (101, ENEMY)] {
+            let mut b = fixture(ROOK);
+            b.turn = owner;
+            b.mechanics.statuses.entry(id).or_default().blessing = true;
+            // Multiple corpse effects before the turn boundary accumulate.
+            b.eat_corpse(id).unwrap();
+            b.eat_corpse(id).unwrap();
+            assert_eq!(b.status(id).agility, 0);
+            assert_eq!(b.mechanics.pending_agility.get(&id), Some(&6));
+            let mut without_reward = b.clone();
+            without_reward.mechanics.pending_agility.clear();
+            assert_ne!(b.search_hash(), without_reward.search_hash());
+            b.end_turn().unwrap();
+            assert_eq!(b.status(id).agility, 0);
+            assert_eq!(b.mechanics.pending_agility.get(&id), Some(&6));
+            b.grant_agility(id, 1);
+            b.end_turn().unwrap();
+            assert_eq!(b.turn, owner);
+            assert_eq!(b.status(id).agility, 7);
+            assert_eq!(b.actions_left, 8);
+            assert!(!b.mechanics.pending_agility.contains_key(&id));
+            b.reset_turn_budget();
+            assert_eq!(b.status(id).agility, 7);
+            assert_eq!(b.actions_left, 8, "recalculation must not pay again");
+            b.end_turn().unwrap();
+            b.end_turn().unwrap();
+            assert_eq!(b.status(id).agility, 0);
+            assert_eq!(b.actions_left, 1);
+        }
     }
     #[test]
     fn conscience_and_hunger_persist_once() {

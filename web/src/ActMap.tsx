@@ -118,8 +118,8 @@ export function ActMap({
       <div className="map-heading">
         <div>
           <p className="eyebrow">{floorLabel(state.floor, state.final_battle)} / {state.character}</p>
-          <h1>{state.final_battle ? "부족의 독재자" : floorNames[state.floor]}</h1>
-          <p>{state.final_battle ? "최후의 로얄을 향한 결전." : "하나의 원정, 당신이 고르는 길."} · 금화 {state.gold}</p>
+          <h1>{state.mode === "endless" ? "무한 원정" : state.final_battle ? "부족의 독재자" : floorNames[state.floor]}</h1>
+          <p>{state.mode === "endless" ? `누적 ${state.cleared_stages}단계 클리어` : state.final_battle ? "최후의 로얄을 향한 결전." : "하나의 원정, 당신이 고르는 길."} · 금화 {state.gold}</p>
         </div>
         <div className="map-progress">
           <strong>{map.nodes.filter((n) => n.visited).length}</strong>

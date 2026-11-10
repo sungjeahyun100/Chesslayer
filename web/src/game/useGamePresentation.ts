@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Command, Snapshot } from "../types";
+import { combatPresentationSteps, type CombatPlan } from "./combatPlan";
 
 export type FloorTransition = { next: Snapshot; stage: "out" | "in" };
 export type BoardMove = { from: number; to: number };
@@ -9,10 +10,21 @@ export function useGamePresentation(onEnterGame: () => void) {
   const [floorTransition, setFloorTransition] = useState<FloorTransition | null>(null);
   const [lastEnemyMove, setLastEnemyMove] = useState<BoardMove | null>(null);
   const [boardRevision, setBoardRevision] = useState(0);
+  const [animation, setAnimation] = useState<CombatPlan | null>(null);
+  const timers = useRef<number[]>([]);
+  const animationSequence = useRef(0);
+  const clearAnimation = useCallback(() => {
+    timers.current.forEach(window.clearTimeout);
+    timers.current = [];
+    setAnimation(null);
+  }, []);
+  useEffect(() => clearAnimation, [clearAnimation]);
 
-  // This is the handoff from committed engine state to presentation. Currently
-  // only the existing floor transition delays display; no board state is cloned.
-  const present = useCallback((next: Snapshot, before: Snapshot | null, source: "start" | "resume" | Command) => {
+  // The engine result is committed before presentation starts. Keep the previous
+  // snapshot on screen until contact, then reveal the committed next snapshot.
+  const present = useCallback((next: Snapshot, before: Snapshot | null, source: "start" | "resume" | Command,
+    context: { enemyTarget?: number; blast?: number[] } = {}) => {
+    clearAnimation();
     const newRun = typeof source === "string";
     if (newRun || (before?.phase !== "combat" && next.phase === "combat")) {
       setLastEnemyMove(null);
@@ -24,6 +36,33 @@ export function useGamePresentation(onEnterGame: () => void) {
     }
     const changesFloor = typeof source !== "string" && ["choose_reward", "continue_reward", "advance_floor"].includes(source.type)
       && (before?.floor !== next.floor || before?.final_battle !== next.final_battle) && next.phase === "map";
+    const steps = before && typeof source !== "string" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      ? combatPresentationSteps(before, next, source, context) : [];
+    if (steps.length) {
+      const playStep = (index: number) => {
+        const step = steps[index];
+        const plan = { ...step.plan, sequence: ++animationSequence.current };
+        setDisplayState(step.before);
+        setAnimation(plan);
+        timers.current.push(window.setTimeout(() => {
+          // A finishing blow still needs its impact/fade on the board before
+          // the victory or defeat screen replaces that board.
+          setDisplayState(step.before.phase === "combat" && step.after.phase !== "combat"
+            ? { ...step.after, phase: "combat" } : step.after);
+          setAnimation((current) => current?.sequence === plan.sequence ? { ...current, impactDone: true } : current);
+        }, plan.impact));
+        timers.current.push(window.setTimeout(() => {
+          if (index + 1 < steps.length) playStep(index + 1);
+          else {
+            setDisplayState(next);
+            setAnimation(null);
+            timers.current = [];
+          }
+        }, plan.duration));
+      };
+      playStep(0);
+      return;
+    }
     if ((source === "start" || changesFloor) && !window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       setFloorTransition({ next, stage: "out" });
     } else {
@@ -31,7 +70,7 @@ export function useGamePresentation(onEnterGame: () => void) {
       setFloorTransition(null);
       if (newRun) onEnterGame();
     }
-  }, [onEnterGame]);
+  }, [onEnterGame, clearAnimation]);
 
   useEffect(() => {
     if (!floorTransition) return;
@@ -58,5 +97,6 @@ export function useGamePresentation(onEnterGame: () => void) {
     return () => window.removeEventListener("keydown", escape);
   }, [floorTransition, skipFloorTransition]);
 
-  return { displayState, floorTransition, lastEnemyMove, boardRevision, presentationBusy: !!floorTransition, present, skipFloorTransition };
+  return { displayState, floorTransition, lastEnemyMove, boardRevision, animation,
+    presentationBusy: !!floorTransition || !!animation, present, skipFloorTransition };
 }

@@ -40,6 +40,26 @@
   color: #899080;
   margin-top: 25px;
 }
+.expedition-modes {
+  display: grid;
+  gap: 24px;
+  margin: 0 0 20px;
+}
+.expedition-mode + .expedition-mode {
+  border-top: 1px solid var(--line);
+  padding-top: 20px;
+}
+.expedition-mode h2 {
+  font-family: "Noto Serif KR", serif;
+  font-size: 19px;
+  margin: 0 0 8px;
+}
+.expedition-mode p {
+  color: #7a8276;
+  font-size: 12px;
+  line-height: 1.8;
+  margin: 0 0 12px;
+}
 .home-facts span + span {
   border-left: 1px solid var(--line);
   padding-left: 20px;

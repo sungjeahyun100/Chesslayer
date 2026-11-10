@@ -22,17 +22,15 @@
 .square.boss-hook-target { outline: 4px solid #d59b22; outline-offset: -5px; }
 .boss-target-mark, .boss-hook-mark { position: absolute; z-index: 6; top: 2px; right: 3px; padding: 1px 4px; border-radius: 3px; background: #9d3526; color: white; font-size: 12px; font-weight: 900; pointer-events: none; }
 .boss-hook-mark { background: #b17b20; }
-.boss-hook-line { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; pointer-events: none; overflow: visible; }
-.boss-hook-line line { stroke: #b47b1a; stroke-width: .08; stroke-dasharray: .13 .09; animation: boss-hook-fire .35s ease-out both; }
-.boss-hook-line circle { fill: #d7a846; stroke: #6b3d16; stroke-width: .05; animation: boss-hook-fire .35s ease-out both; }
-@keyframes boss-hook-fire { from { opacity: 0; stroke-dashoffset: 2; } to { opacity: 1; stroke-dashoffset: 0; } }
-.boss-intent-panel { display: flex; flex-direction: column; gap: 4px; margin: 8px 0; padding: 10px 13px; border: 2px solid #9c563b; border-radius: 4px; background: #fff4e5; color: #512f25; font-size: 12px; line-height: 1.4; }
-.boss-intent-panel strong { font-size: 14px; }
-.boss-intent-panel small { color: #755848; }
-.boss-hp-value { animation: boss-hp-pulse .42s ease-out; }
-.boss-event-flash { padding: 4px 6px; border-radius: 3px; background: #f3dcbb; animation: boss-event-pulse .65s ease-out; }
+.boss-status { display: flex; flex-wrap: wrap; align-items: baseline; gap: 3px 12px; margin-top: 5px; color: #52674d; font-size: 12px; line-height: 1.4; }
+.boss-status small { font-size: 11px; }
+.battle-heading-indicators { display: flex; flex-direction: column; align-items: flex-end; flex-shrink: 0; gap: 7px; }
+.boss-health { display: flex; align-items: center; gap: 9px; padding: 3px 9px; color: #344b35; }
+.boss-health-icon { color: #9c703c; font-size: 27px; line-height: 1; }
+.boss-health small { display: block; margin-bottom: 3px; color: #63745b; font-size: 11px; }
+.boss-hp-value { display: block; font-size: 28px; line-height: 1; white-space: nowrap; font-variant-numeric: tabular-nums; animation: boss-hp-pulse .42s ease-out; }
 @keyframes boss-hp-pulse { from { transform: scale(1.04); color: #c13d2c; } to { transform: scale(1); color: inherit; } }
-@keyframes boss-event-pulse { from { background: #f5ac58; } to { background: #f3dcbb; } }
+@media (prefers-reduced-motion: reduce) { .boss-hp-value { animation: none; } }
 .selection-number { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; display: grid; place-items: center; background: #936b29; color: #fff; border-radius: 50%; font-size: 10px; z-index: 5; }
 .action-hint { flex-wrap: wrap; }
 .card-target-instruction { flex-basis: 100%; font-size: 10px; }
@@ -70,4 +68,3 @@
   .launch .muted { font-size: 11px; }
   .location-actions { flex-direction: column; gap: 12px; }
 }
-

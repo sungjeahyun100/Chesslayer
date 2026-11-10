@@ -9,6 +9,14 @@ use crate::{
 use serde::{Deserialize, Serialize};
 use std::collections::{HashSet, VecDeque};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RunMode {
+    #[default]
+    Campaign,
+    Endless,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunPhase {
@@ -151,7 +159,10 @@ pub struct Game {
     pub path: Vec<usize>,
     pub completed: Vec<usize>,
     pub seed: u32,
-    pub floor: u8,
+    pub floor: u32,
+    pub mode: RunMode,
+    pub cleared_stages: u64,
+    last_counted_node: Option<usize>,
     pub character: String,
     pub squad_id: String,
     pub progress: Progress,
@@ -171,8 +182,11 @@ pub struct Game {
     reward_choice: Option<usize>,
     upgrade_claimed: bool,
     last_cleared_node: Option<usize>,
-    boss_plan: Option<BossPlan>,
+    boss_plans: Vec<BossPlan>,
     boss_sequence_step: u8,
+    replaying_command: bool,
+    legacy_boss_turn: bool,
+    legacy_boss_choice: bool,
 }
 #[derive(Clone)]
 struct BossPlan {
@@ -218,6 +232,9 @@ impl Game {
             completed: vec![],
             seed,
             floor: 1,
+            mode: RunMode::Campaign,
+            cleared_stages: 0,
+            last_counted_node: None,
             character: choice.name.into(),
             squad_id: character.into(),
             progress: Progress::default(),
@@ -237,8 +254,11 @@ impl Game {
             reward_choice: None,
             upgrade_claimed: false,
             last_cleared_node: None,
-            boss_plan: None,
+            boss_plans: vec![],
             boss_sequence_step: 0,
+            replaying_command: false,
+            legacy_boss_turn: false,
+            legacy_boss_choice: false,
         };
         game.assign_map_relics();
         Ok(game)
@@ -249,17 +269,32 @@ impl Game {
         floor: u8,
         progress: Progress,
     ) -> Result<Self, String> {
+        Self::new_run_with_mode(character, seed, floor, progress, RunMode::Campaign)
+    }
+    pub fn new_run_with_mode(
+        character: &str,
+        seed: u32,
+        floor: u8,
+        progress: Progress,
+        mode: RunMode,
+    ) -> Result<Self, String> {
         if !progress.unlocked_squads.iter().any(|id| id == character) {
             return Err("아직 해금되지 않은 부대입니다.".into());
         }
         if floor > 4 {
             return Err("존재하지 않는 층입니다.".into());
         }
+        if mode == RunMode::Endless && floor != 1 {
+            return Err("무한 원정은 1층에서 시작합니다.".into());
+        }
         let mut game = Self::new(character, seed)?;
+        game.mode = mode;
         game.progress = progress;
         game.final_battle = floor == 0;
-        game.floor = if floor == 0 { 4 } else { floor };
-        game.map = if game.final_battle {
+        game.floor = u32::from(if floor == 0 { 4 } else { floor });
+        game.map = if mode == RunMode::Endless {
+            ActMap::generate_endless(seed, game.floor)
+        } else if game.final_battle {
             ActMap {
                 rows: 1,
                 nodes: vec![MapNode {
@@ -419,9 +454,23 @@ impl Game {
     }
     fn complete_node(&mut self) {
         let id = self.current_node.expect("content requires a selected node");
-        self.completed.push(id);
+        self.record_node_clear();
+        if !self.completed.contains(&id) {
+            self.completed.push(id);
+        }
         self.last_cleared_node = Some(id);
         self.phase = RunPhase::Map;
+    }
+    fn record_node_clear(&mut self) {
+        let Some(id) = self.current_node else {
+            return;
+        };
+        // Traversal only moves forward; the sole revisit is this node's rewards.
+        // A won battle counts immediately, before its reward screen is closed.
+        if self.last_counted_node != Some(id) {
+            self.cleared_stages += 1;
+            self.last_counted_node = Some(id);
+        }
     }
     fn claim_reward(&mut self, index: usize) -> Result<(), String> {
         if self.phase != RunPhase::Reward || self.reward_choice.is_some() {
@@ -623,16 +672,19 @@ impl Game {
             return Ok(());
         }
         self.floor += 1;
-        self.final_battle = self.floor == 5;
+        self.final_battle = self.mode == RunMode::Campaign && self.floor == 5;
         self.current_node = None;
         self.path.clear();
         self.completed.clear();
         self.reward_node = None;
         self.reward_choice = None;
         self.last_cleared_node = None;
+        self.last_counted_node = None;
         self.upgrade_claimed = false;
         self.phase = RunPhase::Map;
-        self.map = if self.final_battle {
+        self.map = if self.mode == RunMode::Endless {
+            ActMap::generate_endless(self.seed, self.floor)
+        } else if self.final_battle {
             self.floor = 4;
             ActMap {
                 rows: 1,
@@ -648,8 +700,8 @@ impl Game {
             }
         } else {
             ActMap::generate_for_floor(
-                self.seed ^ u32::from(self.floor).wrapping_mul(0x9e37_79b9),
-                self.floor,
+                self.seed ^ self.floor.wrapping_mul(0x9e37_79b9),
+                self.floor as u8,
             )
         };
         self.assign_map_relics();
@@ -661,6 +713,9 @@ impl Game {
         Ok(())
     }
     fn unlock_boss(&mut self) {
+        if self.mode == RunMode::Endless {
+            return;
+        }
         if self.final_battle {
             self.progress.final_defeated = true;
         } else {
@@ -779,7 +834,11 @@ impl Game {
                     lane: n.lane,
                     kind: n.kind,
                     name: n.name(),
-                    description: n.description(),
+                    description: if self.mode == RunMode::Endless && n.kind == NodeKind::Boss {
+                        "격파하면 보상을 받고 다음 무작위 층으로 진행합니다.".into()
+                    } else {
+                        n.description()
+                    },
                     next: n.next.clone(),
                     available: available.contains(&n.id),
                     visited: self.completed.contains(&n.id),
@@ -810,7 +869,38 @@ impl Game {
         }
         Ok(())
     }
+    /// Restore recorded selections without asking a newer AI to choose the past
+    /// again. Live commands still enforce the boss's announced action.
+    pub fn replay_command(&mut self, command: Command) -> Result<(), String> {
+        self.replaying_command = true;
+        let result = self.dispatch(command);
+        self.replaying_command = false;
+        result
+    }
+
+    /// Version 19 histories finished the boss turn after one recorded action.
+    /// Keep that boundary only while replaying the migrated history prefix.
+    pub fn replay_legacy_command(&mut self, command: Command) -> Result<(), String> {
+        self.legacy_boss_turn = true;
+        let result = self.replay_command(command);
+        self.legacy_boss_turn = false;
+        result
+    }
+
+    pub fn finish_legacy_replay(&mut self) {
+        // A save may stop between a legacy action and its target selection.
+        // Keep that action's sequence until the final choice resolves; planning
+        // cannot advance a projected turn while a choice is still pending.
+        self.legacy_boss_choice = self.battle.pending_choice().is_some();
+        if !self.legacy_boss_choice {
+            self.plan_boss();
+        }
+    }
+
     pub fn dispatch(&mut self, command: Command) -> Result<(), String> {
+        // One dispatch owns one presentation batch. Queries and AI clones never
+        // drain or append to the live game's resolved effect records.
+        self.battle.combat_events.clear();
         match command {
             Command::Move {
                 from,
@@ -859,6 +949,16 @@ impl Game {
                 }
                 let side = self.battle.turn;
                 self.battle.resolve_choice(target)?;
+                if (self.legacy_boss_turn || self.legacy_boss_choice)
+                    && side == ENEMY
+                    && self.battle.turn == ENEMY
+                    && self.battle.boss().is_some()
+                    && self.boss_sequence_step >= 1
+                    && self.battle.phase == Phase::Active
+                    && self.battle.pending_choice().is_none()
+                {
+                    self.battle.end_turn().map_err(engine_error)?;
+                }
                 self.events();
                 self.check_finish()?;
                 if self.phase == RunPhase::Combat && self.battle.turn != side {
@@ -867,6 +967,10 @@ impl Game {
                     } else {
                         self.begin_player_turn();
                     }
+                }
+                if self.legacy_boss_choice && self.battle.pending_choice().is_none() {
+                    self.legacy_boss_choice = false;
+                    self.plan_boss();
                 }
             }
             Command::SpecialAction { from, to } => {
@@ -1259,6 +1363,7 @@ impl Game {
             self.battle.reset_after_battle().map_err(engine_error)?;
             self.cards = CardCombat::default();
             if winner == PLAYER {
+                self.record_node_clear();
                 self.phase = RunPhase::Reward;
                 self.gold += if self
                     .current_node
@@ -1313,192 +1418,120 @@ impl Game {
         self.plan_boss();
     }
     fn plan_boss(&mut self) {
-        self.boss_plan = None;
+        self.boss_plans.clear();
         self.boss_sequence_step = 0;
         if self.phase != RunPhase::Combat || self.battle.boss().is_none() {
             return;
         }
-        let mut ranked = self
-            .battle
-            .boss_action_candidates()
+        self.boss_plans = ai::choose_dictator_plan(&self.battle)
+            .unwrap_or_default()
             .into_iter()
-            .map(|action| {
-                let from = action.first.from;
-                let to = action.steps().last().unwrap().move_to;
-                let tag = action.first.transition.as_deref();
-                let copied = tag
-                    .and_then(|tag| tag.strip_prefix("boss_copy:"))
-                    .and_then(|tag| tag.split_once(':'))
-                    .and_then(|(kind, _)| kind.parse::<PieceType>().ok());
-                let (mut area, mut target_positions) = self.battle.boss_shot_area(&action);
-                if let Some(kind) = copied {
-                    if action.first.effect == Effect::Catch && action.first.take == from {
-                        area = self.battle.blast_preview(kind, from);
-                        target_positions = area
-                            .iter()
-                            .copied()
-                            .filter(|&at| self.battle.board.piece_at(at).ok().flatten().is_some())
-                            .collect();
-                    } else if action.first.effect == Effect::Catch && to == from {
-                        let (blast, paths) =
-                            self.battle
-                                .shot_effect_preview(kind, from, action.first.take);
-                        area.push(action.first.take);
-                        area.extend(blast);
-                        area.extend(paths.into_iter().flatten());
-                        target_positions.push(action.first.take);
-                    } else {
-                        area.push(to);
-                        if self
-                            .battle
-                            .board
-                            .piece_at(action.first.take)
-                            .ok()
-                            .flatten()
-                            .is_some()
-                        {
-                            target_positions.push(action.first.take);
-                        }
-                    }
-                } else if tag != Some("boss_shot") && tag != Some("boss_reload") {
-                    area.push(to);
-                    if self
-                        .battle
-                        .board
-                        .piece_at(action.first.take)
-                        .ok()
-                        .flatten()
-                        .is_some()
-                    {
-                        target_positions.push(action.first.take);
-                    }
-                }
-                let targets: Vec<_> = target_positions
+            .map(|(before, action)| Self::describe_boss_action(&before, action))
+            .collect();
+    }
+
+    fn describe_boss_action(battle: &Battle, action: DefaultAction) -> BossPlan {
+        let from = action.first.from;
+        let to = action.steps().last().unwrap().move_to;
+        let tag = action.first.transition.as_deref();
+        let copied = tag
+            .and_then(|tag| tag.strip_prefix("boss_copy:"))
+            .and_then(|tag| tag.split_once(':'))
+            .and_then(|(kind, _)| kind.parse::<PieceType>().ok());
+        let (mut area, mut target_positions) = battle.boss_shot_area(&action);
+        if let Some(kind) = copied {
+            if action.first.effect == Effect::Catch && action.first.take == from {
+                area = battle.blast_preview(kind, from);
+                target_positions = area
                     .iter()
-                    .filter_map(|&at| {
-                        self.battle
-                            .board
-                            .piece_at(at)
-                            .ok()
-                            .flatten()
-                            .map(|p| BossTargetView {
-                                cell: cell(at),
-                                chance: copied
-                                    .and_then(|kind| {
-                                        self.battle.boss_copied_hit_chance(kind, from, at)
-                                    })
-                                    .or_else(|| self.battle.hit_chance(from, at))
-                                    .unwrap_or(100),
-                                name: piece_name(p.kind).into(),
-                            })
-                    })
+                    .copied()
+                    .filter(|&at| battle.board.piece_at(at).ok().flatten().is_some())
                     .collect();
-                let score = if tag == Some("boss_reload") {
-                    80
-                } else if tag == Some("boss_shot") {
-                    if targets.is_empty() {
-                        -20
-                    } else {
-                        20 + targets
-                            .iter()
-                            .map(|t| {
-                                let owner = self
-                                    .battle
-                                    .board
-                                    .piece_at(pos(t.cell).unwrap())
-                                    .ok()
-                                    .flatten()
-                                    .map(|p| p.owner);
-                                if owner == Some(PLAYER) {
-                                    i32::from(t.chance)
-                                } else {
-                                    8
-                                }
-                            })
-                            .sum::<i32>()
-                    }
-                } else if copied.is_some() && action.first.effect == Effect::Catch {
-                    30 + targets
-                        .iter()
-                        .filter(|t| {
-                            self.battle
-                                .board
-                                .piece_at(pos(t.cell).unwrap())
-                                .ok()
-                                .flatten()
-                                .is_some_and(|p| p.owner == PLAYER)
-                        })
-                        .count() as i32
-                        * 45
-                } else if self
-                    .battle
+            } else if action.first.effect == Effect::Catch && to == from {
+                let (blast, paths) = battle.shot_effect_preview(kind, from, action.first.take);
+                area.push(action.first.take);
+                area.extend(blast);
+                area.extend(paths.into_iter().flatten());
+                target_positions.push(action.first.take);
+            } else {
+                area.push(to);
+                if battle
                     .board
                     .piece_at(action.first.take)
                     .ok()
                     .flatten()
-                    .is_some_and(|p| p.owner == PLAYER)
+                    .is_some()
                 {
-                    125
-                } else {
-                    let nearest = self
-                        .battle
-                        .board
-                        .cells()
-                        .iter()
-                        .enumerate()
-                        .filter_map(|(i, p)| {
-                            p.filter(|p| p.owner == PLAYER).map(|_| pos(i).unwrap())
-                        })
-                        .map(|p| (p.file - to.file).abs().max((p.rank - to.rank).abs()))
-                        .min()
-                        .unwrap_or(8);
-                    16 - nearest * 2
-                };
-                let name = match tag {
-                    Some("boss_reload") => "샷건 재장전 · 행동 1회".into(),
-                    Some("boss_shot") => format!(
-                        "3갈래 샷건 · {} 방향 · 탄도별 첫 기물 공격",
-                        square(action.first.take)
-                    ),
-                    _ if copied.is_some() && action.first.effect == Effect::Catch => format!(
-                        "습득 능력 · {} · {}",
-                        piece_name(copied.unwrap()),
-                        if action.first.take == from {
-                            "자폭".into()
-                        } else {
-                            square(action.first.take)
-                        }
-                    ),
-                    _ if copied.is_some() => format!(
-                        "습득 행마 · {} · {}",
-                        piece_name(copied.unwrap()),
-                        square(to)
-                    ),
-                    _ if self
-                        .battle
-                        .board
-                        .piece_at(action.first.take)
-                        .ok()
-                        .flatten()
-                        .is_some_and(|p| p.owner == PLAYER) =>
-                    {
-                        format!("포획 · {}", square(action.first.take))
-                    }
-                    _ => format!("이동 · {}", square(to)),
-                };
-                (
-                    score,
-                    BossPlan {
-                        action,
-                        name,
-                        area: area.into_iter().map(cell).collect(),
-                        targets,
-                    },
-                )
+                    target_positions.push(action.first.take);
+                }
+            }
+        } else if tag != Some("boss_shot") && tag != Some("boss_reload") {
+            area.push(to);
+            if battle
+                .board
+                .piece_at(action.first.take)
+                .ok()
+                .flatten()
+                .is_some()
+            {
+                target_positions.push(action.first.take);
+            }
+        }
+        let targets: Vec<_> = target_positions
+            .iter()
+            .filter_map(|&at| {
+                battle
+                    .board
+                    .piece_at(at)
+                    .ok()
+                    .flatten()
+                    .map(|p| BossTargetView {
+                        cell: cell(at),
+                        chance: copied
+                            .and_then(|kind| battle.boss_copied_hit_chance(kind, from, at))
+                            .or_else(|| battle.hit_chance(from, at))
+                            .unwrap_or(100),
+                        name: piece_name(p.kind).into(),
+                    })
             })
-            .collect::<Vec<_>>();
-        ranked.sort_by_key(|a| std::cmp::Reverse(a.0));
-        self.boss_plan = ranked.into_iter().next().map(|(_, plan)| plan);
+            .collect();
+        let name = match tag {
+            Some("boss_reload") => "샷건 재장전 · 행동 1회".into(),
+            Some("boss_shot") => format!(
+                "3갈래 샷건 · {} 방향 · 탄도별 첫 기물 공격",
+                square(action.first.take)
+            ),
+            _ if copied.is_some() && action.first.effect == Effect::Catch => format!(
+                "습득 능력 · {} · {}",
+                piece_name(copied.unwrap()),
+                if action.first.take == from {
+                    "자폭".into()
+                } else {
+                    square(action.first.take)
+                }
+            ),
+            _ if copied.is_some() => format!(
+                "습득 행마 · {} · {}",
+                piece_name(copied.unwrap()),
+                square(to)
+            ),
+            _ if battle
+                .board
+                .piece_at(action.first.take)
+                .ok()
+                .flatten()
+                .is_some_and(|p| p.owner == PLAYER) =>
+            {
+                format!("포획 · {}", square(action.first.take))
+            }
+            _ => format!("이동 · {}", square(to)),
+        };
+        BossPlan {
+            action,
+            name,
+            area: area.into_iter().map(cell).collect(),
+            targets,
+        }
     }
     fn play_card(
         &mut self,
@@ -1574,9 +1607,7 @@ impl Game {
             return Err("적의 턴이 아닙니다.".into());
         }
         if self.battle.boss().is_some() {
-            let plan = (self.boss_sequence_step == 0)
-                .then_some(self.boss_plan.as_ref())
-                .flatten();
+            let plan = self.boss_plans.get(usize::from(self.boss_sequence_step));
             return Ok(plan.and_then(|plan| {
                 let from = plan.action.first.from;
                 self.battle
@@ -1617,14 +1648,16 @@ impl Game {
     ) -> Result<(), String> {
         if self.phase != RunPhase::Combat
             || self.battle.turn != ENEMY
+            || self.battle.pending_choice().is_some()
             || from.is_some() != index.is_some()
         {
             return Err("적의 턴이 아닙니다.".into());
         }
         let boss_fight = self.battle.boss().is_some();
-        let planned = (self.boss_sequence_step == 0)
-            .then_some(self.boss_plan.as_ref())
-            .flatten()
+        let replaying = self.replaying_command;
+        let planned = self
+            .boss_plans
+            .get(usize::from(self.boss_sequence_step))
             .map(|p| p.action.clone());
         let acted = self.perform_action(|battle| {
             let (Some(from), Some(index)) = (from, index) else {
@@ -1643,7 +1676,7 @@ impl Game {
                 return Ok(None);
             };
             let from = pos(from).map_err(|_| Error::IllegalAction)?;
-            if boss_fight {
+            if boss_fight && !replaying {
                 let Some(plan) = planned.as_ref() else {
                     return Ok(None);
                 };
@@ -1665,14 +1698,20 @@ impl Game {
         })?;
         if !acted {
             if boss_fight {
-                self.battle.forfeit_boss_action().map_err(engine_error)?;
+                if let Some(action) = &planned {
+                    self.battle
+                        .forfeit_boss_action(action)
+                        .map_err(engine_error)?;
+                } else {
+                    self.battle.end_turn().map_err(engine_error)?;
+                }
                 self.boss_sequence_step = self.boss_sequence_step.saturating_add(1);
             } else {
                 self.battle.end_turn().map_err(engine_error)?;
             }
             self.events();
             self.check_finish()?;
-            if boss_fight && self.phase == RunPhase::Combat {
+            if boss_fight && planned.is_some() && self.phase == RunPhase::Combat {
                 self.log("예고된 적 행동이 불가능해져 실패했습니다.");
             }
             if self.phase == RunPhase::Combat && self.battle.turn == PLAYER {
@@ -1687,7 +1726,8 @@ impl Game {
         if boss_fight
             && self.phase == RunPhase::Combat
             && self.battle.turn == ENEMY
-            && self.boss_sequence_step >= 1
+            && (self.legacy_boss_turn
+                || usize::from(self.boss_sequence_step) >= self.boss_plans.len())
             && self.battle.pending_choice().is_none()
         {
             self.battle.end_turn().map_err(engine_error)?;
@@ -1953,6 +1993,12 @@ impl Game {
             vec![]
         };
         Snapshot {
+            combat_events: self
+                .battle
+                .combat_events
+                .iter()
+                .map(CombatEventView::from)
+                .collect(),
             boss: if self.phase == RunPhase::Combat {
                 self.battle.boss().map(|state| {
                     let hook = state.hook.and_then(|id| self.battle.piece_position(id));
@@ -1978,13 +2024,16 @@ impl Game {
                                 description: definition.description,
                             })
                             .collect(),
-                        plan: self.boss_plan.as_ref().map(|plan| BossPlanView {
-                            name: plan.name.clone(),
-                            from: cell(plan.action.first.from),
-                            to: cell(plan.action.steps().last().unwrap().move_to),
-                            area: plan.area.clone(),
-                            targets: plan.targets.clone(),
-                        }),
+                        plan: self
+                            .boss_plans
+                            .get(usize::from(self.boss_sequence_step))
+                            .map(BossPlanView::from),
+                        plans: self
+                            .boss_plans
+                            .iter()
+                            .skip(usize::from(self.boss_sequence_step))
+                            .map(BossPlanView::from)
+                            .collect(),
                     }
                 })
             } else {
@@ -2155,6 +2204,8 @@ impl Game {
                 .collect(),
             seed: self.seed,
             floor: self.floor,
+            mode: self.mode,
+            cleared_stages: self.cleared_stages,
         }
     }
     pub fn inspect_enemy(&self, index: usize) -> Result<EnemyInspectionView, String> {
@@ -2256,6 +2307,17 @@ pub struct BossPlanView {
     pub area: Vec<usize>,
     pub targets: Vec<BossTargetView>,
 }
+impl From<&BossPlan> for BossPlanView {
+    fn from(plan: &BossPlan) -> Self {
+        Self {
+            name: plan.name.clone(),
+            from: cell(plan.action.first.from),
+            to: cell(plan.action.steps().last().unwrap().move_to),
+            area: plan.area.clone(),
+            targets: plan.targets.clone(),
+        }
+    }
+}
 #[derive(Serialize)]
 pub struct BossView {
     pub hp: i32,
@@ -2266,6 +2328,7 @@ pub struct BossView {
     pub learned: Vec<&'static str>,
     pub learned_abilities: Vec<BossAbilityView>,
     pub plan: Option<BossPlanView>,
+    pub plans: Vec<BossPlanView>,
 }
 #[derive(Serialize)]
 pub struct BossAbilityView {
@@ -2273,7 +2336,87 @@ pub struct BossAbilityView {
     pub description: &'static str,
 }
 #[derive(Serialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum CombatEventView {
+    Shotgun {
+        actor_id: PieceId,
+        from: usize,
+        toward: usize,
+        area: Vec<usize>,
+        rays: Vec<ShotgunRayView>,
+        hits: Vec<ShotgunHitView>,
+    },
+    ChainPull {
+        boss_id: PieceId,
+        boss_cell: usize,
+        piece_id: PieceId,
+        from: usize,
+        to: usize,
+    },
+}
+#[derive(Serialize)]
+pub struct ShotgunRayView {
+    pub direction: (i32, i32),
+    pub cells: Vec<usize>,
+}
+#[derive(Serialize)]
+pub struct ShotgunHitView {
+    pub cell: usize,
+    pub piece_id: PieceId,
+    pub result: ShotgunResult,
+}
+impl From<&CombatEvent> for CombatEventView {
+    fn from(event: &CombatEvent) -> Self {
+        match event {
+            CombatEvent::Shotgun {
+                actor_id,
+                from,
+                toward,
+                rays,
+                hits,
+            } => Self::Shotgun {
+                actor_id: *actor_id,
+                from: cell(*from),
+                toward: cell(*toward),
+                area: rays
+                    .iter()
+                    .flat_map(|ray| ray.cells.iter().copied().map(cell))
+                    .collect(),
+                rays: rays
+                    .iter()
+                    .map(|ray| ShotgunRayView {
+                        direction: ray.direction,
+                        cells: ray.cells.iter().copied().map(cell).collect(),
+                    })
+                    .collect(),
+                hits: hits
+                    .iter()
+                    .map(|hit| ShotgunHitView {
+                        cell: cell(hit.at),
+                        piece_id: hit.piece_id,
+                        result: hit.result,
+                    })
+                    .collect(),
+            },
+            CombatEvent::ChainPull {
+                boss_id,
+                boss_at,
+                piece_id,
+                from,
+                to,
+            } => Self::ChainPull {
+                boss_id: *boss_id,
+                boss_cell: cell(*boss_at),
+                piece_id: *piece_id,
+                from: cell(*from),
+                to: cell(*to),
+            },
+        }
+    }
+}
+#[derive(Serialize)]
 pub struct Snapshot {
+    pub combat_events: Vec<CombatEventView>,
     pub boss: Option<BossView>,
     pub effect_choice: Option<crate::EffectChoice>,
     pub squad_id: String,
@@ -2320,7 +2463,9 @@ pub struct Snapshot {
     pub royal_name: &'static str,
     pub royal_names: Vec<&'static str>,
     pub seed: u32,
-    pub floor: u8,
+    pub floor: u32,
+    pub mode: RunMode,
+    pub cleared_stages: u64,
 }
 #[derive(Serialize)]
 #[serde(tag = "type", content = "definition", rename_all = "snake_case")]
@@ -2546,18 +2691,98 @@ mod relic_resource_tests {
 }
 
 #[cfg(test)]
+mod combat_event_tests {
+    use super::*;
+
+    #[test]
+    fn snapshot_serializes_resolved_events_and_next_command_clears_them() {
+        let mut game = Game::new("guardian", 1).unwrap();
+        game.battle.combat_events.push(CombatEvent::Shotgun {
+            actor_id: 100,
+            from: Position::new(4, 4),
+            toward: Position::new(4, 3),
+            rays: vec![ShotgunRay {
+                direction: (0, -1),
+                cells: vec![Position::new(4, 3)],
+            }],
+            hits: vec![ShotgunHit {
+                at: Position::new(4, 3),
+                piece_id: 2,
+                result: ShotgunResult::Ward,
+            }],
+        });
+        let view = serde_json::to_value(game.snapshot()).unwrap();
+        let event = &view["combat_events"][0];
+        assert_eq!(event["kind"], "shotgun");
+        assert_eq!(event["from"], 36);
+        assert_eq!(event["toward"], 28);
+        assert_eq!(event["area"], serde_json::json!([28]));
+        assert_eq!(event["rays"][0]["direction"], serde_json::json!([0, -1]));
+        assert_eq!(event["hits"][0]["result"], "ward");
+        // Read-only queries cannot consume a batch; commands own its lifetime,
+        // including rejected commands that must not replay old effects.
+        assert_eq!(game.snapshot().combat_events.len(), 1);
+        assert!(game.dispatch(Command::EndTurn).is_err());
+        assert!(game.snapshot().combat_events.is_empty());
+    }
+}
+
+#[cfg(test)]
 mod final_boss_tests {
     use super::*;
+
+    #[test]
+    fn recorded_boss_selection_replays_without_changing_live_plan_enforcement() {
+        let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
+        game.dispatch(Command::SelectNode { id: 0 }).unwrap();
+        game.dispatch(Command::EndTurn).unwrap();
+        let announced = game.boss_plans.first().unwrap().action.clone();
+        let from = announced.first.from;
+        let (index, recorded) = game
+            .battle
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .enumerate()
+            .find(|(_, action)| action.first.move_to != from && action != &announced)
+            .unwrap();
+        let command = Command::EnemyStepSelected {
+            from: Some(cell(from)),
+            index: Some(index),
+        };
+        let mut replayed = game.clone();
+        replayed.replay_command(command.clone()).unwrap();
+        assert_eq!(
+            replayed
+                .battle
+                .piece_position(replayed.battle.royal_id)
+                .unwrap()
+                .0,
+            recorded.first.move_to
+        );
+        assert!(!replayed.replaying_command);
+        game.dispatch(command).unwrap();
+        assert_eq!(
+            game.battle.piece_position(game.battle.royal_id).unwrap().0,
+            announced.first.move_to
+        );
+    }
 
     #[test]
     fn final_battle_publishes_and_keeps_the_planned_action_during_player_turn() {
         let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
         game.dispatch(Command::SelectNode { id: 0 }).unwrap();
-        let announced = game.boss_plan.as_ref().unwrap().action.clone();
+        let announced = game.boss_plans.first().unwrap().action.clone();
+        let announced_turn: Vec<_> = game
+            .boss_plans
+            .iter()
+            .map(|plan| plan.action.clone())
+            .collect();
         let view = game.snapshot().boss.unwrap();
         assert_eq!(view.hp, 5);
         assert_eq!(view.ammo, 2);
         assert!(view.plan.is_some());
+        assert_eq!(view.plans.len(), announced_turn.len());
         assert_eq!(
             game.battle
                 .board
@@ -2575,7 +2800,14 @@ mod final_boss_tests {
             promotion: move_view.promotion.map(|p| p.kind),
         })
         .unwrap();
-        assert_eq!(game.boss_plan.as_ref().unwrap().action, announced);
+        assert_eq!(game.boss_plans.first().unwrap().action, announced);
+        assert_eq!(
+            game.boss_plans
+                .iter()
+                .map(|plan| plan.action.clone())
+                .collect::<Vec<_>>(),
+            announced_turn
+        );
         if game.battle.turn == PLAYER {
             game.dispatch(Command::EndTurn).unwrap();
         }
@@ -2586,6 +2818,153 @@ mod final_boss_tests {
             );
         }
         game.enemy_step().unwrap();
+        if game.phase == RunPhase::Combat && game.battle.turn == ENEMY {
+            assert_eq!(game.boss_sequence_step, 1);
+            assert_eq!(
+                game.snapshot().boss.unwrap().plans.len(),
+                announced_turn.len() - 1
+            );
+            game.enemy_step().unwrap();
+        }
         assert!(game.phase != RunPhase::Combat || game.battle.turn == PLAYER);
+    }
+
+    #[test]
+    fn boss_move_and_shot_are_separate_steps_of_the_same_turn() {
+        let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
+        game.dispatch(Command::SelectNode { id: 0 }).unwrap();
+        let mut projected = game.battle.clone();
+        projected.end_turn().unwrap();
+        let from = projected.piece_position(projected.royal_id).unwrap().0;
+        let movement = projected
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .find(Battle::boss_action_is_movement)
+            .unwrap();
+        let first = Game::describe_boss_action(&projected, movement.clone());
+        projected.apply_piece_action(&movement).unwrap();
+        let at = projected.piece_position(projected.royal_id).unwrap().0;
+        let shot = projected
+            .legal_actions(at)
+            .unwrap()
+            .into_iter()
+            .find(|action| action.first.transition.as_deref() == Some("boss_shot"))
+            .unwrap();
+        let second = Game::describe_boss_action(&projected, shot.clone());
+        game.boss_plans = vec![first, second];
+        game.dispatch(Command::EndTurn).unwrap();
+        let round = game.round;
+        assert_eq!(game.battle.actions_left, 2);
+        game.enemy_step().unwrap();
+        assert_eq!(game.battle.turn, ENEMY);
+        assert_eq!(game.round, round);
+        assert_eq!(game.battle.actions_left, 1);
+        assert_eq!(
+            game.battle.piece_position(game.battle.royal_id).unwrap().0,
+            at
+        );
+        assert_eq!(game.battle.boss().unwrap().ammo, 2);
+        assert_eq!(game.snapshot().boss.unwrap().plan.unwrap().from, cell(at));
+        game.enemy_step().unwrap();
+        assert_eq!(game.battle.turn, PLAYER);
+        assert_eq!(game.round, round + 1);
+        assert_eq!(game.battle.boss().unwrap().ammo, 1);
+        assert!(game
+            .battle
+            .combat_events
+            .iter()
+            .any(|event| matches!(event, CombatEvent::Shotgun { from, .. } if *from == at)));
+    }
+
+    #[test]
+    fn legacy_enemy_choice_keeps_sequence_and_finishes_old_turn_after_resolution() {
+        let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
+        game.dispatch(Command::SelectNode { id: 0 }).unwrap();
+        game.battle = Battle::new(BattleStart {
+            players: vec![
+                PlayerPiece {
+                    id: 1,
+                    kind: pieces::KING,
+                    origin: Position::new(7, 7),
+                    position: Some(Position::new(7, 7)),
+                    moved: false,
+                    upgrades: vec![],
+                    persistent: Default::default(),
+                },
+                PlayerPiece {
+                    id: 2,
+                    kind: pieces::PAWN,
+                    origin: Position::new(3, 4),
+                    position: Some(Position::new(3, 4)),
+                    moved: false,
+                    upgrades: vec![],
+                    persistent: Default::default(),
+                },
+            ],
+            encounter: Encounter {
+                enemies: vec![EnemyPiece {
+                    id: 100,
+                    kind: pieces::TRIBAL_DICTATOR,
+                    position: Position::new(4, 4),
+                }],
+                royal_id: 100,
+                additional_royal_ids: vec![],
+            },
+        })
+        .unwrap();
+        game.battle
+            .v030_card_effect(
+                crate::content::cards::CardKind::ReliefForce,
+                &crate::content::cards::CardSelection::single(None),
+            )
+            .unwrap();
+        game.dispatch(Command::EndTurn).unwrap();
+        let from = Position::new(4, 4);
+        let (index, capture) = game
+            .battle
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .enumerate()
+            .find(|(_, action)| action.first.move_to == Position::new(3, 4))
+            .unwrap();
+        game.boss_plans = vec![Game::describe_boss_action(&game.battle, capture.clone())];
+        game.boss_sequence_step = 0;
+        let round = game.round;
+        game.replay_legacy_command(Command::EnemyStepSelected {
+            from: Some(cell(from)),
+            index: Some(index),
+        })
+        .unwrap();
+        let reaction = game.battle.pending_choice().unwrap();
+        assert_eq!(game.battle.turn, ENEMY);
+        assert_eq!(game.boss_sequence_step, 1);
+        game.finish_legacy_replay();
+        assert!(game.legacy_boss_choice);
+        assert_eq!(game.boss_sequence_step, 1);
+        assert_eq!(game.boss_plans[0].action, capture);
+
+        let hash = game.battle.search_hash();
+        assert!(game
+            .dispatch(Command::EnemyStepSelected {
+                from: None,
+                index: None,
+            })
+            .is_err());
+        assert_eq!(game.battle.search_hash(), hash);
+        assert_eq!(game.boss_sequence_step, 1);
+        assert!(game.legacy_boss_choice);
+        game.dispatch(Command::ResolveEffect {
+            target: reaction.targets[0],
+        })
+        .unwrap();
+        assert_eq!(game.battle.turn, PLAYER);
+        assert_eq!(game.round, round + 1);
+        assert_eq!(game.battle.boss().unwrap().ammo, 2);
+        assert!(game.battle.pending_choice().is_none());
+        assert!(!game.legacy_boss_choice);
+        assert_eq!(game.boss_sequence_step, 0);
+        assert!(!game.boss_plans.is_empty());
     }
 }

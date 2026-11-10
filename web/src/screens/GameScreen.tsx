@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Command, EnemyInspection, Snapshot } from "../types";
 import type { BoardMove } from "../game/useGamePresentation";
+import type { CombatPlan } from "../game/combatPlan";
 import { useGameInput } from "../game/useGameInput";
 import { RunBoard } from "../board/RunBoard";
 import { ActMap, nodeTypes } from "../ActMap";
@@ -11,6 +12,7 @@ import { floorLabel } from "../progress";
 import { BattleScreen } from "./BattleScreen";
 import { RestScreen } from "./RestScreen";
 import { OutcomeScreen } from "./OutcomeScreen";
+import type { EndlessRecord } from "../endless";
 
 interface Props {
   snapshot: Snapshot;
@@ -25,10 +27,13 @@ interface Props {
   presentationBusy: boolean;
   lastEnemyMove: BoardMove | null;
   boardRevision: number;
+  animation: CombatPlan | null;
+  endlessBest: EndlessRecord;
+  endlessRunBest: EndlessRecord;
 }
 
 export function GameScreen({ snapshot, displayState: state, send: dispatchCommand, inspectEnemy, setError, onRestart,
-  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision }: Props) {
+  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, endlessBest, endlessRunBest }: Props) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const closeStatus = useCallback(() => setStatusOpen(false), []);
@@ -65,14 +70,15 @@ export function GameScreen({ snapshot, displayState: state, send: dispatchComman
   const restPiece = state.rest_options.find((piece) => piece.id === input.restChoice?.id);
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
   const board = <RunBoard state={state} input={input} rewardUpgradeOpen={rewardUpgradeOpen}
-    lastEnemyMove={lastEnemyMove} boardRevision={boardRevision} boardRef={boardRef} />;
+    lastEnemyMove={lastEnemyMove} boardRevision={boardRevision} boardRef={boardRef} animation={animation} />;
   return <>
     {!presentationBusy && createPortal(<button className="primary expedition-status-trigger" onClick={() => setStatusOpen(true)} aria-haspopup="dialog" aria-expanded={statusOpen}>원정 현황</button>, document.body)}
     {showMap ? <ActMap state={state} send={send} coveredByReward={rewardRevisit} /> : (
       <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined} data-card-upgrade-open={!!input.focusedUpgrade || undefined}>
         <nav className="node-navigation" aria-label="원정 위치">
           <span>{floorLabel(state.floor, state.final_battle)} / {(state.map.nodes.find((node) => node.current)?.row ?? 0) + 1}번째 지점
-            · {state.node_kind && nodeTypes[state.node_kind].label}</span>
+            · {state.node_kind && nodeTypes[state.node_kind].label}
+            {state.mode === "endless" && ` · 무한 원정 · 누적 ${state.cleared_stages}단계 클리어`}</span>
         </nav>
         {!["treasure", "event", "shop", "victory", "defeat"].includes(state.phase) && (restView
           ? <RestScreen state={state} input={input} board={board} reward={rewardUpgradeOpen}
@@ -80,6 +86,7 @@ export function GameScreen({ snapshot, displayState: state, send: dispatchComman
               onClose={() => { input.chooseRest(null); if (rewardUpgradeOpen) closeRewardUpgrade(); }} />
           : <BattleScreen state={state} input={input} board={board} />)}
         {!["combat", "rest", "reward"].includes(state.phase) && <OutcomeScreen state={state} send={send}
+          endlessBest={endlessBest} endlessRunBest={endlessRunBest}
           onRestart={() => { if (!statusOpen && !presentationBusy) onRestart(); }} outcomeRef={outcomeRef} />}
       </main>
     )}

@@ -2,16 +2,18 @@ import type { RefObject } from "react";
 import type { Snapshot } from "../types";
 import type { GameInput } from "../game/useGameInput";
 import type { BoardMove } from "../game/useGamePresentation";
+import type { CombatPlan } from "../game/combatPlan";
 import { PieceImage } from "../PieceImage";
 import { PromotionPicker } from "../PromotionPicker";
 import { ChessBoard, BoardSquare } from "./ChessBoard";
 import { BoardPiece } from "./BoardPiece";
 import { TargetPreview } from "./TargetPreview";
 import { useBoardAnnotations } from "./useBoardAnnotations";
+import { CombatEffects } from "./CombatEffects";
 
-export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, boardRevision, boardRef }: {
+export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, boardRevision, boardRef, animation }: {
   state: Snapshot; input: GameInput; rewardUpgradeOpen: boolean; lastEnemyMove: BoardMove | null;
-  boardRevision: number; boardRef: RefObject<HTMLDivElement | null>;
+  boardRevision: number; boardRef: RefObject<HTMLDivElement | null>; animation: CombatPlan | null;
 }) {
   const { selected, enemyInspection, activeAbility, abilityTargets, hoveredAbilityTarget, restChoice, promotion, targetCard, cardTargets, cardUpgrades } = input;
   const turn = state.turn === 0;
@@ -20,9 +22,9 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
   const restPiece = state.rest_options.find((piece) => piece.id === restChoice?.id);
   const previewKey = state.upgrade_paths.find((path) => path.from === restPiece?.kind && path.to === restChoice?.target)?.to_key;
   const inspectedEnemy = state.phase === "combat" ? state.pieces.find((piece) => piece.id === enemyInspection?.piece_id && piece.cell === enemyInspection?.cell) : undefined;
-  const bossPiece = state.boss ? state.pieces.find((piece) => piece.key === "tribal_dictator") : undefined;
-  const bossRisk = new Set(state.boss?.plan?.area ?? []);
-  const bossTargets = new Set(state.boss?.plan?.targets.map((target) => target.cell) ?? []);
+  const bossPlans = state.boss?.plans ?? (state.boss?.plan ? [state.boss.plan] : []);
+  const bossRisk = new Set(bossPlans.flatMap((plan) => plan.area));
+  const bossTargets = new Set(bossPlans.flatMap((plan) => plan.targets.map((target) => target.cell)));
   const enemyCaptures = new Set(enemyInspection?.moves.flatMap((move) => move.captures) ?? []);
   const enemyMoves = new Set(enemyInspection?.moves.map((move) => move.to) ?? []);
   const enemyRoutes = [...new Map((enemyInspection?.moves ?? []).filter((move) => move.route).map((move) => [move.route!.join(","), move.route!])).values()];
@@ -88,13 +90,11 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
           {inspectedEnemy && enemyRoutes.length > 0 && <svg className="enemy-routes" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
           {enemyRoutes.map((route) => <polyline key={route.join(",")} points={route.map((cell) => `${cell % 8 + 0.5},${Math.floor(cell / 8) + 0.5}`).join(" ")} />)}
         </svg>}
-        {bossPiece && state.boss?.hook_target !== null && state.boss?.hook_target !== undefined && <svg className="boss-hook-line" viewBox="0 0 8 8" preserveAspectRatio="none" aria-hidden="true">
-          <line x1={bossPiece.cell % 8 + .5} y1={Math.floor(bossPiece.cell / 8) + .5} x2={state.boss.hook_target % 8 + .5} y2={Math.floor(state.boss.hook_target / 8) + .5} />
-          <circle cx={state.boss.hook_target % 8 + .5} cy={Math.floor(state.boss.hook_target / 8) + .5} r=".17" />
-        </svg>}
         </>}
         pieces={<div className="piece-layer">
-          {boardPieces.map((p) => (
+          {boardPieces.filter((p) => !(animation?.actor.id === p.id &&
+            (animation.kind === "return" || (animation.kind === "move" && !animation.impactDone))) &&
+            !(animation?.kind === "chain" && !animation.impactDone && animation.chain?.piece.id === p.id)).map((p) => (
             <BoardPiece
               key={p.id}
               piece={p}
@@ -130,6 +130,7 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
                 : <line key={`${from}-${to}-${index}`} className={`board-annotation-arrow ${index === boardAnnotations.length ? "preview" : ""}`} data-from={from} data-to={to}
                     x1={from % 8 + .5} y1={Math.floor(from / 8) + .5} x2={to % 8 + .5} y2={Math.floor(to / 8) + .5} markerEnd="url(#board-annotation-head)" />)}
           </svg>}
+        effects={<CombatEffects key={animation?.sequence ?? "idle"} plan={animation} />}
       />
       {promotion && (
         <PromotionPicker

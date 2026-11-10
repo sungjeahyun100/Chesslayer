@@ -20,6 +20,10 @@ export function PieceInspector({ piece: selectedPiece, enemy: inspectedEnemy, ab
         </strong>
         {selectedMovement && <p><b>행마:</b> {selectedMovement.movement}</p>}
         {selectedMovement?.special && <p>{selectedMovement.special}</p>}
+        {selectedPiece.key === "tribal_dictator" && boss && <small className="effect-note">
+          HP {boss.hp} · 샷건 {boss.ammo}/{boss.max_ammo}
+          {boss.hook_name && ` · 갈고리 대상: ${boss.hook_name} (다음 적 턴에 끌어옴)`}
+        </small>}
         {selectedPiece.key === "tribal_dictator" && boss?.learned.length ? <small className="effect-note">습득 행마: {boss.learned.join(", ")}</small> : null}
         {selectedPiece.key === "tribal_dictator" && boss?.learned_abilities.map((ability) => <small className="effect-note" key={ability.name}><b>제왕학 · {ability.name}</b> — {ability.description}</small>)}
         {canUseAbility && !inspectedEnemy && abilities.map((ability, index) => <button key={index} className={`ability-button ${activeAbility === ability ? "selected" : ""}`}

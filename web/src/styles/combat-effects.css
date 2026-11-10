@@ -1,0 +1,50 @@
+.combat-effects { position: absolute; inset: 0; z-index: 8; pointer-events: none; overflow: hidden; }
+.combat-moving-piece { position: absolute; width: 12.5%; height: 12.5%; display: grid; place-items: center; z-index: 2; }
+.combat-moving-piece > .piece-image { width: 88%; height: 88%; object-fit: contain; filter: drop-shadow(0 3px 3px #242c1a77); }
+.combat-vanish-piece { position: absolute; width: 12.5%; height: 12.5%; display: grid; place-items: center; animation: combat-vanish .18s ease-out both; }
+.combat-vanish-piece > .piece-image { width: 88%; height: 88%; object-fit: contain; }
+.combat-projectiles { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.combat-tracer line { stroke: #ffed9b; stroke-width: .11; stroke-linecap: round; filter: drop-shadow(0 0 4px #ffa51c); }
+.combat-tracer circle, .combat-muzzle { fill: #fff9d4; filter: drop-shadow(0 0 5px #ff9f00); }
+.combat-shotgun-area { position: absolute; width: 12.5%; height: 12.5%; box-sizing: border-box; background: #fba83a66; border: 2px solid #ffe09dcc; box-shadow: inset 0 0 14px #f1a42c99; animation: combat-shotgun-area .495s ease-out both; }
+.combat-shotgun-pellet line { stroke: #ffe6a0; stroke-width: .055; stroke-linecap: round; filter: drop-shadow(0 0 3px #ff9e32); }
+.combat-shotgun-pellet circle { fill: #fff8d7; }
+.combat-shotgun-flash { fill: #fff2bf; opacity: .65; filter: drop-shadow(0 0 8px #ffc367); }
+.combat-shotgun-flame { fill: #ffc657; stroke: #ffecb2; stroke-width: .025; }
+.combat-shotgun-core { fill: #fffdf0; }
+.combat-chain { z-index: 3; }
+.combat-chain-link { fill: #372b2099; stroke: #e9d8ab; stroke-width: .038; filter: drop-shadow(0 1px 1px #211a15); }
+.combat-chain-link.edge { fill: #8d7850; stroke: #b6a175; stroke-width: .032; }
+.combat-chain-hook { fill: none; stroke: #fff0c7; stroke-width: .055; stroke-linecap: round; }
+.combat-chain-catch { fill: none; stroke: #ffe3a2; stroke-width: .045; stroke-dasharray: .12 .055; filter: drop-shadow(0 0 3px #f7b65b); animation: combat-chain-catch .27s ease-out both; }
+.combat-mortar-shell circle:first-child { fill: #3d4035; stroke: #ffdc7f; stroke-width: .045; }
+.combat-mortar-shell circle:last-child { fill: #ffbe4c; }
+.combat-impact, .combat-ward { position: absolute; transform: translate(-50%, -50%); }
+.combat-impact { width: 12%; aspect-ratio: 1; border-radius: 50%; background: #fff8d7; box-shadow: 0 0 15px 6px #ffb845, 0 0 2px 12px #fff4ac88; animation: combat-impact .18s ease-out both; }
+.combat-impact-miss { background: #d3c3a4; box-shadow: 0 0 8px 3px #8b7459; }
+.combat-mortar-impact { position: absolute; width: 12.5%; aspect-ratio: 1; transform: translate(-50%, -50%); border: 4px solid #ffe5ad; border-radius: 50%; box-shadow: 0 0 18px 8px #ffb850; animation: combat-impact .18s ease-out both; }
+.combat-impact-corpse { box-shadow: 0 0 14px 5px #f0af5f, 0 0 2px 13px #f7dda980; }
+.combat-ward { width: 16%; aspect-ratio: 1; border-radius: 50% 50% 44% 44%; border: 3px solid #ffe6a2; background: radial-gradient(circle, #ffffffb5, #efd9856b 55%, #bb883540); box-shadow: 0 0 18px #ffe090, inset 0 0 12px #fff5cc; color: #fff5cf; font-size: clamp(25px, 4vw, 52px); display: grid; place-items: center; text-shadow: 0 0 8px #b98226; animation: combat-ward .23s ease-out both; }
+.combat-ward span { line-height: 1; }
+.combat-blast-cell { position: absolute; width: 12.5%; height: 12.5%; background: #fff2a9; box-shadow: inset 0 0 15px #fff; animation: combat-blast-cell .3s ease-out both; }
+.combat-explosion { position: absolute; inset: 0; }
+.combat-explosion-flash, .combat-shockwave { position: absolute; left: var(--center-x); top: var(--center-y); border-radius: 50%; transform: translate(-50%, -50%); }
+.combat-explosion-flash { width: 12.5%; aspect-ratio: 1; background: #fff; box-shadow: 0 0 30px 20px #ffcf72; animation: combat-flash .3s ease-out both; }
+.combat-shockwave { width: 12.5%; aspect-ratio: 1; border: 5px solid #ffe4a2; box-shadow: 0 0 15px #ffb747; animation: combat-shockwave .34s ease-out both; }
+.combat-explosion.nuke .combat-explosion-flash { animation-duration: .48s; box-shadow: 0 0 60px 40px #fff3c8; }
+.combat-explosion.nuke .combat-shockwave { animation-duration: .65s; border-width: 8px; }
+.combat-mushroom { position: absolute; left: var(--center-x); top: var(--center-y); width: 27%; height: 36%; transform: translate(-50%, -75%); filter: drop-shadow(0 0 11px #ffb545); animation: combat-mushroom .8s ease-out both; }
+.combat-mushroom-stem { position: absolute; left: 37%; bottom: 0; width: 26%; height: 63%; border-radius: 42% 42% 25% 25%; background: linear-gradient(90deg, #9f4d28, #ffd183 48%, #b75b2e); box-shadow: 0 0 12px #ffad4a; transform-origin: bottom; animation: combat-stem .27s .1s ease-out both; }
+.combat-mushroom-cap { position: absolute; left: 5%; top: 0; width: 90%; height: 57%; border-radius: 58% 58% 36% 36% / 72% 72% 29% 29%; background: radial-gradient(ellipse at 45% 73%, #fff0a9 0, #f7a64e 37%, #b45b32 69%, #744838 100%); box-shadow: inset 0 -6px 0 #763d2e88, 0 0 18px #ffcf73; animation: combat-cap .3s .3s ease-out both; }
+@keyframes combat-impact { from { opacity: 0; transform: translate(-50%, -50%) scale(.25); } 35% { opacity: 1; transform: translate(-50%, -50%) scale(1.25); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.6); } }
+@keyframes combat-vanish { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(.65); } }
+@keyframes combat-ward { from { opacity: 0; transform: translate(-50%, -50%) scale(.35); } 30% { opacity: 1; transform: translate(-50%, -50%) scale(1.3); } to { opacity: 0; transform: translate(-50%, -50%) scale(1.75); } }
+@keyframes combat-blast-cell { from { opacity: .95; } to { opacity: 0; } }
+@keyframes combat-shotgun-area { from { opacity: .25; } 15% { opacity: .85; } 63% { opacity: .5; } to { opacity: 0; } }
+@keyframes combat-chain-catch { from { stroke-width: .08; opacity: 1; } to { stroke-width: .035; opacity: .7; } }
+@keyframes combat-flash { from { opacity: 1; transform: translate(-50%, -50%) scale(.2); } 40% { opacity: .95; } to { opacity: 0; transform: translate(-50%, -50%) scale(3.6); } }
+@keyframes combat-shockwave { from { opacity: 1; transform: translate(-50%, -50%) scale(.2); } to { opacity: 0; transform: translate(-50%, -50%) scale(5.5); } }
+@keyframes combat-mushroom { from { opacity: 0; transform: translate(-50%, -25%) scale(.35); } 20% { opacity: .95; } 75% { opacity: .9; } to { opacity: 0; transform: translate(-50%, -95%) scale(1.45); } }
+@keyframes combat-stem { from { opacity: 0; transform: scaleY(.1); } to { opacity: 1; transform: scaleY(1); } }
+@keyframes combat-cap { from { opacity: 0; transform: scale(.25); } to { opacity: 1; transform: scale(1); } }
+@media (prefers-reduced-motion: reduce) { .combat-effects { display: none; } }

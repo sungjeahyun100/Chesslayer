@@ -130,6 +130,54 @@ fn ingredient_capture_stays_then_corpse_capture_grants_agility_and_cures_hunger(
     assert_eq!(battle.status(2).hunger, 0);
     assert_eq!(battle.turn, ENEMY);
     assert_eq!(battle.status(2).agility, 0);
+    assert!(!battle
+        .status_labels(2)
+        .iter()
+        .any(|s| s.starts_with("민첩")));
+
+    // The opponent's action starts our next turn and releases the reward.
+    capture(&mut battle, Position::new(7, 0), Position::new(7, 1));
+    assert_eq!(battle.turn, PLAYER);
+    assert_eq!(battle.status(2).agility, 3);
+    assert_eq!(battle.actions_left, 4);
+    // Another piece may spend the normal action; only the eater gets the extras.
+    capture(&mut battle, Position::new(4, 7), Position::new(4, 6));
+    assert_eq!(battle.status(2).agility, 3);
+    assert!(battle
+        .legal_actions(Position::new(4, 6))
+        .unwrap()
+        .is_empty());
+    for (from, to, remaining) in [(3, 4, 2), (4, 3, 1), (3, 4, 0)] {
+        capture(&mut battle, Position::new(0, from), Position::new(0, to));
+        assert_eq!(battle.status(2).agility, remaining);
+        if remaining > 0 {
+            assert_eq!(battle.turn, PLAYER);
+            assert_eq!(battle.actions_left, remaining);
+        }
+    }
+    assert_eq!(battle.turn, ENEMY);
+    battle.end_turn().unwrap();
+    assert_eq!(battle.status(2).agility, 0);
+    assert_eq!(battle.actions_left, 1, "the reward is paid only once");
+
+    // Eating again earns a new reward, without restoring the spent one.
+    battle
+        .board
+        .set_piece(
+            Position::new(0, 3),
+            Some(Piece {
+                id: 102,
+                kind: CORPSE,
+                owner: 2,
+            }),
+        )
+        .unwrap();
+    capture(&mut battle, Position::new(0, 4), Position::new(0, 3));
+    assert_eq!(battle.turn, ENEMY);
+    assert_eq!(battle.status(2).agility, 0);
+    battle.end_turn().unwrap();
+    assert_eq!(battle.status(2).agility, 3);
+    assert_eq!(battle.actions_left, 4);
 }
 
 #[test]

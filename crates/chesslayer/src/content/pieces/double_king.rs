@@ -1,11 +1,10 @@
-use super::{movement, PieceDefinition, UpgradeDefinition};
+use super::{PieceDefinition, UpgradeDefinition};
 use crate::PieceType;
 
 pub const DOUBLE_KING: PieceType = 96;
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 10,
-    description:
-        "로열나이트의 행마를 유지합니다. 자신의 턴마다 민첩 1을 얻어 한 번 더 행동할 수 있습니다.",
+    description: "한 행동으로 킹 이동을 최대 2단계 수행합니다. 두 번째 단계는 직진 또는 좌우 45도 방향이며, 각 단계에서 멈출 수 있습니다. 아군을 통과할 수 없고 포획하면 이동을 마칩니다.",
     upgrades: &[UpgradeDefinition {
         target: super::TRIPLE_KING,
         key: "triple_king",
@@ -16,9 +15,5 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
 };
 
 fn movement() -> String {
-    format!(
-        "{};{}",
-        movement::steps(&movement::all_directions()),
-        movement::steps(movement::KNIGHT)
-    )
+    (super::vanguard_commander::DEFINITION.movement)()
 }
