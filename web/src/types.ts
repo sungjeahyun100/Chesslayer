@@ -86,7 +86,12 @@ export interface Card {
   id: number;
   definition: CardDefinition;
   targets: number[];
+  upgrade_options: { id: number; target: number }[];
   disabled_reason: string | null;
+}
+export interface PileCard {
+  id: number;
+  definition: CardDefinition;
 }
 export type RelicId = string;
 export interface Relic {
@@ -126,8 +131,11 @@ export interface Snapshot {
   draw_count: number;
   discard_count: number;
   exhausted_count: number;
+  draw_pile: PileCard[];
+  discard_pile: PileCard[];
+  exhausted_pile: PileCard[];
   deck_count: number;
-  deck: CardDefinition[];
+  deck: PileCard[];
   next_battle_pieces: Piece[];
   relics: Relic[];
   log: string[];
@@ -146,6 +154,7 @@ export interface Snapshot {
   progress: Progress;
   final_battle: boolean;
   gold: number;
+  burn_cost: number;
   shop_offers: CardDefinition[];
   shop_bought: number[];
   reinforcement_options: RestOption[];
@@ -172,6 +181,7 @@ export type Command =
   | { type: "rest_revive" | "rest_confess" | "rest_supply" | "reinforce"; id: number }
   | { type: "event_choice"; choice: "eat" | "leave" }
   | { type: "shop_buy"; index: number }
+  | { type: "shop_burn"; id: number }
   | { type: "shop_leave" }
   | { type: "special_action"; from: number; to: number }
   | { type: "king_reposition"; from: number; targets: number[] }

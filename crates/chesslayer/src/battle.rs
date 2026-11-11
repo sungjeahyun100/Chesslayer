@@ -1533,13 +1533,7 @@ impl Battle {
                 .enumerate()
                 .find_map(|(i, p)| p.filter(|p| p.id == id).map(|p| (i, p)))
                 .ok_or(Error::IllegalAction)?;
-            if piece.owner != PLAYER
-                || !pieces::definition(piece.kind)
-                    .is_some_and(|d| d.upgrades.iter().any(|u| u.target == target))
-                || !pieces::required_owned(target)
-                    .iter()
-                    .all(|&kind| self.players.iter().any(|owned| owned.kind == kind))
-            {
+            if !self.can_temporary_upgrade(piece, target) {
                 return Err(Error::IllegalAction);
             }
             changes.push((
@@ -1563,6 +1557,48 @@ impl Battle {
             }
         }
         Ok(())
+    }
+    /// Legal results for a card's current board piece. Permanent ownership
+    /// continues to count, and earlier temporary upgrades count while active.
+    pub fn temporary_upgrade_options(&self, id: PieceId) -> Vec<PieceType> {
+        if self.phase != Phase::Active {
+            return vec![];
+        }
+        let Some(piece) = self
+            .board
+            .cells()
+            .iter()
+            .flatten()
+            .find(|piece| piece.id == id)
+            .copied()
+        else {
+            return vec![];
+        };
+        pieces::definition(piece.kind).map_or_else(Vec::new, |definition| {
+            definition
+                .upgrades
+                .iter()
+                .filter(|upgrade| self.can_temporary_upgrade(piece, upgrade.target))
+                .map(|upgrade| upgrade.target)
+                .collect()
+        })
+    }
+    fn can_temporary_upgrade(&self, piece: Piece, target: PieceType) -> bool {
+        piece.owner == PLAYER
+            && pieces::definition(piece.kind).is_some_and(|definition| {
+                definition
+                    .upgrades
+                    .iter()
+                    .any(|upgrade| upgrade.target == target)
+            })
+            && pieces::required_owned(target).iter().all(|&kind| {
+                self.players.iter().any(|owned| owned.kind == kind)
+                    || self.board.cells().iter().flatten().any(|donor| {
+                        donor.owner == PLAYER
+                            && donor.kind == kind
+                            && self.temporary_upgrades.contains(&donor.id)
+                    })
+            })
     }
     /// Applies a resolved card action atomically, preserving both royal identities and the turn.
     pub fn apply_resolved_card_effect(&mut self, action: &DefaultAction) -> Result<(), Error> {

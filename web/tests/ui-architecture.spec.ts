@@ -98,12 +98,11 @@ test("temporary upgrade staging survives focus changes and only confirmation spe
   const stage = async (at: number) => {
     await cell(page, at).click();
     await page.locator(`.card-upgrade-picker button[data-kind="${path.to}"]`).click();
-    await page.locator(".card-upgrade-confirm").click();
   };
   await handCard.click();
   await stage(pawns[0].cell);
   await cell(page, pawns[1].cell).click();
-  await page.locator(".card-upgrade-cancel").click();
+  await page.getByRole("button", { name: "일시 강화 선택 취소" }).click();
   await expect(page.locator(".card-staged")).toHaveCount(1);
   await page.setViewportSize({ width: 390, height: 844 });
   await stage(pawns[1].cell);

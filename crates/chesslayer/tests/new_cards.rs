@@ -1,6 +1,6 @@
 use chesslayer::{
     cards::{Card, CardKind},
-    content::{cards::REWARD_POOL, Rng},
+    content::{cards::REWARD_POOL, pieces, Rng},
     game::{CardUpgradeChoice, Command, Game, RunPhase},
     Battle, BattleOptions, BattleStart, Encounter, EnemyPiece, GameResult, PieceType, PlayerPiece,
     Position, BISHOP, BOUNCING_BISHOP, ENEMY, KING, KNIGHT, PAWN, PLAYER, ROOK, TEMPEST_BISHOP,
@@ -210,6 +210,67 @@ fn temporary_upgrade_cost_branch_and_permanent_roster() {
         .unwrap()
         .upgrades
         .is_empty());
+    assert_eq!(g.cards.mana, 0);
+}
+
+#[test]
+fn temporary_upgrade_counts_active_temporary_donors_without_changing_rest_unlocks() {
+    let b = battle(
+        vec![
+            ally(5, KING, p(4, 7)),
+            ally(9, pieces::BOUNCING_QUEEN, p(3, 7)),
+            ally(10, pieces::BOUNCING_ROOK, p(0, 7)),
+            ally(11, BOUNCING_BISHOP, p(2, 7)),
+        ],
+        vec![foe(100, KING, p(7, 0))],
+    );
+    let mut g = game(CardKind::TemporaryUpgrade, b, 1);
+    let movement_god = pieces::MOVEMENT_GOD;
+    let rest_path = |game: &Game| {
+        game.snapshot()
+            .upgrade_paths
+            .into_iter()
+            .find(|path| path.from == pieces::BOUNCING_QUEEN && path.to == movement_god)
+            .unwrap()
+    };
+    assert!(!rest_path(&g).unlocked);
+    assert!(!g.snapshot().hand[0]
+        .upgrade_options
+        .iter()
+        .any(|option| option.id == 9 && option.target == movement_god));
+
+    g.battle
+        .temporary_upgrades(&[(10, pieces::HOOK), (11, pieces::TENGU)])
+        .unwrap();
+    assert!(g.battle.has_temporary_upgrade(10));
+    assert!(g.battle.has_temporary_upgrade(11));
+    assert!(!rest_path(&g).unlocked);
+    assert!(g.snapshot().hand[0]
+        .upgrade_options
+        .iter()
+        .any(|option| option.id == 9 && option.target == movement_god));
+    g.dispatch(Command::PlayCardSelection {
+        id: 999,
+        targets: vec![],
+        upgrades: vec![CardUpgradeChoice {
+            id: 9,
+            target: movement_god,
+        }],
+    })
+    .unwrap();
+    assert_eq!(
+        g.battle.board.piece_at(p(3, 7)).unwrap().unwrap().kind,
+        movement_god
+    );
+    assert_eq!(
+        g.battle
+            .outcome()
+            .iter()
+            .find(|piece| piece.id == 9)
+            .unwrap()
+            .kind,
+        pieces::BOUNCING_QUEEN
+    );
     assert_eq!(g.cards.mana, 0);
 }
 

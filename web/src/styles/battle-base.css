@@ -127,30 +127,6 @@
 }
 .staged-upgrades { display: inline-flex; gap: 4px; flex-wrap: wrap; }
 .staged-upgrades button { font-size: 11px; }
-.card-upgrade-picker { min-width: 0; padding: 22px; border: 1px solid var(--line); border-radius: 6px; background: #fafbf4; }
-.card-upgrade-heading { display: flex; align-items: start; justify-content: space-between; gap: 16px; }
-.card-upgrade-heading .eyebrow { font-size: 10px; color: #7c805e; }
-.card-upgrade-heading h2 { margin: 5px 0 0; font: 600 24px/1.4 "Noto Serif KR", serif; color: #284735; }
-.card-upgrade-heading .text-button { flex: none; font-size: 13px; }
-.card-upgrade-piece { display: flex; align-items: center; gap: 16px; margin: 18px 0; }
-.card-upgrade-portrait { width: 92px; height: 92px; flex: none; display: grid; place-items: center; border: 1px solid #a6b494; border-radius: 14px; background: #e9e6ce; }
-.card-upgrade-portrait .piece-image { width: 78px; height: 78px; }
-.card-upgrade-piece small { display: block; font-size: 12px; color: #7d8b73; }
-.card-upgrade-piece strong { display: block; margin: 4px 0; font: 600 21px "Noto Serif KR", serif; color: #304b36; }
-.card-upgrade-piece p, .card-upgrade-intro { font-size: 13px; line-height: 1.65; color: #66735d; }
-.card-upgrade-intro { margin-bottom: 10px; }
-.card-upgrade-picker .skill-tree-heading h3 { font-size: 21px; }
-.card-upgrade-picker .skill-viewport { height: 340px; }
-.card-upgrade-picker .skill-legend { font-size: 11px; }
-.card-upgrade-selection { margin: 12px 0 16px; padding-top: 16px; border-top: 1px solid var(--line); background: #fafbf4; }
-.card-upgrade-selection > .eyebrow { font-size: 10px; color: #7c805e; }
-.card-upgrade-result { display: flex; align-items: center; gap: 12px; min-height: 84px; padding: 10px 0; }
-.card-upgrade-result .piece-image { width: 64px; height: 64px; flex: none; }
-.card-upgrade-result strong { display: block; font: 600 18px "Noto Serif KR", serif; color: #304b36; }
-.card-upgrade-result p { margin-top: 5px; font-size: 13px; line-height: 1.6; color: #66735d; }
-.card-upgrade-requirement { font-size: 12px; line-height: 1.6; color: #6b765f; margin: 0 0 12px; }
-.card-upgrade-confirm { width: 100%; min-height: 48px; font-size: 15px; }
-.card-upgrade-cancel { display: block; margin: 12px auto 0; font-size: 12px; }
 .square.legal {
   cursor: crosshair;
 }

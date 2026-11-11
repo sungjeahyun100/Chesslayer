@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { idleInput, inputPolicy, inputReducer, inputView, type InputState } from "../src/game/inputState";
 import type { Ability, Card } from "../src/types";
 
-const card: Card = { id: 1, targets: [7, 8, 10024], disabled_reason: null, definition: {
+const card: Card = { id: 1, targets: [7, 8, 10024], upgrade_options: [], disabled_reason: null, definition: {
   kind: "frontline", name: "전선", description: "", cost: 1, targeted: true, selection_mode: "multiple",
   cost_per_target: false, exhaust: false, retain: false, innate: false, ethereal: false,
 } };
@@ -37,9 +37,13 @@ test("multiple targets keep selection order, toggle off, and replace only a dead
 });
 
 test("temporary upgrades preserve staged paths while changing or cancelling focus", () => {
+  const combat = { phase: "combat", turn: 0, effect_choice: null } as const;
+  const gate = { modalOpen: false, presentationBusy: false };
   let input = inputReducer(idleInput, { type: "select-card", card });
   input = inputReducer(input, { type: "focus-upgrade", id: 7 });
+  expect(inputPolicy(combat, input, gate).board).toBe(false);
   input = inputReducer(input, { type: "stage-upgrade", target: 8 });
+  expect(inputPolicy(combat, input, gate).board).toBe(true);
   input = inputReducer(input, { type: "focus-upgrade", id: 9 });
   input = inputReducer(input, { type: "focus-upgrade", id: null });
   expect(inputView(input).cardUpgrades).toEqual([{ id: 7, target: 8 }]);

@@ -42,6 +42,7 @@ export function App() {
     {screen === "compendium" && <Compendium choices={choices} entries={entries} onBack={() => setScreen("home")} />}
     {screen === "sandbox" && <PieceSandbox choices={choices} entries={entries} onBack={() => setScreen("home")} />}
     {screen === "game" && snapshot && displayState && <GameScreen key={session.runId} snapshot={snapshot} displayState={displayState}
+      cardMovement={session.cardMovement}
       send={session.send} inspectEnemy={session.inspectEnemy} setError={setError} developerMode={developerMode}
       upgradeHistory={storage.upgradeHistory} rewardUpgradeHistory={storage.rewardUpgradeHistory}
       endlessBest={storage.endlessBest} endlessRunBest={storage.endlessRunBest}

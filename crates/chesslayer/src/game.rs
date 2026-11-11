@@ -104,6 +104,9 @@ pub enum Command {
     ShopBuy {
         index: usize,
     },
+    ShopBurn {
+        id: u32,
+    },
     ShopLeave,
     EndTurn,
     EnemyStep,
@@ -168,6 +171,7 @@ pub struct Game {
     pub progress: Progress,
     pub final_battle: bool,
     pub gold: u32,
+    pub cards_burned: u32,
     pub ammo: Option<u32>,
     reinforcement_used: bool,
     hunger_protection_used: bool,
@@ -240,6 +244,7 @@ impl Game {
             progress: Progress::default(),
             final_battle: false,
             gold: 0,
+            cards_burned: 0,
             ammo: (character == "artillery").then_some(400),
             reinforcement_used: false,
             hunger_protection_used: false,
@@ -1141,6 +1146,32 @@ impl Game {
                 self.add_card(kind);
                 self.log(format!("상점: {} 구입 · 금화 20", kind.definition().name));
             }
+            Command::ShopBurn { id } => {
+                if self.phase != RunPhase::Shop {
+                    return Err("상점에 있지 않습니다.".into());
+                }
+                let index = self
+                    .deck
+                    .iter()
+                    .position(|card| card.id == id)
+                    .ok_or("소각할 카드가 없습니다.")?;
+                let cost = self.next_burn_cost();
+                if self.gold < cost {
+                    return Err("금화가 부족합니다.".into());
+                }
+                self.gold -= cost;
+                self.cards_burned = self.cards_burned.saturating_add(1);
+                let card = self.deck.remove(index);
+                // A burned card is removed from every combat pile, never discarded.
+                self.cards.hand.retain(|other| other.id != id);
+                self.cards.draw.retain(|other| other.id != id);
+                self.cards.discard.retain(|other| other.id != id);
+                self.cards.exhausted.retain(|other| other.id != id);
+                self.log(format!(
+                    "상점: {} 소각 · 금화 {cost}",
+                    card.kind.definition().name
+                ));
+            }
             Command::ShopLeave => {
                 if self.phase != RunPhase::Shop {
                     return Err("상점에 있지 않습니다.".into());
@@ -1279,6 +1310,9 @@ impl Game {
             }
         }
         Ok(())
+    }
+    pub fn next_burn_cost(&self) -> u32 {
+        self.cards_burned.saturating_add(1).saturating_mul(100)
     }
     fn perform_action<F>(&mut self, select: F) -> Result<bool, String>
     where
@@ -1847,10 +1881,24 @@ impl Game {
                 } else {
                     None
                 };
+                let upgrade_options = if c.kind == CardKind::TemporaryUpgrade {
+                    targets
+                        .iter()
+                        .flat_map(|&id| {
+                            self.battle
+                                .temporary_upgrade_options(id)
+                                .into_iter()
+                                .map(move |target| CardUpgradeChoice { id, target })
+                        })
+                        .collect()
+                } else {
+                    vec![]
+                };
                 CardView {
                     id: c.id,
                     definition: d,
                     targets,
+                    upgrade_options,
                     disabled_reason,
                 }
             })
@@ -2044,6 +2092,7 @@ impl Game {
             progress: self.progress.clone(),
             final_battle: self.final_battle,
             gold: self.gold,
+            burn_cost: self.next_burn_cost(),
             ammo: self.ammo,
             ammo_capacity: self.ammo_capacity(),
             shop_offers: self.shop_offers.iter().map(|c| c.definition()).collect(),
@@ -2099,11 +2148,18 @@ impl Game {
             draw_count: self.cards.draw.len(),
             discard_count: self.cards.discard.len(),
             exhausted_count: self.cards.exhausted.len(),
+            // Sort public pile contents by stable ID. The draw vector's order is secret.
+            draw_pile: sorted_pile_view(&self.cards.draw),
+            discard_pile: sorted_pile_view(&self.cards.discard),
+            exhausted_pile: sorted_pile_view(&self.cards.exhausted),
             deck_count: self.deck.len(),
             deck: self
                 .deck
                 .iter()
-                .map(|card| card.kind.definition())
+                .map(|card| PileCardView {
+                    id: card.id,
+                    definition: card.kind.definition(),
+                })
                 .collect(),
             next_battle_pieces,
             relics: self
@@ -2423,6 +2479,7 @@ pub struct Snapshot {
     pub progress: Progress,
     pub final_battle: bool,
     pub gold: u32,
+    pub burn_cost: u32,
     pub ammo: Option<u32>,
     pub ammo_capacity: Option<u32>,
     pub shop_offers: Vec<CardDefinition>,
@@ -2450,8 +2507,11 @@ pub struct Snapshot {
     pub draw_count: usize,
     pub discard_count: usize,
     pub exhausted_count: usize,
+    pub draw_pile: Vec<PileCardView>,
+    pub discard_pile: Vec<PileCardView>,
+    pub exhausted_pile: Vec<PileCardView>,
     pub deck_count: usize,
-    pub deck: Vec<CardDefinition>,
+    pub deck: Vec<PileCardView>,
     pub next_battle_pieces: Vec<PieceView>,
     pub relics: Vec<RelicView>,
     pub log: Vec<String>,
@@ -2515,7 +2575,25 @@ pub struct CardView {
     pub id: u32,
     pub definition: CardDefinition,
     pub targets: Vec<u32>,
+    pub upgrade_options: Vec<CardUpgradeChoice>,
     pub disabled_reason: Option<&'static str>,
+}
+#[derive(Serialize)]
+pub struct PileCardView {
+    pub id: u32,
+    pub definition: CardDefinition,
+}
+
+fn sorted_pile_view(pile: &[Card]) -> Vec<PileCardView> {
+    let mut cards: Vec<_> = pile
+        .iter()
+        .map(|card| PileCardView {
+            id: card.id,
+            definition: card.kind.definition(),
+        })
+        .collect();
+    cards.sort_by_key(|card| card.id);
+    cards
 }
 #[derive(Serialize)]
 pub struct RelicView {
@@ -2563,6 +2641,94 @@ pub struct RequiredPieceView {
     pub kind: PieceType,
     pub name: &'static str,
     pub owned: bool,
+}
+
+#[cfg(test)]
+mod shop_burn_tests {
+    use super::*;
+
+    #[test]
+    fn burn_removes_only_selected_copy_from_deck_and_all_piles() {
+        let mut game = Game::new("vanguard", 7).unwrap();
+        game.phase = RunPhase::Shop;
+        game.gold = 600;
+        let card = game.deck[0].clone();
+        game.add_card(card.kind);
+        let same_kind = game.deck.last().unwrap().id;
+        game.cards.hand.push(card.clone());
+        game.cards.draw.push(card.clone());
+        game.cards.discard.push(card.clone());
+        game.cards.exhausted.push(card.clone());
+
+        game.dispatch(Command::ShopBurn { id: card.id }).unwrap();
+
+        assert_eq!(game.gold, 500);
+        assert_eq!(game.cards_burned, 1);
+        assert_eq!(game.next_burn_cost(), 200);
+        assert!(!game.deck.iter().any(|other| other.id == card.id));
+        for pile in [
+            &game.cards.hand,
+            &game.cards.draw,
+            &game.cards.discard,
+            &game.cards.exhausted,
+        ] {
+            assert!(!pile.iter().any(|other| other.id == card.id));
+        }
+        assert!(game.deck.iter().any(|other| other.id == same_kind));
+        assert_eq!(game.snapshot().deck_count, game.deck.len());
+    }
+
+    #[test]
+    fn burn_cost_persists_across_shops_and_rejects_invalid_requests() {
+        let mut game = Game::new("vanguard", 8).unwrap();
+        let first = game.deck[0].id;
+        let second = game.deck[1].id;
+        game.gold = 199;
+        assert!(game.dispatch(Command::ShopBurn { id: first }).is_err());
+        game.phase = RunPhase::Shop;
+        assert!(game.dispatch(Command::ShopBurn { id: u32::MAX }).is_err());
+        game.dispatch(Command::ShopBurn { id: first }).unwrap();
+        assert_eq!(game.gold, 99);
+        assert!(game.dispatch(Command::ShopBurn { id: second }).is_err());
+        assert_eq!(game.gold, 99);
+        assert!(game.deck.iter().any(|card| card.id == second));
+        game.phase = RunPhase::Map;
+        game.phase = RunPhase::Shop;
+        game.gold = 300;
+        game.dispatch(Command::ShopBurn { id: second }).unwrap();
+        assert_eq!(game.gold, 100);
+        assert_eq!(game.next_burn_cost(), 300);
+        game.shop_offers = vec![CardKind::Stimpack];
+        let deck_size = game.deck.len();
+        game.dispatch(Command::ShopBuy { index: 0 }).unwrap();
+        assert_eq!(game.gold, 80);
+        assert_eq!(game.deck.len(), deck_size + 1);
+        assert_eq!(game.next_burn_cost(), 300);
+        assert_eq!(Game::new("vanguard", 8).unwrap().next_burn_cost(), 100);
+    }
+}
+
+#[cfg(test)]
+mod card_pile_view_tests {
+    use super::*;
+
+    #[test]
+    fn combat_snapshot_lists_piles_without_draw_order() {
+        let mut game = Game::new("vanguard", 2026).unwrap();
+        game.dispatch(Command::SelectNode { id: 0 }).unwrap();
+        let state = game.snapshot();
+        let ids: Vec<_> = state.draw_pile.iter().map(|card| card.id).collect();
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        assert_eq!(ids, sorted);
+        assert_eq!(state.draw_pile.len(), state.draw_count);
+        assert_eq!(state.discard_pile.len(), state.discard_count);
+        assert_eq!(state.exhausted_pile.len(), state.exhausted_count);
+        assert_eq!(
+            state.hand.len() + state.draw_count + state.discard_count + state.exhausted_count,
+            state.deck_count
+        );
+    }
 }
 
 #[cfg(test)]

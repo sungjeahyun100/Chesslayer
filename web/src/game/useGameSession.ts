@@ -15,6 +15,8 @@ export function useGameSession(active: boolean, onEnterGame: () => void) {
   const [choices, setChoices] = useState<Character[]>([]);
   const [entries, setEntries] = useState<CompendiumSquad[]>([]);
   const [snapshot, setSnapshot] = useState<Snapshot | null>(null);
+  const [cardMovement, setCardMovement] = useState<{ sequence: number; before: Snapshot; next: Snapshot } | null>(null);
+  const cardSequence = useRef(0);
   const [runId, setRunId] = useState(0);
   const [error, setError] = useState("");
   const storage = useRunStorage();
@@ -53,6 +55,7 @@ export function useGameSession(active: boolean, onEnterGame: () => void) {
         context.blast = JSON.parse(engine.current.blast_cells(command.from));
       }
       const next: Snapshot = JSON.parse(engine.current.dispatch(JSON.stringify(command)));
+      setCardMovement({ sequence: ++cardSequence.current, before, next });
       setSnapshot(next);
       present(next, before, command, context);
       persist(engine.current.save(), next, developerRun.current);
@@ -69,6 +72,7 @@ export function useGameSession(active: boolean, onEnterGame: () => void) {
     developerRun.current = isDeveloperRun;
     const next: Snapshot = JSON.parse(game.snapshot());
     setSnapshot(next);
+    setCardMovement(null);
     setRunId((id) => id + 1);
     present(next, null, source);
     persist(game.save(), next, isDeveloperRun);
@@ -101,5 +105,5 @@ export function useGameSession(active: boolean, onEnterGame: () => void) {
       return inspection;
     } catch (cause) { setError(String(cause)); return null; }
   }
-  return { ready, choices, entries, snapshot, runId, error, setError, send, start, resume, inspectEnemy, storage, presentation };
+  return { ready, choices, entries, snapshot, cardMovement, runId, error, setError, send, start, resume, inspectEnemy, storage, presentation };
 }

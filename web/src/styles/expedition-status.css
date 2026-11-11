@@ -1,5 +1,8 @@
-.expedition-status-trigger { position: fixed; top: 17px; right: 5%; z-index: 125; padding: 9px 12px; font-size: 12px; }
-body:has(.expedition-status-trigger) .top-right { padding-right: 125px; }
+.expedition-toolbar { position: fixed; top: 17px; right: 5%; z-index: 125; display: flex; align-items: center; gap: 7px; }
+.expedition-status-trigger { gap: 0; padding: 9px 12px; font-size: 12px; white-space: nowrap; }
+.expedition-gold { display: inline-flex; align-items: center; gap: 4px; padding: 7px 9px; border: 1px solid #c8b278; border-radius: 4px; background: #fff9e8; color: #735420; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; box-shadow: 0 2px 8px #14251a1a; }
+.expedition-gold span { font-size: 15px; line-height: 1; }
+body:has(.expedition-toolbar) .top-right { padding-right: 185px; }
 .expedition-status-overlay { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 20px; background: #10241cbb; }
 .expedition-status-dialog { width: min(1250px, 100%); max-height: min(880px, calc(100dvh - 40px)); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #b8a47a; border-radius: 8px; background: #f5f3ec; box-shadow: 0 24px 80px #071c17a6; }
 .expedition-status-heading { flex: none; display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 20px 26px 17px; border-bottom: 1px solid #d8ddcf; }

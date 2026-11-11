@@ -16,6 +16,7 @@ import type { EndlessRecord } from "../endless";
 
 interface Props {
   snapshot: Snapshot;
+  cardMovement: { sequence: number; before: Snapshot; next: Snapshot } | null;
   displayState: Snapshot;
   send: (command: Command) => boolean;
   inspectEnemy: (cell: number) => EnemyInspection | null;
@@ -32,7 +33,7 @@ interface Props {
   endlessRunBest: EndlessRecord;
 }
 
-export function GameScreen({ snapshot, displayState: state, send: dispatchCommand, inspectEnemy, setError, onRestart,
+export function GameScreen({ snapshot, cardMovement, displayState: state, send: dispatchCommand, inspectEnemy, setError, onRestart,
   developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, endlessBest, endlessRunBest }: Props) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
@@ -72,9 +73,12 @@ export function GameScreen({ snapshot, displayState: state, send: dispatchComman
   const board = <RunBoard state={state} input={input} rewardUpgradeOpen={rewardUpgradeOpen}
     lastEnemyMove={lastEnemyMove} boardRevision={boardRevision} boardRef={boardRef} animation={animation} />;
   return <>
-    {!presentationBusy && createPortal(<button className="primary expedition-status-trigger" onClick={() => setStatusOpen(true)} aria-haspopup="dialog" aria-expanded={statusOpen}>원정 현황</button>, document.body)}
+    {createPortal(<div className="expedition-toolbar">
+      <span className="expedition-gold" aria-label={`보유 금화 ${snapshot.gold}`}><span aria-hidden="true">🪙</span>{snapshot.gold}</span>
+      {!presentationBusy && <button className="primary expedition-status-trigger" onClick={() => setStatusOpen(true)} aria-haspopup="dialog" aria-expanded={statusOpen}>원정 현황</button>}
+    </div>, document.body)}
     {showMap ? <ActMap state={state} send={send} coveredByReward={rewardRevisit} /> : (
-      <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined} data-card-upgrade-open={!!input.focusedUpgrade || undefined}>
+      <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined}>
         <nav className="node-navigation" aria-label="원정 위치">
           <span>{floorLabel(state.floor, state.final_battle)} / {(state.map.nodes.find((node) => node.current)?.row ?? 0) + 1}번째 지점
             · {state.node_kind && nodeTypes[state.node_kind].label}
@@ -84,7 +88,7 @@ export function GameScreen({ snapshot, displayState: state, send: dispatchComman
           ? <RestScreen state={state} input={input} board={board} reward={rewardUpgradeOpen}
               history={rewardUpgradeOpen ? rewardUpgradeHistory : upgradeHistory}
               onClose={() => { input.chooseRest(null); if (rewardUpgradeOpen) closeRewardUpgrade(); }} />
-          : <BattleScreen state={state} input={input} board={board} />)}
+          : <BattleScreen state={state} cardState={snapshot.phase === "combat" ? snapshot : state} cardMovement={cardMovement} input={input} board={board} />)}
         {!["combat", "rest", "reward"].includes(state.phase) && <OutcomeScreen state={state} send={send}
           endlessBest={endlessBest} endlessRunBest={endlessRunBest}
           onRestart={() => { if (!statusOpen && !presentationBusy) onRestart(); }} outcomeRef={outcomeRef} />}

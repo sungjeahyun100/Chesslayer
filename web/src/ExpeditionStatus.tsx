@@ -86,8 +86,8 @@ export function ExpeditionStatus({ state, onClose, developerMode = false, onUpgr
           <section className="status-section status-deck" aria-labelledby="status-deck-title">
             <h3 id="status-deck-title">보유 카드 <span>{state.deck.length}</span></h3>
             <div className="status-deck-list" aria-label="보유 카드 목록">
-              {state.deck.map((card, index) => <article key={index} className="playing-card status-deck-card" data-card-kind={card.kind}>
-                <CardFace card={card} />
+              {state.deck.map((card) => <article key={card.id} className="playing-card status-deck-card" data-card-kind={card.definition.kind}>
+                <CardFace card={card.definition} />
               </article>)}
               {state.deck.length === 0 && <p className="status-deck-empty">보유 카드가 없습니다.</p>}
             </div>

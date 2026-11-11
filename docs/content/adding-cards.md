@@ -8,7 +8,7 @@
 
 강화 카드는 `.with_selection(SelectionMode::Upgrade, targets, effect)`를 사용한다. `selection.upgrades`는 `(PieceId, PieceType)` 쌍이며 비용은 쌍의 수다. Rust가 최소 1개와 마나를 확인한 뒤 효과를 실행한다. 각 경로가 현재 기물 종류에서 이어지는 합법적인 한 단계인지 효과에서 검증한다. `Game::resolve_selection`은 Battle 복제본에서 효과를 실행하고 성공할 때만 보드, 코스트, 손패를 반영한다. 실패 시 세 상태 모두 그대로 남는다.
 
-WASM 명령은 기존 `{"type":"play_card","id":42,"target":9}`와 새 `{"type":"play_card_selection","id":42,"targets":[9,10]}` 또는 `{"type":"play_card_selection","id":42,"upgrades":[{"id":9,"target":8}]}`를 받는다. 선택과 취소는 UI의 임시 상태이며 명령 기록에 남지 않는다. 확인 시에만 명령을 보낸다. 대상 후보와 강화 경로 목록은 Rust 스냅샷에서 받고 React는 사용한 효과를 재계산하지 않는다.
+WASM 명령은 기존 `{"type":"play_card","id":42,"target":9}`와 새 `{"type":"play_card_selection","id":42,"targets":[9,10]}` 또는 `{"type":"play_card_selection","id":42,"upgrades":[{"id":9,"target":8}]}`를 받는다. 선택과 취소는 UI의 임시 상태이며 명령 기록에 남지 않는다. 확인 시에만 명령을 보낸다. 대상 후보와 `CardView.upgrade_options`의 합법적인 강화 결과는 Rust 스냅샷에서 받고 React는 강화 조건을 재계산하지 않는다. 카드 일시 강화의 복합 기물 조건에는 영구 로스터 보유 종류와 현재 전투 보드에서 살아 있는 일시 강화 종류를 모두 인정한다. 쉼터의 영구 강화 조건은 영구 로스터만 사용한다.
 
 `리미터 해제`는 양측 기물에 즉시 적용되며, 대상은 총 3회 이동할 수 있다. 대상의 남은 이동 횟수는 일반 행동과 별도로 확보하고 턴을 넘겨도 유지한다. 세 번째 이동으로 남은 횟수가 0이 되면 로얄을 포함한 대상이 즉시 사망하고 그 턴도 종료된다. 적은 AI가 남은 이동을 우선 사용한다. 전투 종료 시 효과 상태를 지운다. `일시 강화`는 Battle 보드의 종류만 바꾸며 영구 로스터 종류와 강화 이력은 바꾸지 않는다.
 

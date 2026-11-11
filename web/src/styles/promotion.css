@@ -18,9 +18,27 @@
 .promotion-options button:hover, .promotion-options button:focus-visible { background: #e2ece0; border-color: #39765e; }
 .promotion-options img { display: block; width: 64px; height: 64px; max-width: 100%; margin: 0 auto 8px; }
 .promotion-options span { font-size: 12px; }
+.card-upgrade-picker {
+  box-sizing: border-box;
+  left: 50%;
+  right: auto;
+  top: 8%;
+  transform: translateX(-50%);
+  width: min(460px, calc(100% - 16px));
+  max-height: min(72dvh, calc(100% - 16px));
+  overflow-y: auto;
+}
+.card-upgrade-picker .promotion-heading { align-items: center; margin-bottom: 12px; }
+.card-upgrade-picker .promotion-heading strong { font-size: 15px; }
+.card-upgrade-picker .promotion-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
+  gap: 8px;
+}
+.card-upgrade-picker .promotion-options button { min-height: 100px; }
 @media (max-width: 600px) {
   .promotion-picker { left: 6%; right: 0; padding: 12px; }
+  .card-upgrade-picker { left: 50%; right: auto; }
   .promotion-options img { width: 46px; height: 46px; }
   .promotion-options span { font-size: 11px; }
 }
-

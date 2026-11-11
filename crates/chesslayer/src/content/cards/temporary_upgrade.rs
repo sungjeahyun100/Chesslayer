@@ -1,5 +1,5 @@
 use super::{CardDefinition, CardKind, CardSelection, SelectionMode};
-use crate::{content::pieces, game::engine_error, Battle, PieceId, PLAYER};
+use crate::{game::engine_error, Battle, PieceId, PLAYER};
 
 pub fn definition() -> CardDefinition {
     CardDefinition::new(CardKind::TemporaryUpgrade, "일시 강화", 0,
@@ -13,9 +13,7 @@ fn targets(battle: &Battle) -> Vec<PieceId> {
         .cells()
         .iter()
         .flatten()
-        .filter(|p| {
-            p.owner == PLAYER && pieces::definition(p.kind).is_some_and(|d| !d.upgrades.is_empty())
-        })
+        .filter(|p| p.owner == PLAYER && !battle.temporary_upgrade_options(p.id).is_empty())
         .map(|p| p.id)
         .collect()
 }

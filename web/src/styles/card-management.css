@@ -1,0 +1,102 @@
+.game-layout[data-phase="combat"] .card-management {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+  align-items: start;
+  gap: 6px;
+  min-width: 0;
+}
+.game-layout[data-phase="combat"] .hand-center { display: contents; }
+.game-layout[data-phase="combat"] .hand-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  grid-column: 2;
+  grid-row: 1;
+  min-height: 29px;
+}
+.game-layout[data-phase="combat"] .hand { grid-column: 1 / -1; grid-row: 2; }
+.game-layout[data-phase="combat"] .hand-heading h2 { white-space: nowrap; }
+.exhaust-count { color: #89917e; font-size: 10px; white-space: nowrap; }
+.exhaust-count b { color: #526848; font-size: 11px; margin-left: 3px; }
+.card-pile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  padding: 1px 0 6px;
+  border: 0;
+  background: transparent;
+  color: #35513d;
+  cursor: pointer;
+}
+.card-pile[data-pile="draw"] { grid-column: 1; grid-row: 1; }
+.card-pile[data-pile="discard"] { grid-column: 3; grid-row: 1; }
+.card-pile:hover .pile-stack, .card-pile:focus-visible .pile-stack { transform: translateY(-4px); }
+.pile-stack {
+  position: relative;
+  display: block;
+  width: 47px;
+  height: 68px;
+  transition: transform .2s ease;
+}
+.pile-stack::before, .pile-stack::after, .pile-card-back, .card-flight-back {
+  border: 1px solid #8c9d7e;
+  border-radius: 5px;
+  background: repeating-linear-gradient(45deg, #45634c 0 4px, #54735a 4px 8px);
+  box-shadow: inset 0 0 0 4px #e6e4d4, inset 0 0 0 6px #78917a, 0 3px 6px #23372b30;
+}
+.pile-stack::before, .pile-stack::after {
+  content: "";
+  position: absolute;
+  inset: 2px;
+  transform: translate(-3px, 3px) rotate(-3deg);
+}
+.pile-stack::after { transform: translate(2px, 1px) rotate(2deg); }
+.pile-card-back { position: absolute; inset: 2px; z-index: 1; display: block; }
+.discard-pile .pile-card-back, .discard-pile .pile-stack::before, .discard-pile .pile-stack::after {
+  filter: sepia(.22) saturate(.7);
+}
+.pile-caption { font: 700 11px "Noto Sans KR", sans-serif; white-space: nowrap; }
+.pile-caption b { display: block; margin-top: 2px; font-size: 14px; color: #6f774e; }
+.card-list-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 155;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: #10241cbb;
+}
+.card-list-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(830px, 100%);
+  max-height: min(760px, calc(100dvh - 32px));
+  border: 1px solid #b8a47a;
+  border-radius: 8px;
+  background: #f5f3ec;
+  box-shadow: 0 24px 80px #071c17a6;
+  overflow: hidden;
+}
+.card-list-dialog header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid #d8ddcf; }
+.card-list-dialog h2 { font: 700 21px "Noto Serif KR", Georgia, serif; color: #244e40; }
+.card-list-dialog h2 span { margin-left: 7px; color: #8b713a; font: 700 13px "Noto Sans KR", sans-serif; }
+.card-list-dialog header button { border: 1px solid #9aaf98; border-radius: 4px; padding: 7px 12px; background: #fffef8; color: #244e40; cursor: pointer; }
+.card-list-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; padding: 16px 20px 20px; overflow-y: auto; min-height: 0; }
+.card-list-grid .playing-card { width: 100%; min-width: 0; box-sizing: border-box; }
+.card-list-grid .playing-card:hover { transform: none; }
+.card-motion-layer { position: fixed; inset: 0; z-index: 125; pointer-events: none; overflow: visible; }
+.card-flight { position: fixed; transform-origin: top left; perspective: 800px; will-change: transform, opacity; }
+.card-flight-inner { position: relative; width: 100%; height: 100%; transform-style: preserve-3d; }
+.card-flight .playing-card { box-sizing: border-box; width: 100%; min-width: 0; height: 100%; margin: 0; overflow: hidden; }
+.card-flight-front, .card-flight-inner > .card-flight-back { position: absolute; inset: 0; backface-visibility: hidden; }
+.card-flight-inner > .card-flight-back { transform: rotateY(180deg); }
+.pile-transfer-back { width: 100%; height: 100%; box-sizing: border-box; }
+@media (max-width: 700px) {
+  .game-layout[data-phase="combat"] .card-management { grid-template-columns: 48px minmax(0, 1fr) 48px; gap: 6px; }
+  .pile-stack { width: 43px; height: 62px; }
+  .card-list-overlay { padding: 0; }
+  .card-list-dialog { width: 100%; max-height: 100dvh; height: 100dvh; border-radius: 0; }
+}
+@media (prefers-reduced-motion: reduce) { .pile-stack { transition: none; } }

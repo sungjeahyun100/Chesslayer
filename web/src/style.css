@@ -12,6 +12,7 @@
 @import "./styles/map.css";
 @import "./styles/pieces.css";
 @import "./styles/combat-layout.css";
+@import "./styles/card-management.css";
 @import "./styles/combat-effects.css";
 @import "./styles/rest.css";
 @import "./styles/promotion.css";

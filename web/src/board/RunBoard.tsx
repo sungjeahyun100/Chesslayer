@@ -5,6 +5,7 @@ import type { BoardMove } from "../game/useGamePresentation";
 import type { CombatPlan } from "../game/combatPlan";
 import { PieceImage } from "../PieceImage";
 import { PromotionPicker } from "../PromotionPicker";
+import { CardUpgradePanel } from "../CardUpgradePanel";
 import { ChessBoard, BoardSquare } from "./ChessBoard";
 import { BoardPiece } from "./BoardPiece";
 import { TargetPreview } from "./TargetPreview";
@@ -139,6 +140,10 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
           onChoose={input.confirmPromotion}
           onCancel={input.cancelPromotion}
         />
+      )}
+      {targetCard?.definition.selection_mode === "upgrade" && input.focusedUpgrade && (
+        <CardUpgradePanel key={input.focusedUpgrade.id} card={targetCard} piece={input.focusedUpgrade}
+          paths={state.upgrade_paths} onConfirm={input.confirmCardUpgrade} onCancel={input.closeCardUpgrade} />
       )}
       <div className="file-labels">
         {"abcdefgh".split("").map((f) => (

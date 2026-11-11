@@ -1,53 +1,3 @@
-.game-layout[data-card-upgrade-open] {
-  max-width: 1160px;
-  grid-template-columns: minmax(0, 560px) minmax(380px, 480px);
-  gap: 20px 28px;
-  align-items: start;
-}
-.game-layout[data-card-upgrade-open] .sidebar { padding-top: 0; }
-@media (max-width: 1000px) {
-  .game-layout[data-card-upgrade-open] { display: flex; flex-direction: column; }
-  .game-layout[data-card-upgrade-open] .battle-column,
-  .game-layout[data-card-upgrade-open] .sidebar { width: 100%; max-width: 620px; margin-inline: auto; }
-}
-@media (max-width: 650px) {
-  .game-layout[data-card-upgrade-open] .sidebar { display: flex; padding: 0 8px; }
-  .game-layout[data-card-upgrade-open] .card-upgrade-picker { width: 100%; padding: 16px; }
-  .game-layout[data-card-upgrade-open] .card-upgrade-portrait { width: 76px; height: 76px; }
-  .game-layout[data-card-upgrade-open] .card-upgrade-portrait .piece-image { width: 66px; height: 66px; }
-}
-
-/* Keep the decision controls in view while the tree uses the available height. */
-.card-upgrade-picker {
-  display: flex;
-  flex-direction: column;
-  height: min(760px, calc(100dvh - 100px));
-  min-height: 340px;
-  scroll-margin-top: 80px;
-}
-.card-upgrade-heading { align-items: center; }
-.card-upgrade-heading h2 { margin: 0; }
-.card-upgrade-piece { gap: 11px; margin: 10px 0 4px; min-width: 0; }
-.card-upgrade-portrait { width: 46px; height: 46px; border-radius: 8px; }
-.card-upgrade-portrait .piece-image { width: 40px; height: 40px; }
-.card-upgrade-piece strong { margin: 0; font-size: 16px; white-space: nowrap; }
-.card-upgrade-piece strong span { font: 12px sans-serif; color: #6b765f; }
-.card-upgrade-cost { margin-left: auto; white-space: nowrap; font-size: 12px; color: #5a714e; }
-.card-upgrade-picker .skill-tree { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.card-upgrade-picker .skill-tree-heading { padding: 4px 0 8px; }
-.card-upgrade-picker .skill-tree-heading h3 { font-size: 18px; }
-.card-upgrade-picker .skill-map { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-.card-upgrade-picker .skill-legend { padding: 9px 12px 2px; }
-.card-upgrade-picker .skill-viewport { flex: 1; min-height: 110px; height: auto; }
-.card-upgrade-picker .skill-map-toolbar { padding: 5px 8px; }
-.card-upgrade-selection { flex: none; margin: 8px 0 0; padding: 8px 0 0; max-height: 84px; overflow: auto; }
-.card-upgrade-selection strong { font-size: 13px; color: #304b36; }
-.card-upgrade-selection p { margin-top: 3px; font-size: 12px; line-height: 1.45; color: #66735d; }
-.card-upgrade-selection small { display: block; margin-top: 3px; color: #8b4238; }
-.card-upgrade-actions { flex: none; display: flex; align-items: center; gap: 12px; padding-top: 10px; }
-.card-upgrade-actions .primary { flex: 1; min-height: 44px; }
-.card-upgrade-actions .text-button { flex: none; margin: 0; min-height: 40px; }
-
 .rest-workshop { display: flex; flex-direction: column; height: min(780px, calc(100dvh - 100px)); min-height: 340px; scroll-margin-top: 80px; }
 .rest-workshop .rest-detail-heading { flex: none; margin: 0 0 8px; }
 .rest-workshop .rest-detail-heading h2 { font: 600 21px "Noto Serif KR", serif; color: #284735; }
@@ -83,10 +33,7 @@
   .rest-workshop .skill-tree { flex: 1; }
 }
 @media (max-width: 650px) {
-  .game-layout[data-card-upgrade-open] .card-upgrade-portrait { width: 46px; height: 46px; }
-  .game-layout[data-card-upgrade-open] .card-upgrade-portrait .piece-image { width: 40px; height: 40px; }
-  .card-upgrade-picker, .rest-workshop { min-height: 0; height: calc(100dvh - 88px); }
+  .rest-workshop { min-height: 0; height: calc(100dvh - 88px); }
   .rest-workshop-actions { flex-wrap: wrap; gap: 5px 10px; }
   .rest-workshop-actions .text-button:last-child { margin-left: auto; }
 }
-

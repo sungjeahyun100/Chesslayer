@@ -47,6 +47,20 @@
 .postbattle-options .piece-image { width: 30px; height: 30px; }
 .postbattle-options small { color: #9a6547; }
 .shop-cards { display: flex; justify-content: center; flex-wrap: wrap; gap: 14px; margin: 25px 0; }
+.shop-tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 8px; margin: 19px 0; }
+.shop-tabs button { border: 1px solid #aebd9e; border-radius: 4px; padding: 9px 14px; background: #f2f6e9; color: #31503b; font-size: 12px; font-weight: 700; }
+.shop-tabs button.active { border-color: #b58c43; background: #f2e8cc; color: #6f5120; }
+.shop-burn { max-width: 760px; margin: 0 auto 22px; }
+.shop-burn > p { font-size: 12px; }
+.shop-burn-layout { display: grid; grid-template-columns: minmax(170px, 1fr) minmax(190px, 1fr); gap: 16px; align-items: start; }
+.shop-burn-list { display: grid; align-content: start; gap: 5px; max-height: 360px; overflow-y: auto; padding: 3px; }
+.shop-burn-list button { display: flex; justify-content: space-between; gap: 8px; padding: 8px 10px; border: 1px solid #c8d4bf; border-radius: 4px; background: #fffef8; color: #35523b; text-align: left; font-size: 12px; }
+.shop-burn-list button.selected { border-color: #ae8746; background: #f1eedc; }
+.shop-burn-list small { color: #8b713a; }
+.shop-burn-detail { display: grid; justify-items: center; gap: 8px; }
+.shop-burn-detail .playing-card { width: min(100%, 210px); box-sizing: border-box; }
+.shop-burn-detail p { margin: 0; font-size: 12px; }
+.shop-burn-detail .primary:disabled { opacity: .55; cursor: not-allowed; }
 .location-actions { display: flex; gap: 22px; justify-content: center; align-items: center; margin-top: 25px; }
 .relic-panel > summary { cursor: pointer; padding: 9px 0; }
 .relic-panel > summary::after { content: '+'; color: #657957; }
@@ -67,4 +81,6 @@
   .launch { align-items: flex-end; }
   .launch .muted { font-size: 11px; }
   .location-actions { flex-direction: column; gap: 12px; }
+  .shop-burn-layout { grid-template-columns: minmax(0, 1fr); }
+  .shop-burn-list { max-height: 170px; }
 }

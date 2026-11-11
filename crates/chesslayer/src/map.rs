@@ -58,7 +58,7 @@ impl MapNode {
             ),
             NodeKind::Boss => "격파하면 다음 층과 보스 부대를 해금하고 이번 런을 마칩니다.".into(),
             NodeKind::Event => "따뜻한 식사로 아군 전체의 허기를 해소합니다.".into(),
-            NodeKind::Shop => "전투에서 얻은 금화로 부대 전용 카드를 구입합니다.".into(),
+            NodeKind::Shop => "금화로 부대 전용 카드를 구입하거나 덱의 카드를 소각합니다.".into(),
         }
     }
 }

@@ -473,7 +473,7 @@ fn complete_upgrade_graph_has_no_cycle() {
 }
 
 #[test]
-fn temporary_card_upgrade_uses_permanent_kinds_for_unlock() {
+fn temporary_card_upgrade_counts_permanent_kinds_but_not_untracked_board_pieces() {
     let build = |has_donor: bool| {
         let mut players = Battle::standard_roster();
         for p in &mut players {

@@ -30,12 +30,12 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
     const cancel = (event: KeyboardEvent) => {
       if (event.key !== "Escape" || policy.blocked) return;
       if (rewardUpgradeOpen) closeRewardUpgrade();
-      dispatch({ type: "reset" });
+      dispatch(input.mode === "card" && input.focus !== null ? { type: "focus-upgrade", id: null } : { type: "reset" });
       setError("");
     };
     window.addEventListener("keydown", cancel);
     return () => window.removeEventListener("keydown", cancel);
-  }, [policy.blocked, rewardUpgradeOpen, closeRewardUpgrade, setError]);
+  }, [policy.blocked, rewardUpgradeOpen, closeRewardUpgrade, setError, input]);
 
   function execute(command: Command) {
     if (policy.blocked) return;
@@ -140,7 +140,7 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
     execute({ type: "move", from: input.from, to: input.to, promotion: kind });
   }
   function confirmCardUpgrade(target: number) {
-    if (!policy.act || !focusedUpgrade) return;
+    if (policy.blocked || !targetCard || !focusedUpgrade) return;
     dispatch({ type: "stage-upgrade", target });
     returnToBoard();
   }

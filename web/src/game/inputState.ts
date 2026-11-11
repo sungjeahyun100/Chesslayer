@@ -87,7 +87,7 @@ export interface InputGate {
 // Enemy inspection remains available during the enemy turn, as before.
 export function inputPolicy(state: Pick<Snapshot, "phase" | "turn" | "effect_choice">, input: InputState, gate: InputGate) {
   const blocked = gate.modalOpen || gate.presentationBusy;
-  const board = !blocked && input.mode !== "promotion";
+  const board = !blocked && input.mode !== "promotion" && !(input.mode === "card" && input.focus !== null);
   return {
     blocked,
     board,
