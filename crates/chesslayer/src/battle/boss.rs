@@ -475,6 +475,7 @@ impl Battle {
         ));
         let mut rays = vec![];
         let mut hits = vec![];
+        let mut triggered_wards = vec![];
         for direction in directions {
             // Resolve against the board at this ray's firing time. Earlier rays
             // can trigger explosions which remove a later ray's first blocker.
@@ -493,6 +494,7 @@ impl Battle {
                     if hit {
                         if self.wards.remove(&victim.id) {
                             result = ShotgunResult::Ward;
+                            triggered_wards.push((victim.id, target));
                             self.events.push(format!(
                                 "가호: {}에게 명중한 사격을 막았습니다.",
                                 piece_name(victim.kind)
@@ -529,6 +531,13 @@ impl Battle {
             rays,
             hits,
         });
+        for (piece_id, at) in triggered_wards {
+            self.combat_events.push(CombatEvent::StatusTriggered {
+                piece_id,
+                at,
+                status: "ward",
+            });
+        }
         self.sync_players();
         self.update_result(ResultReason::RoyalCaptured);
         Ok(true)

@@ -48,6 +48,7 @@ export function App() {
       endlessBest={storage.endlessBest} endlessRunBest={storage.endlessRunBest}
       presentationBusy={presentation.presentationBusy} lastEnemyMove={presentation.lastEnemyMove} boardRevision={presentation.boardRevision}
       animation={presentation.animation}
+      statusEffects={presentation.statusEffects}
       onRestart={() => { setMode(snapshot.mode); setScreen("choose"); setError(""); }} />}
     <footer>CHESSLAYER <span>원정과 부대 해금은 이 브라우저에 저장됩니다.</span></footer>
   </>;

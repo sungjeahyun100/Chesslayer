@@ -2409,6 +2409,11 @@ pub enum CombatEventView {
         from: usize,
         to: usize,
     },
+    StatusTriggered {
+        piece_id: PieceId,
+        cell: usize,
+        status: &'static str,
+    },
 }
 #[derive(Serialize)]
 pub struct ShotgunRayView {
@@ -2424,6 +2429,15 @@ pub struct ShotgunHitView {
 impl From<&CombatEvent> for CombatEventView {
     fn from(event: &CombatEvent) -> Self {
         match event {
+            CombatEvent::StatusTriggered {
+                piece_id,
+                at,
+                status,
+            } => Self::StatusTriggered {
+                piece_id: *piece_id,
+                cell: cell(*at),
+                status: *status,
+            },
             CombatEvent::Shotgun {
                 actor_id,
                 from,

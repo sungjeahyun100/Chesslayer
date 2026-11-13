@@ -1,0 +1,84 @@
+.board-statuses {
+  position: absolute; top: 1%; left: 2%; right: 2%; z-index: 9;
+  display: flex; flex-wrap: wrap; align-content: start; gap: 1px;
+  pointer-events: none; line-height: 1;
+}
+.royal-piece .board-statuses { right: 19%; }
+.board-status {
+  position: relative; box-sizing: border-box; flex: 0 0 auto;
+  width: clamp(9px, 2.1vw, 15px); height: clamp(9px, 2.1vw, 15px);
+  display: grid; place-items: center; border: 1px solid #fffbd0;
+  border-radius: 3px; background: var(--status-color, #526d63);
+  color: #fffdf4; box-shadow: 0 1px 2px #1a2919a6;
+  font: 700 clamp(7px, 1.45vw, 11px)/1 "DejaVu Sans", sans-serif;
+  pointer-events: auto; cursor: help;
+}
+.board-status-icon { display: block; transform: translateY(-.3px); }
+.board-status-count {
+  position: absolute; right: -2px; bottom: -3px; min-width: 8px;
+  padding: 1px; border-radius: 5px; background: #211e28;
+  color: white; font: 700 7px/1 sans-serif; text-align: center;
+}
+.board-statuses.dense { gap: 0; }
+.board-statuses.dense .board-status { width: clamp(7px, 1.45vw, 10px); height: clamp(7px, 1.45vw, 10px); font-size: clamp(6px, 1.1vw, 8px); }
+.board-status-ingredient { --status-color: #8b6743; }
+.board-status-blessing { --status-color: #ba8c2d; }
+.board-status-hunger { --status-color: #922f31; }
+.board-status-madness { --status-color: #7e4b9c; }
+.board-status-guilt { --status-color: #454056; }
+.board-status-agility { --status-color: #218b91; }
+.board-status-weakness { --status-color: #8d6149; }
+.board-status-incapacitated { --status-color: #783e43; }
+.board-status-dining { --status-color: #727c38; }
+.board-status-death_threshold { --status-color: #952d3b; }
+.board-status-bell { --status-color: #b37a2d; }
+.board-status-temporary { --status-color: #648379; }
+.board-status-aimed { --status-color: #416f9c; }
+.board-status-propellant { --status-color: #446d8a; }
+.board-status-entrenched_pending { --status-color: #63734e; }
+.board-status-entrenched_ready { --status-color: #58784d; }
+.board-status-suppressed { --status-color: #685877; }
+.board-status-reckless { --status-color: #ad4d39; }
+.board-status-ward { --status-color: #b18b3c; }
+
+.status-effect-layer { position: absolute; inset: 0; z-index: 9; pointer-events: none; overflow: hidden; }
+.status-effect { position: absolute; width: 12.5%; height: 12.5%; transform: translate(-50%, -50%); color: var(--effect-color, #88c09b); }
+.status-effect-ring, .status-effect-core, .status-effect-spark { position: absolute; display: block; }
+.status-effect-ring { inset: 7%; border: 2px solid currentColor; border-radius: 50%; box-shadow: 0 0 9px currentColor, inset 0 0 8px currentColor; animation: status-ring .42s ease-out both; }
+.status-effect-core { inset: 30%; border-radius: 50%; background: currentColor; filter: blur(5px); animation: status-core .35s ease-out both; }
+.status-effect-spark { width: 12%; height: 12%; border-radius: 50%; background: currentColor; box-shadow: 0 0 6px currentColor; animation: status-spark .42s ease-out both; }
+.status-effect-spark.one { left: 10%; top: 15%; --dx: -100%; --dy: -140%; }
+.status-effect-spark.two { right: 12%; bottom: 18%; --dx: 110%; --dy: 100%; }
+.status-effect-ingredient { --effect-color: #c6a06c; }
+.status-effect-blessing, .status-effect-ward { --effect-color: #ffe59a; }
+.status-effect-hunger { --effect-color: #b13e48; }
+.status-effect-madness { --effect-color: #bf75ed; }
+.status-effect-guilt { --effect-color: #514a72; }
+.status-effect-agility { --effect-color: #67e8e2; }
+.status-effect-weakness, .status-effect-incapacitated { --effect-color: #ad6e6e; }
+.status-effect-dining { --effect-color: #b5c270; }
+.status-effect-death_threshold { --effect-color: #ef444e; }
+.status-effect-bell { --effect-color: #f4b95f; }
+.status-effect-temporary { --effect-color: #9ecbb4; }
+.status-effect-aimed, .status-effect-propellant { --effect-color: #8dc6f2; }
+.status-effect-entrenched_pending, .status-effect-entrenched_ready { --effect-color: #a6bb7c; }
+.status-effect-suppressed { --effect-color: #9a85ba; }
+.status-effect-reckless { --effect-color: #ed8569; }
+.status-effect-madness .status-effect-ring { border-style: dashed; animation: status-madness .42s ease-out both; }
+.status-effect-guilt .status-effect-core { inset: 10%; background: #242033; filter: blur(6px); }
+.status-effect-agility .status-effect-ring { border-radius: 2px; border-left: 0; border-right: 0; transform: skewX(-28deg); }
+.status-effect-hunger .status-effect-ring { border-width: 4px; animation: status-hunger .42s ease-out both; }
+.status-effect-death_threshold .status-effect-ring { border-radius: 20%; border-style: dashed; transform: rotate(28deg); }
+.status-effect-ward .status-effect-core { inset: 12%; background: transparent; filter: none; }
+.status-effect-ward .status-effect-core::after { content: "✝"; position: absolute; inset: 0; display: grid; place-items: center; font: 700 clamp(20px, 4vw, 38px)/1 serif; text-shadow: 0 0 8px currentColor; }
+.status-effect-remove { filter: grayscale(.75); opacity: .65; }
+.status-effect-remove .status-effect-ring { animation-direction: reverse; }
+.status-effect-stack .status-effect-ring { border-width: 3px; }
+@keyframes status-ring { from { opacity: 0; transform: scale(.25); } 25% { opacity: 1; } to { opacity: 0; transform: scale(1.7); } }
+@keyframes status-core { from { opacity: 0; transform: scale(.3); } 35% { opacity: .8; } to { opacity: 0; transform: scale(1.5); } }
+@keyframes status-spark { from { opacity: 0; transform: translate(0, 0) scale(.4); } 30% { opacity: 1; } to { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.1); } }
+@keyframes status-madness { from { opacity: 0; transform: rotate(-20deg) scale(.3); } 25% { opacity: 1; } 55% { transform: rotate(20deg) scale(1.15); } to { opacity: 0; transform: rotate(-8deg) scale(1.6); } }
+@keyframes status-hunger { from { opacity: 0; transform: scale(.5); } 35% { opacity: 1; transform: scale(1.2); } 65% { transform: scale(.8); } to { opacity: 0; transform: scale(1.5); } }
+@media (max-width: 480px) { .board-statuses { gap: 0; } .board-status { width: 9px; height: 9px; font-size: 7px; } .board-status-count { font-size: 6px; } }
+@media (prefers-reduced-motion: reduce) { .status-effect-layer { display: none; } }
+.piece-statuses small { display: block; margin-top: 2px; font-size: 9px; font-weight: 400; line-height: 1.35; }

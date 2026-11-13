@@ -68,7 +68,8 @@ export type CombatEvent =
   | { kind: "shotgun"; actor_id: number; from: number; toward: number; area: number[];
       rays: { direction: [number, number]; cells: number[] }[];
       hits: { cell: number; piece_id: number; result: "hit" | "miss" | "ward" | "corpse" }[] }
-  | { kind: "chain_pull"; boss_id: number; boss_cell: number; piece_id: number; from: number; to: number };
+  | { kind: "chain_pull"; boss_id: number; boss_cell: number; piece_id: number; from: number; to: number }
+  | { kind: "status_triggered"; piece_id: number; cell: number; status: "death_threshold" | "ward" };
 export interface CardDefinition {
   kind: string;
   name: string;

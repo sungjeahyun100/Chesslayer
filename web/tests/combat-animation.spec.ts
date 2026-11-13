@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { combatPlan, combatPresentationSteps } from "../src/game/combatPlan";
+import { statusChanges, statusVisuals } from "../src/game/statusVisuals";
 import type { CombatEvent, Piece, Snapshot } from "../src/types";
 import { dispatch, newRun, snapshot } from "./helpers/uiRuns";
 
@@ -10,6 +11,66 @@ const piece = (id: number, key: string, cell: number, ward = false): Piece => ({
 });
 const state = (pieces: Piece[], log: string[] = []): Snapshot =>
   ({ phase: "combat", pieces, log } as Snapshot);
+
+test("every engine status label has a distinct board icon and stack value", () => {
+  const labels = ["식재료", "황충의 축복", "기아", "광기 2", "죄책감 3", "민첩 1", "약화 2",
+    "영구 전투불능", "식사의 예법", "죽음의 문턱", "다음 수 만찬의 종소리", "임시 기물",
+    "다음 사격 명중률 +15%p", "다음 관통 +20%p", "진지 유지 중", "방어 진지 강화",
+    "이동 제압", "무모한 돌격"];
+  const visuals = statusVisuals({ statuses: labels, ward: true });
+  expect(visuals).toHaveLength(labels.length + 1);
+  expect(new Set(visuals.map((visual) => visual.icon)).size).toBe(visuals.length);
+  expect(visuals.find((visual) => visual.kind === "madness")?.count).toBe(2);
+  expect(visuals.find((visual) => visual.kind === "hunger")?.label).toBe("기아");
+});
+
+test("status feedback follows actual simultaneous changes, not piece movement", () => {
+  const before = state([piece(1, "king", 52), { ...piece(2, "king", 4, true), statuses: ["광기 1", "죄책감 2"] }]);
+  const after = { ...state([piece(1, "king", 44), { ...piece(2, "king", 12), ward: false,
+    statuses: ["광기 2", "민첩 1"] }]), combat_events: [{ kind: "status_triggered" as const,
+      piece_id: 2, cell: 12, status: "ward" as const }] };
+  expect(statusChanges(before, after)).toEqual([
+    { pieceId: 2, cell: 12, kind: "ward", event: "trigger" },
+    { pieceId: 2, cell: 12, kind: "madness", event: "stack" },
+    { pieceId: 2, cell: 12, kind: "agility", event: "apply" },
+    { pieceId: 2, cell: 12, kind: "guilt", event: "remove" },
+  ]);
+  expect(statusChanges(before, state([{ ...before.pieces[0], cell: 44 }, before.pieces[1]]))).toEqual([]);
+  const lower = state([{ ...before.pieces[1], statuses: ["광기 1", "죄책감 1"] }]);
+  expect(statusChanges(state([before.pieces[1]]), lower)).toEqual([]);
+});
+
+test("death threshold trigger is reported even when the piece disappears", () => {
+  const before = state([{ ...piece(1, "king", 52), statuses: ["죽음의 문턱"] }]);
+  const after = { ...state([]), combat_events: [{ kind: "status_triggered" as const,
+    piece_id: 1, cell: 52, status: "death_threshold" as const }] };
+  expect(statusChanges(before, after)).toEqual([{ pieceId: 1, cell: 52, kind: "death_threshold", event: "trigger" }]);
+});
+
+test("small board keeps simultaneous status icons on the piece and selection reveals descriptions", async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto("/");
+  await page.evaluate(async () => {
+    const { default: init, WebGame } = await import("/src/wasm/chesslayer_web.js");
+    await init();
+    const progress = { highest_floor: 4, unlocked_squads: ["guardian", "heretic"], final_unlocked: true, final_defeated: false };
+    const game = WebGame.start_run("heretic", 2026, 1, JSON.stringify(progress));
+    const map = JSON.parse(game.snapshot()) as Snapshot;
+    game.dispatch(JSON.stringify({ type: "select_node", id: map.map.nodes.find((node) => node.available && node.kind === "combat")!.id }));
+    localStorage.setItem("chesslayer.run.v1", game.save());
+    game.free();
+  });
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  const selected = page.locator('.piece[data-piece-id="9"]');
+  await expect(selected.locator(".board-status")).toHaveCount(2);
+  await expect(selected.locator('[data-status="blessing"]')).toHaveAttribute("title", /황충의 축복/);
+  const pieceBox = await selected.boundingBox();
+  const badgeBox = await selected.locator('[data-status="blessing"]').boundingBox();
+  expect(pieceBox && badgeBox && badgeBox.x >= pieceBox.x && badgeBox.x + badgeBox.width <= pieceBox.x + pieceBox.width).toBeTruthy();
+  await selected.locator('[data-status="blessing"]').click();
+  await expect(page.getByRole("region", { name: "아군 기물 정보" })).toContainText("시체를 먹으면 다음 자기 진영 턴에 민첩 3을 얻습니다.");
+});
 
 test("the presentation plan follows the engine result for a guarded capture and a missed shot", () => {
   const attacker = piece(1, "knight", 52);

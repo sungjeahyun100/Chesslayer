@@ -102,6 +102,11 @@ pub enum CombatEvent {
         from: Position,
         to: Position,
     },
+    StatusTriggered {
+        piece_id: PieceId,
+        at: Position,
+        status: &'static str,
+    },
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ShotgunRay {
@@ -1264,6 +1269,11 @@ impl Battle {
         };
         if let Some(victim) = victim {
             self.wards.remove(&victim.id);
+            self.combat_events.push(CombatEvent::StatusTriggered {
+                piece_id: victim.id,
+                at: action.first.take,
+                status: "ward",
+            });
             self.events.push(format!(
                 "가호: {}의 포획을 한 번 막았습니다.",
                 piece_name(victim.kind)

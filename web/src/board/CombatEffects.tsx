@@ -1,5 +1,6 @@
 import { useEffect, useState, type CSSProperties } from "react";
 import { PieceImage } from "../PieceImage";
+import { StatusBadges } from "./StatusBadges";
 import { combatTiming, type CombatPlan } from "../game/combatPlan";
 
 const point = (cell: number) => ({ x: cell % 8 + .5, y: Math.floor(cell / 8) + .5 });
@@ -91,6 +92,7 @@ function ChainEffects({ plan, elapsed }: { plan: CombatPlan; elapsed: number }) 
       data-piece-id={chain.piece.id} data-from={chain.from} data-to={chain.to}
       style={{ left: `${(moving.x - .5) * 12.5}%`, top: `${(moving.y - .5) * 12.5}%` }}>
       <PieceImage pieceKey={chain.piece.key} owner={chain.piece.owner} />
+      <StatusBadges piece={chain.piece} />
     </span>}
     <svg viewBox="0 0 8 8" preserveAspectRatio="none" className="combat-projectiles combat-chain"
       data-from={plan.origin} data-target={chain.from} data-to={chain.to} style={{ opacity: fade }}>
@@ -154,6 +156,7 @@ export function CombatEffects({ plan }: { plan: CombatPlan | null }) {
     {plan.kind === "chain" && <ChainEffects plan={plan} elapsed={elapsed} />}
     {motion && <span className="combat-moving-piece" style={{ left: `${(motion.x - .5) * 12.5}%`, top: `${(motion.y - .5) * 12.5}%` }}>
       <PieceImage pieceKey={plan.actor.key} owner={plan.actor.owner} />
+      <StatusBadges piece={plan.actor} />
     </span>}
     {(plan.kind === "tracer" || plan.kind === "mortar") && <svg viewBox="0 0 8 8" preserveAspectRatio="none" className="combat-projectiles">
       {projectiles}

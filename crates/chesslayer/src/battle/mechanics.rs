@@ -677,6 +677,11 @@ impl Battle {
             .filter_map(|p| p.position.map(|pos| (p.id, pos)))
             .collect();
         for (id, pos) in targets {
+            self.combat_events.push(CombatEvent::StatusTriggered {
+                piece_id: id,
+                at: pos,
+                status: "death_threshold",
+            });
             self.mechanics
                 .statuses
                 .entry(id)
@@ -1614,6 +1619,11 @@ impl Battle {
                         }
                     }
                     if self.wards.remove(&victim.id) {
+                        self.combat_events.push(CombatEvent::StatusTriggered {
+                            piece_id: victim.id,
+                            at: step.take,
+                            status: "ward",
+                        });
                         self.events.push(format!(
                             "가호: {}에게 명중한 사격을 한 번 막았습니다.",
                             piece_name(victim.kind)
@@ -2962,6 +2972,11 @@ impl Battle {
                     self.mechanics.shot_hits_this_turn =
                         self.mechanics.shot_hits_this_turn.saturating_add(1);
                     if self.wards.remove(&target.id) {
+                        self.combat_events.push(CombatEvent::StatusTriggered {
+                            piece_id: target.id,
+                            at: to,
+                            status: "ward",
+                        });
                         self.events.push(format!(
                             "가호: {}에게 명중한 사격을 한 번 막았습니다.",
                             piece_name(target.kind)

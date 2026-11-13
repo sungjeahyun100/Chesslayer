@@ -11,10 +11,13 @@ import { BoardPiece } from "./BoardPiece";
 import { TargetPreview } from "./TargetPreview";
 import { useBoardAnnotations } from "./useBoardAnnotations";
 import { CombatEffects } from "./CombatEffects";
+import { StatusEffects } from "./StatusEffects";
+import type { StatusChange } from "../game/statusVisuals";
+import { statusVisuals } from "../game/statusVisuals";
 
-export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, boardRevision, boardRef, animation }: {
+export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, boardRevision, boardRef, animation, statusEffects }: {
   state: Snapshot; input: GameInput; rewardUpgradeOpen: boolean; lastEnemyMove: BoardMove | null;
-  boardRevision: number; boardRef: RefObject<HTMLDivElement | null>; animation: CombatPlan | null;
+  boardRevision: number; boardRef: RefObject<HTMLDivElement | null>; animation: CombatPlan | null; statusEffects: StatusChange[];
 }) {
   const { selected, enemyInspection, activeAbility, abilityTargets, hoveredAbilityTarget, restChoice, promotion, targetCard, cardTargets, cardUpgrades } = input;
   const turn = state.turn === 0;
@@ -67,7 +70,7 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
               data-enemy-capture={enemyCapture || undefined}
               data-last-enemy-move={state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) || undefined}
               className={`${state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) ? "last-enemy-move" : ""} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
-              title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : fallout ? `방사성 낙진 · 남은 ${fallout.remaining}라운드 · 턴 종료 시 제거` : piece?.statuses?.join(" · ") || (piece?.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined)}
+              title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : fallout ? `방사성 낙진 · 남은 ${fallout.remaining}라운드 · 턴 종료 시 제거` : piece ? statusVisuals(piece).map((status) => `${status.label}: ${status.description}`).join("\n") || (piece.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined) : undefined}
               onMouseEnter={() => { if (abilityTarget) input.hoverAbility(i); }}
               onMouseLeave={() => { if (hoveredAbilityTarget === i) input.hoverAbility(null); }}
               onClick={() => input.clickSquare(i)}
@@ -99,6 +102,7 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
             <BoardPiece
               key={p.id}
               piece={p}
+              onSelect={() => input.clickSquare(p.cell)}
               focused={
                 restView && restChoice?.id === p.id
               }
@@ -131,7 +135,7 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
                 : <line key={`${from}-${to}-${index}`} className={`board-annotation-arrow ${index === boardAnnotations.length ? "preview" : ""}`} data-from={from} data-to={to}
                     x1={from % 8 + .5} y1={Math.floor(from / 8) + .5} x2={to % 8 + .5} y2={Math.floor(to / 8) + .5} markerEnd="url(#board-annotation-head)" />)}
           </svg>}
-        effects={<CombatEffects key={animation?.sequence ?? "idle"} plan={animation} />}
+        effects={<><CombatEffects key={animation?.sequence ?? "idle"} plan={animation} /><StatusEffects effects={statusEffects} /></>}
       />
       {promotion && (
         <PromotionPicker

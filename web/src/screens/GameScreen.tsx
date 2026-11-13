@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import type { Command, EnemyInspection, Snapshot } from "../types";
 import type { BoardMove } from "../game/useGamePresentation";
 import type { CombatPlan } from "../game/combatPlan";
+import type { StatusChange } from "../game/statusVisuals";
 import { useGameInput } from "../game/useGameInput";
 import { RunBoard } from "../board/RunBoard";
 import { ActMap, nodeTypes } from "../ActMap";
@@ -29,12 +30,13 @@ interface Props {
   lastEnemyMove: BoardMove | null;
   boardRevision: number;
   animation: CombatPlan | null;
+  statusEffects: StatusChange[];
   endlessBest: EndlessRecord;
   endlessRunBest: EndlessRecord;
 }
 
 export function GameScreen({ snapshot, cardMovement, displayState: state, send: dispatchCommand, inspectEnemy, setError, onRestart,
-  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, endlessBest, endlessRunBest }: Props) {
+  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, statusEffects, endlessBest, endlessRunBest }: Props) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const closeStatus = useCallback(() => setStatusOpen(false), []);
@@ -71,7 +73,7 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
   const restPiece = state.rest_options.find((piece) => piece.id === input.restChoice?.id);
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
   const board = <RunBoard state={state} input={input} rewardUpgradeOpen={rewardUpgradeOpen}
-    lastEnemyMove={lastEnemyMove} boardRevision={boardRevision} boardRef={boardRef} animation={animation} />;
+    lastEnemyMove={lastEnemyMove} boardRevision={boardRevision} boardRef={boardRef} animation={animation} statusEffects={statusEffects} />;
   return <>
     {createPortal(<div className="expedition-toolbar">
       <span className="expedition-gold" aria-label={`보유 금화 ${snapshot.gold}`}><span aria-hidden="true">🪙</span>{snapshot.gold}</span>

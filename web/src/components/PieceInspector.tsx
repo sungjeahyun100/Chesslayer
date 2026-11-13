@@ -29,7 +29,7 @@ export function PieceInspector({ piece: selectedPiece, enemy: inspectedEnemy, ab
         {canUseAbility && !inspectedEnemy && abilities.map((ability, index) => <button key={index} className={`ability-button ${activeAbility === ability ? "selected" : ""}`}
           title={ability.description} onClick={() => onAbility(ability)}
           disabled={!inputEnabled || ability.targets.length === 0}>{ability.name} <span>{ability.targets.length ? "대상 선택 →" : "대상 없음"}</span></button>)}
-        <PieceStatuses statuses={selectedPiece.statuses} compact />
+        <PieceStatuses statuses={selectedPiece.statuses} compact details />
         {initiativeRemaining > 0 && <small className="effect-note">선공권 보호 · 상대의 포획 제한 · 남은 상대 턴 {initiativeRemaining}회</small>}
         {selectedPiece.temporary_upgrade && <small className="effect-note">일시 강화 · 현재 전투에서만 유지</small>}
         {selectedPiece.ward && <small className="effect-note">가호 · 다음 포획 시 공격 무효</small>}

@@ -8,6 +8,31 @@ use chesslayer::{
 fn at(file: i32, rank: i32) -> Position {
     Position::new(file, rank)
 }
+
+#[test]
+fn death_threshold_reports_its_trigger_at_battle_start() {
+    let mut players = Battle::standard_roster();
+    players[0].persistent.insert("death_threshold".into(), 1);
+    let doomed_id = players[0].id;
+    let doomed_at = players[0].position.unwrap();
+    let start = BattleStart {
+        players,
+        encounter: Encounter {
+            enemies: vec![EnemyPiece {
+                id: 100,
+                kind: KING,
+                position: at(4, 0),
+            }],
+            royal_id: 100,
+            additional_royal_ids: vec![],
+        },
+    };
+    let battle = Battle::with_options(start, BattleOptions::default(), &mut Rng::new(1)).unwrap();
+    assert!(battle.combat_events.iter().any(|event| matches!(event,
+        CombatEvent::StatusTriggered { piece_id, at, status: "death_threshold" }
+            if *piece_id == doomed_id && *at == doomed_at)));
+    assert!(battle.piece_position(doomed_id).is_none());
+}
 fn capture(b: &mut Battle, from: Position, to: Position) {
     let action = b
         .legal_actions(from)
@@ -74,6 +99,9 @@ fn direct_capture_retaliates_against_normal_elite_boss_and_royal_after_ward() {
                 capture(&mut b, at(4, 4), at(4, 6));
                 assert_eq!(b.result, GameResult::Ongoing);
                 assert!(!b.has_ward(target));
+                assert!(b.combat_events.iter().any(|event| matches!(event,
+                    CombatEvent::StatusTriggered { piece_id, status: "ward", .. }
+                        if *piece_id == target)));
                 assert!(b.has_self_defense(target));
                 assert_eq!(b.board.piece_at(at(4, 4)).unwrap().unwrap().id, 100);
                 b.turn = ENEMY;

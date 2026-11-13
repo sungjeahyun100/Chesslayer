@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Command, Snapshot } from "../types";
 import { combatPresentationSteps, type CombatPlan } from "./combatPlan";
+import { statusChanges, type StatusChange } from "./statusVisuals";
 
 export type FloorTransition = { next: Snapshot; stage: "out" | "in" };
 export type BoardMove = { from: number; to: number };
@@ -11,12 +12,18 @@ export function useGamePresentation(onEnterGame: () => void) {
   const [lastEnemyMove, setLastEnemyMove] = useState<BoardMove | null>(null);
   const [boardRevision, setBoardRevision] = useState(0);
   const [animation, setAnimation] = useState<CombatPlan | null>(null);
+  const [statusEffects, setStatusEffects] = useState<StatusChange[]>([]);
   const timers = useRef<number[]>([]);
+  const statusTimers = useRef<number[]>([]);
   const animationSequence = useRef(0);
+  const statusSequence = useRef(0);
   const clearAnimation = useCallback(() => {
     timers.current.forEach(window.clearTimeout);
     timers.current = [];
+    statusTimers.current.forEach(window.clearTimeout);
+    statusTimers.current = [];
     setAnimation(null);
+    setStatusEffects([]);
   }, []);
   useEffect(() => clearAnimation, [clearAnimation]);
 
@@ -38,6 +45,16 @@ export function useGamePresentation(onEnterGame: () => void) {
       && (before?.floor !== next.floor || before?.final_battle !== next.final_battle) && next.phase === "map";
     const steps = before && typeof source !== "string" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
       ? combatPresentationSteps(before, next, source, context) : [];
+    const showStatusChanges = (oldState: Snapshot, newState: Snapshot, newBatch: boolean) => {
+      const changes = statusChanges(oldState, newState, newBatch);
+      if (!changes.length || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+      const effects = changes.map((change) => ({ ...change, id: ++statusSequence.current }));
+      setStatusEffects((current) => [...current, ...effects]);
+      statusTimers.current.push(window.setTimeout(() => {
+        const ids = new Set(effects.map((effect) => effect.id));
+        setStatusEffects((current) => current.filter((effect) => !ids.has(effect.id)));
+      }, 480));
+    };
     if (steps.length) {
       const playStep = (index: number) => {
         const step = steps[index];
@@ -49,6 +66,7 @@ export function useGamePresentation(onEnterGame: () => void) {
           // the victory or defeat screen replaces that board.
           setDisplayState(step.before.phase === "combat" && step.after.phase !== "combat"
             ? { ...step.after, phase: "combat" } : step.after);
+          showStatusChanges(step.before, step.after, index === 0);
           setAnimation((current) => current?.sequence === plan.sequence ? { ...current, impactDone: true } : current);
         }, plan.impact));
         timers.current.push(window.setTimeout(() => {
@@ -67,6 +85,7 @@ export function useGamePresentation(onEnterGame: () => void) {
       setFloorTransition({ next, stage: "out" });
     } else {
       setDisplayState(next);
+      if (before) showStatusChanges(before, next, true);
       setFloorTransition(null);
       if (newRun) onEnterGame();
     }
@@ -97,6 +116,6 @@ export function useGamePresentation(onEnterGame: () => void) {
     return () => window.removeEventListener("keydown", escape);
   }, [floorTransition, skipFloorTransition]);
 
-  return { displayState, floorTransition, lastEnemyMove, boardRevision, animation,
+  return { displayState, floorTransition, lastEnemyMove, boardRevision, animation, statusEffects,
     presentationBusy: !!floorTransition || !!animation, present, skipFloorTransition };
 }
