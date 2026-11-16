@@ -57,11 +57,11 @@ test("테스트용 부대는 일반 목록과 분리되어 선택되고 카드·
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   await expect(page.locator('.selection-page > .characters [data-squad-id="avenger"]')).toHaveCount(0);
-  const squad = page.getByRole("region", { name: "테스트용 부대" }).locator('[data-squad-id="avenger"]');
-  await expect(squad.getByRole("heading", { name: "테스트용 부대" })).toBeVisible();
+  const squad = page.getByRole("region", { name: "복수귀 부대" }).locator('[data-squad-id="avenger"]');
+  await expect(squad.getByRole("heading", { name: "복수귀 부대" })).toBeVisible();
   await expect(squad).toBeEnabled();
   await squad.click();
-  await expect(page.locator(".launch .muted")).toContainText("테스트용 부대");
+  await expect(page.locator(".launch .muted")).toContainText("복수귀 부대");
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
   const snapshot = await page.evaluate(async () => {

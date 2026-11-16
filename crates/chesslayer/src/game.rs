@@ -209,6 +209,8 @@ pub struct Game {
     boss_plans: Vec<BossPlan>,
     boss_sequence_step: u8,
     replaying_command: bool,
+    /// Replay version 23's seeded content before the migration boundary.
+    pub legacy_content: bool,
     legacy_boss_turn: bool,
     legacy_boss_choice: bool,
 }
@@ -285,6 +287,7 @@ impl Game {
             boss_plans: vec![],
             boss_sequence_step: 0,
             replaying_command: false,
+            legacy_content: false,
             legacy_boss_turn: false,
             legacy_boss_choice: false,
         };
@@ -600,7 +603,11 @@ impl Game {
             .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
         let missing: Vec<_> = content::pieces::required_owned(target)
             .iter()
-            .filter(|&&kind| !roster.iter().any(|p| p.kind == kind))
+            .filter(|&&kind| {
+                !roster
+                    .iter()
+                    .any(|p| content::pieces::owned_matches_kind(p, kind))
+            })
             .map(|&kind| piece_name(kind))
             .collect();
         if !missing.is_empty() {
@@ -811,9 +818,42 @@ impl Game {
         });
         self.next_card_id += 1;
     }
+    fn card_pool(&self) -> &'static [CardKind] {
+        if self.legacy_content && self.squad_id == "avenger" {
+            let pool = content::cards::avenger::REWARD_POOL;
+            &pool[..pool.len() - 2]
+        } else {
+            content::cards::reward_pool(&self.squad_id)
+        }
+    }
+    fn generate_shop_offers(&mut self) {
+        self.shop_offers = self.card_pool().to_vec();
+        if !self.legacy_content {
+            self.shop_offers.sort_unstable();
+            self.shop_offers.dedup();
+        }
+        self.rng.shuffle(&mut self.shop_offers);
+        self.shop_offers.truncate(3);
+        self.shop_bought.clear();
+    }
+    /// Remove one card instance from the expedition and every active combat pile.
+    fn burn_card(&mut self, id: u32) -> Result<Card, String> {
+        let index = self
+            .deck
+            .iter()
+            .position(|card| card.id == id)
+            .ok_or("소각할 카드가 없습니다.")?;
+        let card = self.deck.remove(index);
+        self.cards.hand.retain(|other| other.id != id);
+        self.cards.draw.retain(|other| other.id != id);
+        self.cards.discard.retain(|other| other.id != id);
+        self.cards.exhausted.retain(|other| other.id != id);
+        self.cards.cost_overrides.remove(&id);
+        Ok(card)
+    }
     fn grant_relic(&mut self, relic: Relic) {
         if self.relics.contains(&relic) {
-            self.add_card(content::cards::reward_pool(&self.squad_id)[0]);
+            self.add_card(self.card_pool()[0]);
             self.log(format!(
                 "{}은 이미 보유 중입니다. 대신 부대 전용 카드 1장을 얻었습니다.",
                 relic.name()
@@ -849,20 +889,37 @@ impl Game {
             } else {
                 Rarity::Common
             };
-            self.rewards = (0..3)
-                .map(|_| Reward::Card(self.roll_reward_card(minimum)))
+            if self.legacy_content {
+                self.rewards = (0..3)
+                    .map(|_| Reward::Card(self.roll_reward_card(minimum)))
+                    .collect();
+                return;
+            }
+            let pool = self.card_pool();
+            self.rewards = self
+                .roll_unique_cards(pool, 3, minimum)
+                .into_iter()
+                .map(Reward::Card)
                 .collect();
             return;
         }
-        let mut cards = content::cards::reward_pool(&self.squad_id).to_vec();
+        let mut cards = self.card_pool().to_vec();
+        if !self.legacy_content {
+            cards.sort_unstable();
+            cards.dedup();
+        }
         if self
             .current_node
             .is_some_and(|id| matches!(self.map.nodes[id].kind, NodeKind::Elite | NodeKind::Boss))
         {
             let mut rewards = Vec::with_capacity(3);
-            for _ in 0..3 {
+            for _ in 0..if self.legacy_content {
+                3
+            } else {
+                3.min(cards.len())
+            } {
                 if cards.is_empty() {
-                    cards = content::cards::reward_pool(&self.squad_id).to_vec();
+                    cards = self.card_pool().to_vec();
                 }
                 rewards.push(Reward::Card({
                     let chosen =
@@ -897,12 +954,11 @@ impl Game {
         // Registered card kinds fill every slot when relics run out.
         while rewards.len() < 3 {
             if remaining.is_empty() {
-                remaining.extend(
-                    content::cards::reward_pool(&self.squad_id)
-                        .iter()
-                        .copied()
-                        .map(Reward::Card),
-                );
+                if self.legacy_content {
+                    remaining.extend(self.card_pool().iter().copied().map(Reward::Card));
+                    continue;
+                }
+                break;
             }
             let mut index = self.rng.index(remaining.len());
             if matches!(remaining[index], Reward::Card(_)) {
@@ -1263,23 +1319,16 @@ impl Game {
                 if self.phase != RunPhase::Shop {
                     return Err("상점에 있지 않습니다.".into());
                 }
-                let index = self
-                    .deck
-                    .iter()
-                    .position(|card| card.id == id)
-                    .ok_or("소각할 카드가 없습니다.")?;
+                if !self.deck.iter().any(|card| card.id == id) {
+                    return Err("소각할 카드가 없습니다.".into());
+                }
                 let cost = self.next_burn_cost();
                 if self.gold < cost {
                     return Err("금화가 부족합니다.".into());
                 }
                 self.gold -= cost;
                 self.cards_burned = self.cards_burned.saturating_add(1);
-                let card = self.deck.remove(index);
-                // A burned card is removed from every combat pile, never discarded.
-                self.cards.hand.retain(|other| other.id != id);
-                self.cards.draw.retain(|other| other.id != id);
-                self.cards.discard.retain(|other| other.id != id);
-                self.cards.exhausted.retain(|other| other.id != id);
+                let card = self.burn_card(id)?;
                 self.log(format!(
                     "상점: {} 소각 · 금화 {cost}",
                     card.kind.definition().name
@@ -1356,10 +1405,7 @@ impl Game {
                     }
                     NodeKind::Shop => {
                         self.phase = RunPhase::Shop;
-                        self.shop_offers = content::cards::reward_pool(&self.squad_id).to_vec();
-                        self.rng.shuffle(&mut self.shop_offers);
-                        self.shop_offers.truncate(3);
-                        self.shop_bought.clear();
+                        self.generate_shop_offers();
                     }
                     NodeKind::Treasure => {
                         self.phase = RunPhase::Treasure;
@@ -1424,12 +1470,7 @@ impl Game {
                 if self.phase != RunPhase::Rest || self.mode != RunMode::Endless {
                     return Err("무한 원정의 휴식에서만 무료 소각할 수 있습니다.".into());
                 }
-                let index = self
-                    .deck
-                    .iter()
-                    .position(|c| c.id == id)
-                    .ok_or("덱에 없는 카드입니다.")?;
-                let card = self.deck.remove(index);
+                let card = self.burn_card(id)?;
                 self.log(format!("휴식: {} 무료 소각", card.kind.definition().name));
                 self.complete_node();
             }
@@ -2154,7 +2195,11 @@ impl Game {
                             .any(|u| {
                                 content::pieces::required_owned(u.target)
                                     .iter()
-                                    .all(|&kind| roster.iter().any(|owned| owned.kind == kind))
+                                    .all(|&kind| {
+                                        roster.iter().any(|owned| {
+                                            content::pieces::owned_matches_kind(owned, kind)
+                                        })
+                                    })
                             }),
                     can_revive: self.phase == RunPhase::Rest
                         && origin.is_some()
@@ -2429,12 +2474,18 @@ impl Game {
                             .map(|&kind| RequiredPieceView {
                                 kind,
                                 name: piece_name(kind),
-                                owned: roster.iter().any(|p| p.kind == kind),
+                                owned: roster
+                                    .iter()
+                                    .any(|p| content::pieces::owned_matches_kind(p, kind)),
                             })
                             .collect(),
                         unlocked: content::pieces::required_owned(u.target)
                             .iter()
-                            .all(|&kind| roster.iter().any(|p| p.kind == kind)),
+                            .all(|&kind| {
+                                roster
+                                    .iter()
+                                    .any(|p| content::pieces::owned_matches_kind(p, kind))
+                            }),
                     })
                 })
                 .collect(),

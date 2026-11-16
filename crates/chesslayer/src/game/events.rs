@@ -12,6 +12,8 @@ pub enum EventKind {
     Hidden,
     Supplies,
     Disposal,
+    RandomBurn,
+    DoubleBurn,
     Restaurant,
 }
 #[derive(Clone, Serialize)]
@@ -38,6 +40,7 @@ pub(super) struct EventState {
     pub ambush_combat: bool,
     pub next_battle_penalty: bool,
     pub hidden_outcome: usize,
+    pub selected_burns: Vec<u32>,
 }
 fn choice(id: impl ToString, label: impl ToString, enabled: bool) -> EventChoiceView {
     EventChoiceView {
@@ -80,9 +83,11 @@ impl Game {
                     .upgrades
                     .iter()
                     .filter(|u| {
-                        content::pieces::required_owned(u.target)
-                            .iter()
-                            .all(|k| roster.iter().any(|p| p.kind == *k))
+                        content::pieces::required_owned(u.target).iter().all(|k| {
+                            roster
+                                .iter()
+                                .any(|p| content::pieces::owned_matches_kind(p, *k))
+                        })
                     })
                     .map(|u| u.target)
                     .collect();
@@ -107,9 +112,13 @@ impl Game {
         }
         if !self.deck.is_empty() {
             pool.push(Disposal);
+            if !self.legacy_content {
+                pool.extend([RandomBurn, DoubleBurn]);
+            }
         }
         if !self.event_state.ambushed
-            && content::cards::reward_pool(&self.squad_id)
+            && self
+                .card_pool()
                 .iter()
                 .any(|k| k.definition().rarity >= Rarity::Epic)
         {
@@ -123,6 +132,7 @@ impl Game {
                     || !self.event_state.next_battle_penalty)
         });
         let kind = pool[self.rng.index(pool.len())];
+        self.event_state.selected_burns.clear();
         self.event_state.last = Some(kind);
         self.phase = RunPhase::Event;
         let (title, description, grade, choices) = match kind {
@@ -137,10 +147,21 @@ impl Game {
                 vec![choice("spin", "룰렛을 돌린다", true)],
             ),
             LuckyDay => {
-                let pool = content::cards::reward_pool(&self.squad_id);
-                let choices = (0..15)
-                    .map(|i| {
-                        let card = pool[self.rng.index(pool.len())].definition();
+                let pool = self.card_pool();
+                let kinds: Vec<_> = if self.legacy_content {
+                    (0..15).map(|_| pool[self.rng.index(pool.len())]).collect()
+                } else {
+                    let mut kinds = pool.to_vec();
+                    kinds.sort_unstable();
+                    kinds.dedup();
+                    self.rng.shuffle(&mut kinds);
+                    kinds.into_iter().take(15).collect()
+                };
+                let choices = kinds
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, kind)| {
+                        let card = kind.definition();
                         EventChoiceView {
                             id: i.to_string(),
                             label: card.name.into(),
@@ -149,7 +170,12 @@ impl Game {
                         }
                     })
                     .collect();
-                ("운수 좋은 날","희귀도 가중치 없이 추첨한 15장 중 한 장을 선택하세요. 같은 카드가 여러 번 나올 수 있습니다.","rare",choices)
+                (
+                    "운수 좋은 날",
+                    "희귀도 가중치 없이 추첨한 서로 다른 카드 중 한 장을 선택하세요.",
+                    "rare",
+                    choices,
+                )
             }
             UnluckyDay => (
                 "운수 나쁜 날",
@@ -217,6 +243,26 @@ impl Game {
                     })
                     .collect(),
             ),
+            RandomBurn => (
+                "무작위 카드 소각",
+                "현재 덱에서 카드 한 장을 무작위로 영구 소각합니다.",
+                "common",
+                vec![choice("continue", "원정 경로로 돌아가기", true)],
+            ),
+            DoubleBurn => (
+                "선택 카드 2장 소각",
+                "덱에서 서로 다른 카드 두 장을 골라 무료로 영구 소각합니다.",
+                "common",
+                self.deck
+                    .iter()
+                    .map(|c| EventChoiceView {
+                        id: c.id.to_string(),
+                        label: format!("{} #{} 선택", c.kind.definition().name, c.id),
+                        disabled: false,
+                        card: Some(c.kind.definition()),
+                    })
+                    .collect(),
+            ),
             Restaurant => (
                 "작은 식당",
                 "따뜻한 식사로 아군 전체의 지속 허기를 제거합니다.",
@@ -235,6 +281,27 @@ impl Game {
             choices,
             result: None,
         });
+        if kind == RandomBurn {
+            let view = self.event_state.active.as_mut().unwrap();
+            if self.deck.is_empty() {
+                view.result = Some("소각 가능한 카드가 없습니다.".into());
+            } else {
+                let id = self.deck[self.rng.index(self.deck.len())].id;
+                let card = self.burn_card(id).expect("selected deck card exists");
+                let name = card.kind.definition().name;
+                let view = self.event_state.active.as_mut().unwrap();
+                view.result = Some(format!("{} #{} 영구 소각 완료", name, id));
+                view.choices.insert(
+                    0,
+                    EventChoiceView {
+                        id: id.to_string(),
+                        label: "소각된 카드".into(),
+                        disabled: true,
+                        card: Some(card.kind.definition()),
+                    },
+                );
+            }
+        }
     }
     fn event_remove_random(&mut self) -> Result<String, String> {
         let ids = self.event_nonroyals();
@@ -365,7 +432,7 @@ impl Game {
                             let card = next.deck.remove(i);
                             format!("{} 영구 소각", card.kind.definition().name)
                         } else {
-                            let pool = content::cards::reward_pool(&next.squad_id);
+                            let pool = next.card_pool();
                             let k = pool[next.rng.index(pool.len())];
                             next.add_card(k);
                             format!("{} 획득", k.definition().name)
@@ -397,7 +464,7 @@ impl Game {
                         "30골드 획득".into()
                     }
                     1 => {
-                        let pool = content::cards::reward_pool(&next.squad_id);
+                        let pool = next.card_pool();
                         let k = pool[next.rng.index(pool.len())];
                         next.add_card(k);
                         format!("{} 획득", k.definition().name)
@@ -407,9 +474,38 @@ impl Game {
             }
             Disposal => {
                 let card_id = id.parse::<u32>().map_err(|_| "올바르지 않은 카드")?;
-                next.deck.retain(|c| c.id != card_id);
+                next.burn_card(card_id)?;
                 format!("{} · 무료 소각 완료", selection.label)
             }
+            DoubleBurn => {
+                let card_id = id.parse::<u32>().map_err(|_| "올바르지 않은 카드")?;
+                if !next.deck.iter().any(|c| c.id == card_id)
+                    || next.event_state.selected_burns.contains(&card_id)
+                {
+                    return Err("덱의 다른 카드를 선택하세요.".into());
+                }
+                next.event_state.selected_burns.push(card_id);
+                let needed = next.deck.len().min(2);
+                if next.event_state.selected_burns.len() < needed {
+                    let view = next.event_state.active.as_mut().unwrap();
+                    view.choices
+                        .iter_mut()
+                        .find(|c| c.id == id)
+                        .unwrap()
+                        .disabled = true;
+                    view.description =
+                        "한 장을 선택했습니다. 소각할 다른 카드를 선택하세요.".into();
+                    *self = next;
+                    return Ok(());
+                }
+                let mut names = Vec::new();
+                for card_id in next.event_state.selected_burns.clone() {
+                    let card = next.burn_card(card_id)?;
+                    names.push(format!("{} #{}", card.kind.definition().name, card_id));
+                }
+                format!("{} 영구 소각 완료", names.join(", "))
+            }
+            RandomBurn => return Err("이미 소각 결과를 확인했습니다.".into()),
             Restaurant => {
                 if id == "eat" {
                     let mut roster = next.battle.outcome();

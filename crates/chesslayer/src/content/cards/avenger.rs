@@ -43,6 +43,8 @@ pub const ALL: &[CardKind] = &[
     CardKind::GunBarrage,
     CardKind::ComeHere,
     CardKind::Interference,
+    CardKind::AbsoluteAuthority,
+    CardKind::AuthoritarianOrder,
 ];
 pub const REWARD_POOL: &[CardKind] = &[
     CardKind::Divinity,
@@ -77,6 +79,8 @@ pub const REWARD_POOL: &[CardKind] = &[
     CardKind::GunBarrage,
     CardKind::ComeHere,
     CardKind::Interference,
+    CardKind::AbsoluteAuthority,
+    CardKind::AuthoritarianOrder,
 ];
 pub fn is_avenger(kind: CardKind) -> bool {
     ALL.contains(&kind)
@@ -103,7 +107,7 @@ pub fn definition(kind: CardKind) -> CardDefinition {
         CardKind::FullArmor => ("풀 플레이트 아머",2,"이번 전투 기물 하나의 현재·최대 체력 +3.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::FullArmor))),
         CardKind::AlekhineGun => ("알레킨의 총",0,"룩-룩-퀸 진형의 맨 앞 룩을 선택. 전방 3개 파일의 양측 기물을 보드 끝까지 제거.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::AlekhineGun))),
         CardKind::MakeBaby => ("아기 만들기",1,"룩-킹-퀸 앞에 폰 3개가 있으면 마지막 랭크 이외 빈칸에 폰 생성.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::MakeBaby))),
-        CardKind::BloodOffering => ("피의 인신공양",2,"아군 비로얄 하나를 제거하고 기물점수만큼 마나 획득.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::BloodOffering))),
+        CardKind::BloodOffering => ("피의 인신공양",0,"아군 비로얄 하나를 제거하고 기물점수만큼 마나 획득.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::BloodOffering))),
         CardKind::WealthOffering => ("재물의 인신공양",2,"아군 비로얄 하나를 제거하고 기물점수만큼 드로우.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::WealthOffering))),
         CardKind::Bounty => ("포상금",2,"10골드 이상 필요. 전 재산을 소모하고 골드÷10의 몫만큼 아군 하나에 행마권.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::Bounty))),
         CardKind::TacticalMove => ("전술적 이동",0,"아군 하나에 이번 턴 비무장과 행마권 1.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::TacticalMove))),
@@ -118,6 +122,8 @@ pub fn definition(kind: CardKind) -> CardDefinition {
         CardKind::GunBarrage => ("아-자-자-잣!!!",1,"룩-룩-퀸을 희생하고 맨 앞 룩 바로 전방 4개 랭크의 모든 기물 제거.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::GunBarrage))),
         CardKind::ComeHere => ("일루와잇!",2,"킹 주변에 빈칸이 있으면 선택한 기물을 그중 무작위 한 칸으로 끌어옴.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::ComeHere))),
         CardKind::Interference => ("내정 간섭",4,"상대 로얄을 선택한 다른 적 기물로 변경.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::Interference))),
+        CardKind::AbsoluteAuthority => ("무소불위의 권력",2,"보드 위의 아무 기물 하나에 행마권 1.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::AbsoluteAuthority))),
+        CardKind::AuthoritarianOrder => ("권위적 행동명령",1,"메이져·로얄을 제외한 아군 기물 하나에 행마권 1.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::AuthoritarianOrder))),
         _ => unreachable!("avenger definition"),
     };
     let mut d = CardDefinition::new(kind, name, cost, description, |_, _| {

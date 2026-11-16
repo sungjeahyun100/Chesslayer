@@ -26,6 +26,7 @@ export interface CompendiumPiece {
 }
 
 const categoryNames = { cards: "카드", relics: "유물", pieces: "기물" } as const;
+const rarityOrder: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
 type Category = keyof typeof categoryNames;
 
 function MovementBoard({ piece }: { piece: CompendiumPiece }) {
@@ -65,6 +66,8 @@ export function Compendium({ choices, entries, onBack }: { choices: Character[];
   const [category, setCategory] = useState<Category>("cards");
   const [pieceKind, setPieceKind] = useState<number | null>(null);
   const squad = entries.find((entry) => entry.id === squadId);
+  const sortedCards = useMemo(() => squad?.cards.slice().sort((a, b) =>
+    rarityOrder[a.definition.rarity ?? "common"] - rarityOrder[b.definition.rarity ?? "common"]) ?? [], [squad]);
   const character = choices.find((choice) => choice.id === squadId);
   const selectedPiece = squad?.pieces.find((piece) => piece.kind === pieceKind) ?? squad?.pieces[0];
   const allPaths: UpgradePath[] = useMemo(() => squad?.pieces.flatMap((piece) => piece.upgrades.map((edge) => ({
@@ -96,7 +99,7 @@ export function Compendium({ choices, entries, onBack }: { choices: Character[];
     </nav>
     {!squad && <p>도감 정보를 불러오는 중입니다.</p>}
     {squad && category === "cards" && <div className="compendium-grid">
-      {squad.cards.map((card) => <article key={card.definition.kind} className="compendium-card" data-rarity={card.definition.rarity ?? "common"}>
+      {sortedCards.map((card) => <article key={card.definition.kind} className="compendium-card" data-rarity={card.definition.rarity ?? "common"}>
         <div className="compendium-badges"><span>{cardOwners(card.definition.kind) > 1 ? "공용" : "부대 전용"}</span>{card.starting && <span>시작 덱</span>}{!card.available && <span>현재 획득 경로 없음</span>}</div>
         <CardFace card={card.definition} />
         <p className="compendium-condition">{card.definition.cost_per_target ? "대상 기물마다 코스트 1" : `코스트 ${card.definition.cost}`}

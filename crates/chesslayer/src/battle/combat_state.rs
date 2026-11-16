@@ -126,7 +126,13 @@ impl Battle {
             .unwrap_or(0)
     }
     pub fn matches_kind(&self, piece: Piece, kind: PieceType) -> bool {
-        piece.kind == kind || self.stats(piece.id).name.as_deref() == Some(piece_name(kind))
+        piece.kind == kind
+            || (piece.owner == PLAYER
+                && self
+                    .players
+                    .iter()
+                    .any(|owned| owned.id == piece.id && pieces::owned_matches_kind(owned, kind)))
+            || self.stats(piece.id).name.as_deref() == Some(piece_name(kind))
     }
     pub fn grant_move_rights(&mut self, id: PieceId, count: u32) -> Result<(), Error> {
         if self.phase != Phase::Active || self.piece_position(id).is_none() {

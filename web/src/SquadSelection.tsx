@@ -30,7 +30,7 @@ export function SquadSelection({ choices, character, onCharacter, floor, onFloor
     return <button className={`character ${character === choice.id ? "chosen" : ""} ${unlocked ? "" : "locked"}`}
       key={choice.id} data-squad-id={choice.id} disabled={!unlocked} onClick={() => onCharacter(choice.id)} aria-pressed={character === choice.id}>
       <RelicIcon id={choice.relic} name={relicNames[choice.relic] ?? choice.name} className="character-icon" />
-      <span className="eyebrow">{testSquad ? "복수귀 부대" : choice.title}</span><h2>{testSquad ? "테스트용 부대" : choice.name}</h2>
+      <span className="eyebrow">{testSquad ? "복수귀 부대" : choice.title}</span><h2>{testSquad ? "복수귀 부대" : choice.name}</h2>
       <p>{choice.description}</p><small className="squad-tactics">{tactics[choice.id]}</small>
       <span className="character-radio">{!unlocked ? `${choice.unlock_floor}층 보스 격파 시 해금` : character === choice.id ? "● 선택됨" : "○ 선택 가능"}</span>
     </button>;
@@ -50,7 +50,7 @@ export function SquadSelection({ choices, character, onCharacter, floor, onFloor
       {mainChoices.map(renderChoice)}
     </div>
     {testChoice && <section className="test-squad-section" aria-labelledby="test-squad-heading">
-      <h2 id="test-squad-heading">테스트용 부대</h2>
+      <h2 id="test-squad-heading">복수귀 부대</h2>
       <div className="characters test-squad-choices">{renderChoice(testChoice)}</div>
     </section>}
     {developerMode && mode === "campaign" && <div className="floor-selection" role="group" aria-label="개발자 출발 층 선택">
@@ -62,7 +62,7 @@ export function SquadSelection({ choices, character, onCharacter, floor, onFloor
         <strong>최종 결전 · 부족의 독재자</strong><span>{progress.final_defeated ? "격파 완료 · 재도전 가능" : "별도 결전 · 보스 전투 1회"}</span>
       </button>}
     </div>}
-    <div className="launch"><span className="muted">{selected?.id === "avenger" ? "테스트용 부대" : selected?.name} · {mode === "endless" ? "무한 원정 · 1층 출발" : floor === 0 ? "최종 결전" : `${floor}층 원정`}<br />{mode === "endless" ? "최고기록은 이 브라우저에 저장됩니다." : "해금 기록은 새 원정에도 유지됩니다."}</span>
+    <div className="launch"><span className="muted">{selected?.id === "avenger" ? "복수귀 부대" : selected?.name} · {mode === "endless" ? "무한 원정 · 1층 출발" : floor === 0 ? "최종 결전" : `${floor}층 원정`}<br />{mode === "endless" ? "최고기록은 이 브라우저에 저장됩니다." : "해금 기록은 새 원정에도 유지됩니다."}</span>
       <button className="primary large" onClick={onStart} disabled={!ready || !progress.unlocked_squads.includes(character)}>런 시작 <span>→</span></button>
     </div>
   </main>;

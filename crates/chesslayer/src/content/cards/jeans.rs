@@ -24,7 +24,7 @@ fn effect(battle: &mut Battle, target: Option<PieceId>) -> Result<Option<usize>,
         .cells()
         .iter()
         .flatten()
-        .filter(|p| matches!(p.kind, ROOK | QUEEN))
+        .filter(|p| battle.matches_kind(**p, ROOK) || battle.matches_kind(**p, QUEEN))
         .map(|p| p.id)
         .collect();
     Ok(Some(battle.remove_nonroyals(&ids).map_err(engine_error)?))

@@ -1,11 +1,21 @@
 use super::*;
 
 impl Game {
+    fn effective_avenger_definition(&self, card: &crate::cards::Card) -> CardDefinition {
+        let mut definition = self.cards.effective_definition(card);
+        if self.legacy_content
+            && card.kind == CardKind::BloodOffering
+            && !self.cards.cost_overrides.contains_key(&card.id)
+        {
+            definition.cost = 2;
+        }
+        definition
+    }
     pub(super) fn roll_reward_card(
         &mut self,
         minimum: content::cards::avenger::Rarity,
     ) -> CardKind {
-        let pool = content::cards::reward_pool(&self.squad_id);
+        let pool = self.card_pool();
         self.roll_card_candidates(pool, minimum)
     }
     pub(super) fn roll_card_candidates(
@@ -38,6 +48,23 @@ impl Game {
             candidates = pool.to_vec();
         }
         candidates[self.rng.index(candidates.len())]
+    }
+    pub(super) fn roll_unique_cards(
+        &mut self,
+        pool: &[CardKind],
+        count: usize,
+        minimum: content::cards::avenger::Rarity,
+    ) -> Vec<CardKind> {
+        let mut available = pool.to_vec();
+        available.sort_unstable();
+        available.dedup();
+        let mut chosen = Vec::with_capacity(count.min(available.len()));
+        for _ in 0..count.min(available.len()) {
+            let kind = self.roll_card_candidates(&available, minimum);
+            available.retain(|candidate| *candidate != kind);
+            chosen.push(kind);
+        }
+        chosen
     }
     pub(super) fn configure_expansion(&mut self) -> Result<(), String> {
         if self.squad_id == "avenger" {
@@ -101,7 +128,7 @@ impl Game {
             .get(index)
             .ok_or("손패에 없는 카드입니다.")?
             .clone();
-        let d = self.cards.effective_definition(&card);
+        let d = self.effective_avenger_definition(&card);
         if self.cards.mana < d.cost {
             return Err("마나가 부족합니다.".into());
         }
@@ -173,7 +200,7 @@ impl Game {
                     let cost = if card.kind == ClaudeOptimize {
                         0
                     } else {
-                        next.cards.effective_definition(&c).cost.saturating_sub(1)
+                        next.effective_avenger_definition(&c).cost.saturating_sub(1)
                     };
                     next.cards.cost_overrides.insert(c.id, cost);
                 }

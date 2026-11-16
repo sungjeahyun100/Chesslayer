@@ -217,6 +217,29 @@ pub struct PieceDefinition {
     pub initial_double_step: bool,
     pub family: PieceFamily,
 }
+/// The exact upgrade path recorded on a permanent player piece, newest first.
+/// Invalid legacy paths stop at the last verifiable edge.
+pub fn upgrade_lineage(kind: PieceType, upgrades: &[String]) -> Vec<PieceType> {
+    let mut lineage = vec![kind];
+    let mut current = kind;
+    for key in upgrades.iter().rev() {
+        let Some(parent) = ALL.iter().find(|definition| {
+            definition.upgrades.iter().any(|edge| {
+                edge.target == current
+                    && (edge.key == key || self::definition(current).is_some_and(|d| d.key == key))
+            })
+        }) else {
+            break;
+        };
+        current = parent.kind;
+        lineage.push(current);
+    }
+    lineage
+}
+
+pub fn owned_matches_kind(piece: &crate::battle::PlayerPiece, kind: PieceType) -> bool {
+    upgrade_lineage(piece.kind, &piece.upgrades).contains(&kind)
+}
 impl PieceDefinition {
     pub const fn new(
         kind: PieceType,

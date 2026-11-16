@@ -83,6 +83,22 @@ fn execute(battle: &mut Battle, from: Position, to: Position) {
 }
 
 #[test]
+fn tengu_is_minor_for_both_sides_without_changing_its_score() {
+    assert_eq!(classification(pieces::TENGU), (PieceClass::Minor, 9));
+    for side in [PLAYER, ENEMY] {
+        let battle = scene(pieces::TENGU, side);
+        let id = battle
+            .board
+            .piece_at(square(side, 0, 0))
+            .unwrap()
+            .unwrap()
+            .id;
+        assert_eq!(battle.piece_class(id), PieceClass::Minor);
+        assert_eq!(battle.piece_score(id), 9);
+    }
+}
+
+#[test]
 fn knightrider_repeats_one_jump_vector_and_stops_on_landing_blockers() {
     for side in [PLAYER, ENEMY] {
         let from = square(side, 0, 0);

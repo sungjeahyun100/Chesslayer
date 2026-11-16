@@ -19,9 +19,12 @@ struct SavedRun {
     /// migrated run can always reproduce its original history.
     #[serde(default)]
     legacy_boss_commands: usize,
+    /// Commands saved before the card and event content update.
+    #[serde(default)]
+    legacy_content_commands: usize,
 }
 
-const SAVE_VERSION: u32 = 23;
+const SAVE_VERSION: u32 = 24;
 
 /// The only browser state owner. JavaScript sends intentions and renders snapshots.
 #[wasm_bindgen]
@@ -77,6 +80,7 @@ impl WebGame {
                 progress,
                 commands: vec![],
                 legacy_boss_commands: 0,
+                legacy_content_commands: 0,
             },
         })
     }
@@ -177,12 +181,17 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
     let header: serde_json::Value =
         serde_json::from_str(saved).map_err(|_| "저장된 원정을 읽을 수 없습니다.")?;
     let version = header.get("version").and_then(|v| v.as_u64());
-    if version != Some(u64::from(SAVE_VERSION)) {
+    if !matches!(version, Some(23) | Some(24)) {
         return Err("이전 게임 규칙으로 저장된 원정입니다. 이어갈 수 없어 새 원정을 시작해야 합니다. 기존 기록은 새 원정을 시작하기 전까지 보존됩니다.".into());
     }
     let mut save: SavedRun =
         serde_json::from_str(saved).map_err(|_| "저장된 원정을 읽을 수 없습니다.")?;
-    if save.legacy_boss_commands > save.commands.len() {
+    if version == Some(23) {
+        save.legacy_content_commands = save.commands.len();
+    }
+    if save.legacy_boss_commands > save.commands.len()
+        || save.legacy_content_commands > save.commands.len()
+    {
         return Err("저장된 원정의 진행 기록이 올바르지 않습니다.".into());
     }
     save.version = SAVE_VERSION;
@@ -194,6 +203,7 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
         save.mode,
     )?;
     for (index, command) in save.commands.iter().enumerate() {
+        game.legacy_content = index < save.legacy_content_commands;
         let result = if index < save.legacy_boss_commands {
             game.replay_legacy_command(command.clone())
         } else {
@@ -204,6 +214,7 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
             game.finish_legacy_replay();
         }
     }
+    game.legacy_content = false;
     Ok((game, save))
 }
 #[wasm_bindgen]
@@ -460,6 +471,24 @@ mod save_tests {
         assert_eq!(
             serde_json::to_value(restored.snapshot()).unwrap(),
             serde_json::to_value(game.game.snapshot()).unwrap()
+        );
+        saved["version"] = serde_json::json!(23);
+        saved
+            .as_object_mut()
+            .unwrap()
+            .remove("legacy_content_commands");
+        let (restored_legacy, migrated) = restore_saved_run(&saved.to_string()).unwrap();
+        assert_eq!(migrated.version, SAVE_VERSION);
+        assert_eq!(migrated.legacy_content_commands, migrated.commands.len());
+        assert_eq!(
+            serde_json::to_value(restored_legacy.snapshot()).unwrap(),
+            serde_json::to_value(game.game.snapshot()).unwrap()
+        );
+        let (restored_again, _) =
+            restore_saved_run(&serde_json::to_string(&migrated).unwrap()).unwrap();
+        assert_eq!(
+            serde_json::to_value(restored_again.snapshot()).unwrap(),
+            serde_json::to_value(restored_legacy.snapshot()).unwrap()
         );
 
         saved["version"] = serde_json::json!(SAVE_VERSION);

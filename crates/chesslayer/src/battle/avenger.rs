@@ -27,8 +27,14 @@ impl Battle {
             .cells()
             .iter()
             .flatten()
-            .filter(|p| p.owner < 2)
+            .filter(|p| kind == AbsoluteAuthority || p.owner < 2)
             .filter(|&&p| match kind {
+                AbsoluteAuthority => true,
+                AuthoritarianOrder => {
+                    p.owner == PLAYER
+                        && self.piece_class(p.id) != PieceClass::Major
+                        && !self.is_royal_piece(p.id)
+                }
                 PawnOrder => {
                     p.owner == PLAYER
                         && (self.piece_class(p.id) == PieceClass::Pawn
@@ -160,7 +166,8 @@ impl Battle {
             self.combat_stats.insert(id, self.stats(id));
         }
         match kind {
-            PawnOrder | MinorOrder | MajorOrder | MindControl | TacticalMove => {
+            PawnOrder | MinorOrder | MajorOrder | MindControl | TacticalMove
+            | AbsoluteAuthority | AuthoritarianOrder => {
                 self.grant_move_rights(id, 1)?;
                 if kind == TacticalMove {
                     self.stats_mut(id).disarmed = true;

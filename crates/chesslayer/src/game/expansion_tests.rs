@@ -25,6 +25,12 @@ fn event_eligibility_repetition_and_seeded_choices() {
         let previous = event.kind;
         if previous == EventKind::LuckyDay {
             assert_eq!(event.choices.len(), 15);
+            let kinds: HashSet<_> = event
+                .choices
+                .iter()
+                .map(|c| c.card.as_ref().unwrap().kind)
+                .collect();
+            assert_eq!(kinds.len(), 15);
         }
         g.enter_random_event();
         assert_ne!(g.event_state.active.as_ref().unwrap().kind, previous);
@@ -40,11 +46,248 @@ fn event_eligibility_repetition_and_seeded_choices() {
             g.enter_random_event();
             assert!(!matches!(
                 g.event_state.active.as_ref().unwrap().kind,
-                EventKind::Ambush | EventKind::Roulette | EventKind::Disposal
+                EventKind::Ambush
+                    | EventKind::Roulette
+                    | EventKind::Disposal
+                    | EventKind::RandomBurn
+                    | EventKind::DoubleBurn
             ));
         }
     }
-    assert_eq!(seen.len(), 8);
+    assert_eq!(seen.len(), 10);
+}
+
+#[test]
+fn new_orders_use_existing_move_rights_and_filter_targets() {
+    use crate::battle::PieceClass;
+    use CardKind::*;
+    assert_eq!(BloodOffering.definition().cost, 0);
+    assert_eq!(AbsoluteAuthority.definition().cost, 2);
+    assert_eq!(AbsoluteAuthority.definition().rarity, Rarity::Epic);
+    assert_eq!(AuthoritarianOrder.definition().cost, 1);
+    assert_eq!(AuthoritarianOrder.definition().rarity, Rarity::Rare);
+    assert!(content::cards::reward_pool("avenger").contains(&AbsoluteAuthority));
+    assert!(content::cards::reward_pool("avenger").contains(&AuthoritarianOrder));
+    let mut game = Game::new("avenger", 8).unwrap();
+    let all: HashSet<_> = game
+        .battle
+        .board
+        .cells()
+        .iter()
+        .flatten()
+        .map(|p| p.id)
+        .collect();
+    assert_eq!(
+        game.battle
+            .avenger_targets(AbsoluteAuthority)
+            .into_iter()
+            .collect::<HashSet<_>>(),
+        all
+    );
+    let restricted = game.battle.avenger_targets(AuthoritarianOrder);
+    assert!(!restricted.is_empty());
+    for id in &restricted {
+        let (_, piece) = game.battle.piece_position(*id).unwrap();
+        assert_eq!(piece.owner, PLAYER);
+        assert_ne!(game.battle.piece_class(*id), PieceClass::Major);
+        assert!(!game.battle.is_royal_piece(*id));
+    }
+    let target = restricted[0];
+    game.battle
+        .avenger_effect(AuthoritarianOrder, Some(target), None)
+        .unwrap();
+    game.battle
+        .avenger_effect(AuthoritarianOrder, Some(target), None)
+        .unwrap();
+    assert_eq!(game.battle.stats(target).move_rights, 2);
+    let enemy = game.battle.royal_id;
+    game.battle
+        .avenger_effect(AbsoluteAuthority, Some(enemy), None)
+        .unwrap();
+    assert_eq!(game.battle.stats(enemy).move_rights, 1);
+}
+
+#[test]
+fn blood_offering_plays_with_zero_mana() {
+    let mut game = Game::new("avenger", 19).unwrap();
+    let id = game.battle.avenger_targets(CardKind::BloodOffering)[0];
+    let score = game.battle.piece_score(id) as u32;
+    game.cards.hand.push(Card {
+        id: 999,
+        kind: CardKind::BloodOffering,
+    });
+    game.cards.mana = 0;
+    game.play_avenger_card(0, Some(id), None).unwrap();
+    assert_eq!(game.cards.mana, score);
+    assert!(game.cards.hand.is_empty());
+    assert!(game.cards.discard.iter().any(|card| card.id == 999));
+}
+
+#[test]
+fn legacy_blood_offering_cost_is_preserved_during_save_replay() {
+    let mut game = Game::new("avenger", 19).unwrap();
+    game.legacy_content = true;
+    game.cards.hand = vec![
+        Card {
+            id: 998,
+            kind: CardKind::Optimize,
+        },
+        Card {
+            id: 999,
+            kind: CardKind::BloodOffering,
+        },
+    ];
+    game.cards.mana = 3;
+    game.play_avenger_card(0, None, None).unwrap();
+    assert_eq!(game.cards.cost_overrides.get(&999), Some(&1));
+    let target = game.battle.avenger_targets(CardKind::BloodOffering)[0];
+    let score = game.battle.piece_score(target) as u32;
+    game.play_avenger_card(0, Some(target), None).unwrap();
+    assert_eq!(game.cards.mana, 1 + score);
+}
+
+#[test]
+fn upgrade_lineage_matches_only_traversed_branches_and_gun_formation() {
+    use content::pieces::*;
+    let mut roster = Battle::standard_roster();
+    for piece in &mut roster {
+        if piece.kind != KING {
+            piece.position = None;
+        }
+    }
+    let queen = roster.iter_mut().find(|p| p.kind == QUEEN).unwrap();
+    queen.kind = MOVEMENT_GOD;
+    queen.upgrades = vec!["bouncing".into(), "movement_god".into()];
+    queen.position = Some(Position::new(3, 7));
+    let qid = queen.id;
+    let mut rooks: Vec<_> = roster.iter_mut().filter(|p| p.kind == ROOK).collect();
+    let front = rooks[0].id;
+    rooks[0].position = Some(Position::new(3, 5));
+    rooks[1].position = Some(Position::new(3, 6));
+    let battle = Battle::new(BattleStart {
+        players: roster,
+        encounter: encounter(0),
+    })
+    .unwrap();
+    let queen = battle.piece_position(qid).unwrap().1;
+    for kind in [QUEEN, BOUNCING_QUEEN, MOVEMENT_GOD] {
+        assert!(battle.matches_kind(queen, kind));
+    }
+    assert!(!battle.matches_kind(queen, TEMPEST_QUEEN));
+    assert!(!battle.matches_kind(queen, BOUNCING_TEMPEST_QUEEN));
+    assert!(battle
+        .gun_formations(PLAYER)
+        .iter()
+        .any(|formation| formation[0] == front));
+    assert!(battle
+        .avenger_targets(CardKind::AlekhineGun)
+        .contains(&front));
+    assert!((CardKind::Gun.definition().target_candidates)(&battle).contains(&front));
+}
+
+#[test]
+fn rewards_and_shops_do_not_repeat_card_kinds() {
+    for seed in 0..40 {
+        let mut game = Game::new("avenger", seed).unwrap();
+        game.generate_rewards();
+        let kinds: Vec<_> = game
+            .rewards
+            .iter()
+            .filter_map(|r| match r {
+                Reward::Card(k) => Some(*k),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(kinds.len(), 3);
+        assert_eq!(kinds.iter().copied().collect::<HashSet<_>>().len(), 3);
+        game.generate_shop_offers();
+        assert_eq!(
+            game.shop_offers
+                .iter()
+                .copied()
+                .collect::<HashSet<_>>()
+                .len(),
+            game.shop_offers.len()
+        );
+    }
+}
+
+#[test]
+fn event_burns_remove_instances_without_changing_shop_price() {
+    for kind in [EventKind::RandomBurn, EventKind::DoubleBurn] {
+        let mut game = (0..200)
+            .map(event_game)
+            .find(|candidate| {
+                let mut candidate = candidate.clone();
+                candidate.enter_random_event();
+                candidate.event_state.active.as_ref().unwrap().kind == kind
+            })
+            .unwrap();
+        game.deck.push(game.deck[0].clone());
+        game.deck.last_mut().unwrap().id = 999;
+        let count = game.deck.len();
+        let price = game.next_burn_cost();
+        game.cards.hand = game.deck.clone();
+        game.cards.draw = game.deck.clone();
+        game.cards.discard = game.deck.clone();
+        game.cards.exhausted = game.deck.clone();
+        let before: HashSet<_> = game.deck.iter().map(|card| card.id).collect();
+        game.enter_random_event();
+        assert_eq!(game.event_state.active.as_ref().unwrap().kind, kind);
+        if kind == EventKind::DoubleBurn {
+            let ids: Vec<_> = game
+                .event_state
+                .active
+                .as_ref()
+                .unwrap()
+                .choices
+                .iter()
+                .take(2)
+                .map(|c| c.id.clone())
+                .collect();
+            game.choose_event(&ids[0]).unwrap();
+            assert!(game.choose_event(&ids[0]).is_err());
+            game.choose_event(&ids[1]).unwrap();
+            assert_eq!(game.deck.len(), count - 2);
+        } else {
+            assert_eq!(game.deck.len(), count - 1);
+        }
+        assert_eq!(game.next_burn_cost(), price);
+        assert!(game.event_state.active.as_ref().unwrap().result.is_some());
+        let after: HashSet<_> = game.deck.iter().map(|card| card.id).collect();
+        for id in before.difference(&after) {
+            for pile in [
+                &game.cards.hand,
+                &game.cards.draw,
+                &game.cards.discard,
+                &game.cards.exhausted,
+            ] {
+                assert!(!pile.iter().any(|card| card.id == *id));
+            }
+        }
+    }
+}
+
+#[test]
+fn double_burn_accepts_a_single_remaining_card() {
+    let mut game = (0..200)
+        .map(event_game)
+        .find(|candidate| {
+            let mut candidate = candidate.clone();
+            candidate.enter_random_event();
+            candidate.event_state.active.as_ref().unwrap().kind == EventKind::DoubleBurn
+        })
+        .unwrap();
+    game.deck.truncate(1);
+    let id = game.deck[0].id.to_string();
+    game.enter_random_event();
+    assert_eq!(
+        game.event_state.active.as_ref().unwrap().kind,
+        EventKind::DoubleBurn
+    );
+    game.choose_event(&id).unwrap();
+    assert!(game.deck.is_empty());
+    assert_eq!(game.next_burn_cost(), 100);
 }
 #[test]
 fn events_present_results_and_grant_only_one_selected_card() {

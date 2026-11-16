@@ -51,12 +51,9 @@ fn effect(battle: &mut Battle, target: Option<PieceId>) -> Result<Option<usize>,
 }
 
 fn front(battle: &Battle, id: PieceId) -> Option<Position> {
-    let (i, _) = battle
-        .board
-        .cells()
-        .iter()
-        .enumerate()
-        .find(|(_, p)| p.is_some_and(|p| p.id == id && p.owner == PLAYER && p.kind == ROOK))?;
+    let (i, _) = battle.board.cells().iter().enumerate().find(|(_, p)| {
+        p.is_some_and(|p| p.id == id && p.owner == PLAYER && battle.matches_kind(p, ROOK))
+    })?;
     let front = Position::new((i % 8) as i32, (i / 8) as i32);
     let behind: Vec<_> = ((front.rank + 1)..8)
         .filter_map(|rank| {
@@ -72,9 +69,9 @@ fn front(battle: &Battle, id: PieceId) -> Option<Position> {
         return None;
     }
     if behind[0].1.owner != PLAYER
-        || behind[0].1.kind != ROOK
+        || !battle.matches_kind(behind[0].1, ROOK)
         || behind[1].1.owner != PLAYER
-        || behind[1].1.kind != QUEEN
+        || !battle.matches_kind(behind[1].1, QUEEN)
     {
         return None;
     }

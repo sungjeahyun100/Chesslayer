@@ -95,6 +95,8 @@ pub enum CardKind {
     GunBarrage,
     ComeHere,
     Interference,
+    AbsoluteAuthority,
+    AuthoritarianOrder,
 
     Jeans,
     Ward,
@@ -185,6 +187,7 @@ impl CardKind {
             | Self::GunBarrage
             | Self::ComeHere
             | Self::Interference => avenger::definition(self),
+            Self::AbsoluteAuthority | Self::AuthoritarianOrder => avenger::definition(self),
             Self::Jeans => jeans::definition(),
             Self::Ward => ward::definition(),
             Self::Gun => gun::definition(),
