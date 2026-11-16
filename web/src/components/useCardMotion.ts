@@ -43,7 +43,8 @@ export function useCardMotion(root: RefObject<HTMLElement | null>, state: Snapsh
     const newHand = new Set(next.hand.map((card) => card.id));
     const entering = next.hand.filter((card) => !oldHand.has(card.id));
     const leaving = before.hand.filter((card) => !newHand.has(card.id));
-    const reshuffled = before.draw_count === 0 && before.discard_count > 0 && next.discard_count < before.discard_count;
+    const reshuffled = before.discard_count > next.discard_count &&
+      (before.draw_count === 0 || (before.squad_id === "avenger" && entering.length > before.draw_count));
     if (!entering.length && !leaving.length && !reshuffled) return;
 
     const layer = document.createElement("div");

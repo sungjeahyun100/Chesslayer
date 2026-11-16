@@ -1,0 +1,21 @@
+/* The same rarity palette applies wherever cards and relics are shown. */
+[data-rarity="common"] { --rarity-color: #68766e; --rarity-glow: #dce4dc; }
+[data-rarity="rare"] { --rarity-color: #286ca8; --rarity-glow: #d6ebff; }
+[data-rarity="epic"] { --rarity-color: #8144a8; --rarity-glow: #efdafa; }
+[data-rarity="legendary"] { --rarity-color: #a56b10; --rarity-glow: #ffedbb; }
+.playing-card[data-rarity][data-rarity],
+.status-relic[data-rarity][data-rarity],
+.relic[data-rarity][data-rarity],
+.compendium-card[data-rarity][data-rarity],
+.compendium-relic[data-rarity][data-rarity],
+.treasure-relic[data-rarity][data-rarity],
+.sandbox-v2-hand-card[data-rarity][data-rarity] {
+  border: 2px solid var(--rarity-color);
+  box-shadow: inset 0 0 0 2px var(--rarity-glow), 0 2px 8px #14251a14;
+}
+.playing-card[data-rarity]:hover:not(:disabled) { border-color: var(--rarity-color); }
+.playing-card.active-card[data-rarity] { outline: 3px solid #d6ae51; outline-offset: 2px; }
+.battle-rewards .playing-card.is-claimed[data-rarity] { outline: 3px solid #548259; outline-offset: 2px; }
+.relic[data-rarity] { padding: 8px; border-radius: 5px; }
+.relic-rarity { display: inline-block; margin-left: 7px; color: var(--rarity-color); font-size: 11px; font-weight: 800; }
+.treasure-relic[data-rarity] { display: grid; place-items: center; width: max-content; padding: 10px; border-radius: 6px; }

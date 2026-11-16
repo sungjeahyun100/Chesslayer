@@ -13,6 +13,12 @@
 }
 .game-layout[data-phase="combat"] .battle-heading { margin: 0 0 8px 20px; }
 .game-layout[data-phase="combat"] .battle-heading h1 { font-size: 21px; }
+.game-layout[data-phase="combat"] .turn-end-button {
+  align-self: stretch;
+  justify-content: center;
+  padding: 9px 13px;
+  font-size: 12px;
+}
 .game-layout[data-phase="combat"] .board-frame {
   width: min(100%, calc(100dvh - 155px));
   min-width: 0;
@@ -79,9 +85,18 @@
   .game-layout[data-phase="combat"] .sidebar > * { flex: 0 1 250px; }
 }
 @media (max-width: 700px) {
+  .game-layout[data-phase="combat"]:has(.turn-end-button) { padding-bottom: 76px; }
   .game-layout[data-phase="combat"] .battle-column { display: flex; flex-direction: column; }
   .game-layout[data-phase="combat"] .battle-area, .game-layout[data-phase="combat"] .hand-area { width: 100%; }
   .game-layout[data-phase="combat"] .board-frame { width: min(100%, calc(100dvh - 160px)); }
   .game-layout[data-phase="combat"] .hand { height: auto; max-height: 260px; }
   .game-layout[data-phase="combat"] .hand .playing-card { min-height: 100px; }
+  .game-layout[data-phase="combat"] .turn-end-button {
+    position: fixed;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 40;
+    min-width: 130px;
+    box-shadow: 0 4px 14px #143d3040;
+  }
 }

@@ -266,7 +266,18 @@ fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
     assert!(g.battle.board.piece_at(at(0, 7)).unwrap().is_none());
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
     // Position this boundary test immediately before the guaranteed stage-5 rest.
-    let rest = g.map.nodes.iter().find(|n| n.row == 4).unwrap().id;
+    let rest = g
+        .map
+        .nodes
+        .iter()
+        .find(|n| {
+            n.row == 4
+                && n.next.iter().any(|&id| {
+                    matches!(g.map.nodes[id].kind, NodeKind::Combat | NodeKind::Elite)
+                })
+        })
+        .unwrap()
+        .id;
     let predecessor = g
         .map
         .nodes
@@ -279,7 +290,7 @@ fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
     let rest = g
         .available_nodes()
         .into_iter()
-        .find(|&id| g.map.nodes[id].kind == NodeKind::Rest)
+        .find(|&id| id == rest)
         .unwrap();
     g.dispatch(Command::SelectNode { id: rest }).unwrap();
     let s = g.snapshot();

@@ -21,7 +21,7 @@ struct SavedRun {
     legacy_boss_commands: usize,
 }
 
-const SAVE_VERSION: u32 = 20;
+const SAVE_VERSION: u32 = 23;
 
 /// The only browser state owner. JavaScript sends intentions and renders snapshots.
 #[wasm_bindgen]
@@ -177,14 +177,11 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
     let header: serde_json::Value =
         serde_json::from_str(saved).map_err(|_| "저장된 원정을 읽을 수 없습니다.")?;
     let version = header.get("version").and_then(|v| v.as_u64());
-    if !matches!(version, Some(19) | Some(20)) {
+    if version != Some(u64::from(SAVE_VERSION)) {
         return Err("이전 게임 규칙으로 저장된 원정입니다. 이어갈 수 없어 새 원정을 시작해야 합니다. 기존 기록은 새 원정을 시작하기 전까지 보존됩니다.".into());
     }
     let mut save: SavedRun =
         serde_json::from_str(saved).map_err(|_| "저장된 원정을 읽을 수 없습니다.")?;
-    if save.version == 19 {
-        save.legacy_boss_commands = save.commands.len();
-    }
     if save.legacy_boss_commands > save.commands.len() {
         return Err("저장된 원정의 진행 기록이 올바르지 않습니다.".into());
     }
@@ -340,8 +337,12 @@ mod save_tests {
     }"#;
 
     #[test]
-    fn legacy_boss_history_migrates_and_new_two_action_turns_restore() {
-        let (mut game, mut save) = restore_saved_run(LEGACY_BOSS_RUN).unwrap();
+    fn current_boss_history_with_legacy_boundary_restores_two_action_turns() {
+        assert!(restore_saved_run(LEGACY_BOSS_RUN).is_err());
+        let mut fixture: serde_json::Value = serde_json::from_str(LEGACY_BOSS_RUN).unwrap();
+        fixture["version"] = SAVE_VERSION.into();
+        fixture["legacy_boss_commands"] = 5.into();
+        let (mut game, mut save) = restore_saved_run(&fixture.to_string()).unwrap();
         let snapshot = game.snapshot();
         assert_eq!(snapshot.round, 3);
         assert_eq!(snapshot.turn, PLAYER);
@@ -388,7 +389,10 @@ mod save_tests {
             "commands":[{"type":"select_node","id":0},
                 {"type":"play_card_selection","id":5,"targets":[1,10040]}]
         }"#;
-        let (mut game, mut save) = restore_saved_run(saved).unwrap();
+        let mut fixture: serde_json::Value = serde_json::from_str(saved).unwrap();
+        fixture["version"] = SAVE_VERSION.into();
+        fixture["legacy_boss_commands"] = 2.into();
+        let (mut game, mut save) = restore_saved_run(&fixture.to_string()).unwrap();
         assert_eq!(game.battle.turn, PLAYER);
         assert!(game.battle.pending_choice().is_some());
         assert_eq!(save.legacy_boss_commands, 2);
@@ -450,13 +454,15 @@ mod save_tests {
             .as_object_mut()
             .unwrap()
             .remove("legacy_boss_commands");
+        assert!(restore_saved_run(&saved.to_string()).is_err());
+        saved["version"] = SAVE_VERSION.into();
         let (restored, _) = restore_saved_run(&saved.to_string()).unwrap();
         assert_eq!(
             serde_json::to_value(restored.snapshot()).unwrap(),
             serde_json::to_value(game.game.snapshot()).unwrap()
         );
 
-        saved["version"] = serde_json::json!(20);
+        saved["version"] = serde_json::json!(SAVE_VERSION);
         saved["legacy_boss_commands"] = serde_json::json!(2);
         assert!(restore_saved_run(&saved.to_string()).is_err());
         saved["version"] = serde_json::json!(18);

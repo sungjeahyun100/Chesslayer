@@ -7,6 +7,7 @@ const relicNames: Record<string, string> = {
   fire_control: "사격 통제", recon_scope: "정찰 조준경",
 };
 const tactics: Record<string, string> = {
+  avenger: "카드 행마권 · 연속 이동 · 수동 턴 종료",
   guardian: "기물 강화 · 가호 · 고유 행마",
   vanguard: "부대 행동 2회 · 민첩 · 희생",
   heretic: "식재료 · 시체 · 황충의 축복",
@@ -21,6 +22,19 @@ export function SquadSelection({ choices, character, onCharacter, floor, onFloor
   developerMode: boolean; onBack: () => void; onStart: () => void; onToggleDeveloperMode: () => void; ready: boolean;
 }) {
   const selected = choices.find((choice) => choice.id === character);
+  const mainChoices = choices.filter((choice) => choice.id !== "avenger");
+  const testChoice = choices.find((choice) => choice.id === "avenger");
+  const renderChoice = (choice: Character) => {
+    const unlocked = progress.unlocked_squads.includes(choice.id);
+    const testSquad = choice.id === "avenger";
+    return <button className={`character ${character === choice.id ? "chosen" : ""} ${unlocked ? "" : "locked"}`}
+      key={choice.id} data-squad-id={choice.id} disabled={!unlocked} onClick={() => onCharacter(choice.id)} aria-pressed={character === choice.id}>
+      <RelicIcon id={choice.relic} name={relicNames[choice.relic] ?? choice.name} className="character-icon" />
+      <span className="eyebrow">{testSquad ? "복수귀 부대" : choice.title}</span><h2>{testSquad ? "테스트용 부대" : choice.name}</h2>
+      <p>{choice.description}</p><small className="squad-tactics">{tactics[choice.id]}</small>
+      <span className="character-radio">{!unlocked ? `${choice.unlock_floor}층 보스 격파 시 해금` : character === choice.id ? "● 선택됨" : "○ 선택 가능"}</span>
+    </button>;
+  };
   return <main className="selection-page">
     <button className="text-button" onClick={onBack}>← 처음으로</button>
     <p className="eyebrow">CHOOSE YOUR EXPEDITION</p>
@@ -33,17 +47,12 @@ export function SquadSelection({ choices, character, onCharacter, floor, onFloor
       <span role="status">{developerMode ? mode === "endless" ? "켜짐 · 모든 부대 선택 가능" : "켜짐 · 모든 부대 선택 및 층 바로 시작 가능" : "꺼짐 · 일반 해금 기록 적용"}</span>
     </div>
     <div className="characters">
-      {choices.map((choice) => {
-        const unlocked = progress.unlocked_squads.includes(choice.id);
-        return <button className={`character ${character === choice.id ? "chosen" : ""} ${unlocked ? "" : "locked"}`}
-          key={choice.id} disabled={!unlocked} onClick={() => onCharacter(choice.id)} aria-pressed={character === choice.id}>
-          <RelicIcon id={choice.relic} name={relicNames[choice.relic] ?? choice.name} className="character-icon" />
-          <span className="eyebrow">{choice.title}</span><h2>{choice.name}</h2>
-          <p>{choice.description}</p><small className="squad-tactics">{tactics[choice.id]}</small>
-          <span className="character-radio">{!unlocked ? `${choice.unlock_floor}층 보스 격파 시 해금` : character === choice.id ? "● 선택됨" : "○ 선택 가능"}</span>
-        </button>;
-      })}
+      {mainChoices.map(renderChoice)}
     </div>
+    {testChoice && <section className="test-squad-section" aria-labelledby="test-squad-heading">
+      <h2 id="test-squad-heading">테스트용 부대</h2>
+      <div className="characters test-squad-choices">{renderChoice(testChoice)}</div>
+    </section>}
     {developerMode && mode === "campaign" && <div className="floor-selection" role="group" aria-label="개발자 출발 층 선택">
       {[1, 2, 3, 4].map((value) => <button key={value} className={floor === value ? "selected" : ""}
         aria-pressed={floor === value} onClick={() => onFloor(value)}>
@@ -53,7 +62,7 @@ export function SquadSelection({ choices, character, onCharacter, floor, onFloor
         <strong>최종 결전 · 부족의 독재자</strong><span>{progress.final_defeated ? "격파 완료 · 재도전 가능" : "별도 결전 · 보스 전투 1회"}</span>
       </button>}
     </div>}
-    <div className="launch"><span className="muted">{selected?.name} · {mode === "endless" ? "무한 원정 · 1층 출발" : floor === 0 ? "최종 결전" : `${floor}층 원정`}<br />{mode === "endless" ? "최고기록은 이 브라우저에 저장됩니다." : "해금 기록은 새 원정에도 유지됩니다."}</span>
+    <div className="launch"><span className="muted">{selected?.id === "avenger" ? "테스트용 부대" : selected?.name} · {mode === "endless" ? "무한 원정 · 1층 출발" : floor === 0 ? "최종 결전" : `${floor}층 원정`}<br />{mode === "endless" ? "최고기록은 이 브라우저에 저장됩니다." : "해금 기록은 새 원정에도 유지됩니다."}</span>
       <button className="primary large" onClick={onStart} disabled={!ready || !progress.unlocked_squads.includes(character)}>런 시작 <span>→</span></button>
     </div>
   </main>;

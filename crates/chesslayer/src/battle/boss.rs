@@ -4,6 +4,7 @@ use crate::{ActionStep, Effect};
 #[derive(Clone, Debug)]
 pub struct BossState {
     pub hp: i32,
+    pub max_health: i32,
     pub ammo: u8,
     pub hook: Option<PieceId>,
     pub movement_used: bool,
@@ -16,12 +17,17 @@ pub(super) fn hit_boss(
     board: &Board,
     victim: Piece,
     attacker: Option<PieceId>,
+    damage: i32,
 ) -> bool {
     let Some(state) = boss.as_mut() else {
         return true;
     };
-    state.hp -= 1;
-    events.push(format!("부족의 독재자 HP -1 · 현재 {}.", state.hp.max(0)));
+    state.max_health = state.max_health.max(state.hp);
+    state.hp = state.hp.saturating_sub(damage.max(0));
+    events.push(format!(
+        "부족의 독재자 HP -{damage} · 현재 {}.",
+        state.hp.max(0)
+    ));
     if state.hp <= 0 {
         state.hook = None;
         return true;
@@ -72,7 +78,8 @@ pub(super) fn death_near_boss(
     {
         return;
     }
-    state.hp += 1;
+    state.hp = state.hp.saturating_add(1);
+    state.max_health = state.max_health.max(state.hp);
     events.push(format!(
         "찢고 죽여라: {}의 죽음으로 HP +1 · 현재 {}.",
         piece_name(victim.kind),
@@ -92,7 +99,7 @@ impl Battle {
     }
 
     pub fn boss_action_candidates(&self) -> Vec<DefaultAction> {
-        self.piece_position(self.royal_id)
+        self.piece_position(self.boss_id)
             .filter(|(_, p)| p.kind == pieces::TRIBAL_DICTATOR)
             .and_then(|(at, _)| self.actions_from(at, false).ok())
             .unwrap_or_default()
@@ -108,7 +115,7 @@ impl Battle {
     pub(super) fn is_boss_actor(&self, piece: Piece) -> bool {
         self.boss.is_some()
             && piece.owner == ENEMY
-            && piece.id == self.royal_id
+            && piece.id == self.boss_id
             && piece.kind == pieces::TRIBAL_DICTATOR
     }
 
@@ -166,7 +173,7 @@ impl Battle {
     ) -> Option<u8> {
         let mut proxy = self.clone();
         let piece = proxy.board.piece_at(from).ok().flatten()?;
-        if piece.id != self.royal_id {
+        if piece.id != self.boss_id {
             return None;
         }
         proxy
@@ -250,15 +257,17 @@ impl Battle {
     }
 
     pub(super) fn boss_hit(&mut self, victim: Piece, attacker: Option<PieceId>) -> bool {
-        if victim.id != self.royal_id {
+        if victim.id != self.boss_id {
             return true;
         }
+        let damage = attacker.map(|id| self.stats(id).attack).unwrap_or(1);
         hit_boss(
             &mut self.boss,
             &mut self.events,
             &self.board,
             victim,
             attacker,
+            damage,
         )
     }
 
@@ -267,7 +276,7 @@ impl Battle {
             &mut self.boss,
             &mut self.absorbed,
             &mut self.events,
-            self.royal_id,
+            self.boss_id,
             &self.board,
             victim,
             at,
@@ -281,7 +290,7 @@ impl Battle {
         let Some(piece) = self.board.piece_at(from).ok().flatten() else {
             return vec![];
         };
-        if piece.id != self.royal_id {
+        if piece.id != self.boss_id {
             return vec![];
         }
         if boss.ammo == 0 {
@@ -311,7 +320,7 @@ impl Battle {
     }
 
     pub(super) fn boss_copied_special_actions(&self, from: Position) -> Vec<DefaultAction> {
-        let Some(kinds) = self.absorbed.get(&self.royal_id) else {
+        let Some(kinds) = self.absorbed.get(&self.boss_id) else {
             return vec![];
         };
         let mut kinds: Vec<_> = kinds.iter().copied().collect();
@@ -353,7 +362,7 @@ impl Battle {
             .map_err(|_| Error::IllegalAction)?;
         if !self
             .absorbed
-            .get(&self.royal_id)
+            .get(&self.boss_id)
             .is_some_and(|kinds| kinds.contains(&kind))
         {
             return Err(Error::IllegalAction);
@@ -362,14 +371,14 @@ impl Battle {
         let Some(piece) = self.board.piece_at(from)? else {
             return Err(Error::IllegalAction);
         };
-        if piece.id != self.royal_id || piece.kind != pieces::TRIBAL_DICTATOR {
+        if piece.id != self.boss_id || piece.kind != pieces::TRIBAL_DICTATOR {
             return Err(Error::IllegalAction);
         }
         self.board.set_piece(from, Some(Piece { kind, ..piece }))?;
         let mut copied = action.clone();
         copied.first.transition = (!original.is_empty()).then(|| original.to_string());
         let result = self.apply_effect(&copied, ActionSource::PieceMove);
-        if let Some((at, current)) = self.piece_position(self.royal_id) {
+        if let Some((at, current)) = self.piece_position(self.boss_id) {
             self.board.set_piece(
                 at,
                 Some(Piece {
@@ -386,7 +395,7 @@ impl Battle {
         let Some(id) = self.boss.as_mut().and_then(|b| b.hook.take()) else {
             return Ok(());
         };
-        let Some((boss_at, _)) = self.piece_position(self.royal_id) else {
+        let Some((boss_at, _)) = self.piece_position(self.boss_id) else {
             return Ok(());
         };
         let Some((target_at, target)) = self.piece_position(id) else {
@@ -420,7 +429,7 @@ impl Battle {
             self.board.set_piece(to, Some(target))?;
             self.sync_players();
             self.combat_events.push(CombatEvent::ChainPull {
-                boss_id: self.royal_id,
+                boss_id: self.boss_id,
                 boss_at,
                 piece_id: id,
                 from: target_at,
@@ -443,7 +452,7 @@ impl Battle {
         let Some(tag) = action.first.transition.as_deref() else {
             return Ok(false);
         };
-        let Some((at, actor)) = self.piece_position(self.royal_id) else {
+        let Some((at, actor)) = self.piece_position(self.boss_id) else {
             return Ok(false);
         };
         if actor.kind != pieces::TRIBAL_DICTATOR || action.first.from != at {
@@ -500,7 +509,12 @@ impl Battle {
                                 piece_name(victim.kind)
                             ));
                         } else {
-                            self.kill_at(target, false)?;
+                            let damage = self.stats(actor.id).attack.max(0);
+                            let stats = self.stats_mut(victim.id);
+                            stats.health = stats.health.saturating_sub(damage);
+                            if stats.health <= 0 || victim.kind == pieces::CORPSE {
+                                self.kill_at(target, false)?;
+                            }
                             result = if victim.kind != pieces::CORPSE
                                 && self
                                     .piece_position(victim.id)
@@ -1118,6 +1132,7 @@ mod tests {
             .unwrap();
         battle.apply_piece_action(&action).unwrap();
         assert_eq!(battle.boss().unwrap().hp, before - 1);
+        assert_eq!(battle.stats(100).max_health, before);
         assert!(battle.piece_position(100).is_some());
     }
 }

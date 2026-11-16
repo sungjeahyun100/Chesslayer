@@ -1,34 +1,16 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-const commands = JSON.parse(
-  readFileSync("../crates/chesslayer/tests/fixtures/winning-run.json", "utf8"),
-);
+import { checkpoint } from "./helpers/uiRuns";
 const saveKey = "chesslayer.run.v1";
 
 // Build a legitimate save through the production WASM commands, including AI turns.
 // No injected snapshots or test-only game APIs.
 async function loadRest(page: Page, casualties = false) {
+  const prepared = checkpoint(casualties ? "casualties" : "rest");
   await page.goto("/");
-  await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
-  await page.evaluate(
-    async ({ commands, saveKey }) => {
-      const url = "/src/wasm/chesslayer_web.js";
-      const { default: init, WebGame } = await import(url);
-      await init();
-      const game = new WebGame("vanguard", 2026);
-      for (const [index, command] of commands.entries()) {
-        let s = JSON.parse(game.snapshot());
-        while (s.phase === "combat" && s.turn === 1)
-          s = JSON.parse(game.dispatch(JSON.stringify({ type: "enemy_step" })));
-        if (s.phase === "rest") break;
-        try { game.dispatch(JSON.stringify(command)); }
-        catch (e) { throw new Error(`fixture command ${index}: ${String(e)}`); }
-      }
-      localStorage.setItem(saveKey, game.save());
-      game.free();
-    },
-    { commands: casualties ? JSON.parse(readFileSync("../crates/chesslayer/tests/fixtures/rest-revive.json", "utf8")) : commands, saveKey },
-  );
+  await page.evaluate(({ saved, key }) => {
+    localStorage.setItem(key, saved);
+    localStorage.setItem("chesslayer.run.developer.v1", "true");
+  }, { saved: prepared.saved, key: saveKey });
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "rest");
@@ -166,10 +148,8 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   await page.locator('[data-square="a3"]').click();
   await expect(page.locator(".rest-detail")).toHaveCount(0);
   await page.locator('[data-square="e1"]').click();
-  await page.locator(".skill-node").click();
-  await expect(
-    page.getByText("강화 경로 없음"),
-  ).toBeVisible();
+  await page.locator('.skill-node[data-kind="94"]').click();
+  await expect(page.locator(".skill-node.available")).toHaveCount(0);
   await page.locator('[data-square="a2"]').click();
   await expect(page.locator('[data-square="a2"]')).toHaveAttribute(
     "aria-pressed",
@@ -228,7 +208,7 @@ test("휴식: 보드 선택·강화 미리보기·취소·확정·저장·다음
   await page.getByRole("button", { name: "원정 현황 닫기" }).click();
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
-  await page.locator('[data-node-id="13"]').click();
+  await page.locator('.map-node:enabled[data-kind="combat"]').first().click();
   await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute(
     "data-piece-key",
     "tempest_pawn",
@@ -246,18 +226,21 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   await page.setViewportSize({ width: 390, height: 844 });
   await loadRest(page, true);
   const before = await saved(page);
-  await page.locator('[data-square="h1"]').click();
+  const dead = (await restoreSnapshot(page)).rest_options.find((p: any) => p.dead && p.can_revive);
+  expect(dead).toBeTruthy();
+  const originSquare = `${"abcdefgh"[dead.origin % 8]}${8 - Math.floor(dead.origin / 8)}`;
+  await page.locator(`[data-square="${originSquare}"]`).click();
   await expect(page.getByText("이 기물을 되살리시겠습니까?")).toBeVisible();
   await expect(page.locator(".rest-portrait img")).toHaveAttribute(
     "data-piece-key",
-    "rook",
+    dead.key,
   );
   await expect(page.locator(".rest-ghost")).toHaveCount(1);
   await expect(page.locator(".rest-ghost img")).toBeVisible();
   expect(await saved(page)).toBe(before);
   await page.keyboard.press("Escape");
   await expect(page.locator(".rest-ghost")).toHaveCount(0);
-  await page.locator('[data-square="h1"]').click();
+  await page.locator(`[data-square="${originSquare}"]`).click();
   await allImagesLoaded(page);
   expect(
     await page.evaluate(
@@ -276,16 +259,16 @@ test("모바일 휴식: 사망 기물만 원점 부활·취소·저장 후 재�
   await page.getByRole("button", { name: "부활 확정" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
   let snapshot = await restoreSnapshot(page);
-  expect(snapshot.pieces.find((p: any) => p.id === 8)).toMatchObject({
-    key: "rook",
-    cell: 63,
+  expect(snapshot.pieces.find((p: any) => p.id === dead.id)).toMatchObject({
+    key: dead.key,
+    cell: dead.origin,
   });
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
-  await page.locator('[data-node-id="14"]').click();
+  await page.locator('.map-node:enabled[data-kind="combat"]').first().click();
   snapshot = await restoreSnapshot(page);
   expect(snapshot.phase).toBe("combat");
-  expect(snapshot.pieces.find((p: any) => p.id === 8)?.key).toBe("rook");
+  expect(snapshot.pieces.find((p: any) => p.id === dead.id)?.key).toBe(dead.key);
 });
 
 test("휴식: 룩·비숍·나이트·퀸의 분기 강화와 저장·원점 배치", async ({ page }) => {
@@ -335,7 +318,7 @@ test("휴식: 룩·비숍·나이트·퀸의 분기 강화와 저장·원점 배
       expect(after.log.at(-1)).toContain(`${piece.name} → ${name}`);
       await page.reload();
       await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
-      await page.locator('[data-node-id="13"]').click();
+      await page.locator('.map-node:enabled[data-kind="combat"]').first().click();
       await expect(page.locator(`[data-piece-id="${piece.id}"] img`)).toHaveAttribute("data-piece-key", key);
       const next = await restoreSnapshot(page);
       expect(next.rest_options.find((p: any) => p.id === piece.id)).toMatchObject({

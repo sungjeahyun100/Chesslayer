@@ -2,10 +2,45 @@ use chesslayer::{content::*, game::*, map::*, *};
 use std::collections::HashSet;
 
 #[test]
+fn every_floor_has_four_shops_and_three_events_on_distinct_branch_rows() {
+    for seed in 0..128 {
+        for floor in 1..=4 {
+            let map = ActMap::generate_for_floor(seed, floor);
+            let shops = map
+                .nodes
+                .iter()
+                .filter(|node| node.kind == NodeKind::Shop)
+                .collect::<Vec<_>>();
+            let events = map
+                .nodes
+                .iter()
+                .filter(|node| node.kind == NodeKind::Event)
+                .collect::<Vec<_>>();
+            assert_eq!(shops.len(), 4, "seed {seed}, floor {floor}");
+            assert_eq!(events.len(), 3, "seed {seed}, floor {floor}");
+            assert!(shops.iter().any(|node| node.row == 9));
+            assert!(events.iter().any(|node| node.row == 3));
+            let special_rows = shops
+                .iter()
+                .chain(events.iter())
+                .map(|node| node.row)
+                .collect::<HashSet<_>>();
+            assert_eq!(special_rows.len(), 7, "seed {seed}, floor {floor}");
+            assert!(special_rows.iter().all(|&row| row >= 2));
+            assert!(shops
+                .iter()
+                .chain(events.iter())
+                .all(|node| node.encounter.is_none()));
+        }
+    }
+}
+
+#[test]
 fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
     let mut distinct = HashSet::new();
     let mut elites = HashSet::new();
     let mut saw_treasure = false;
+    let mut wide_rows_seen = HashSet::new();
     for seed in 0..128 {
         let map = ActMap::generate(seed);
         assert_eq!(map, ActMap::generate(seed));
@@ -14,7 +49,13 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
         distinct.insert(serde_json::to_string(&map).unwrap());
         let starts = map.starts();
         assert_eq!(starts.len(), 3);
-        assert!(starts.iter().all(|&id| map.nodes[id].next.len() == 2));
+        assert!(starts.iter().all(|&id| map.nodes[id].next.len() >= 2));
+        for row in [1, 3, 5, 7, 9, 11] {
+            let width = map.nodes.iter().filter(|node| node.row == row).count();
+            assert!((6..=7).contains(&width), "seed {seed}, row {row}");
+            wide_rows_seen.insert(width);
+        }
+        assert!(map.nodes.iter().all(|node| node.lane < MAP_LANES));
         let boss = map
             .nodes
             .iter()
@@ -101,6 +142,7 @@ fn seeded_maps_have_branches_merges_and_no_stranded_nodes() {
         assert!(map.nodes.iter().any(|n| n.kind == NodeKind::Elite));
     }
     assert!(distinct.len() > 120);
+    assert_eq!(wide_rows_seen, HashSet::from([6, 7]));
     assert!(saw_treasure);
     assert_eq!(elites, encounters::ELITES.into());
 }
@@ -230,6 +272,16 @@ fn traversal_is_validated_and_rewards_preserve_the_generated_map() {
         .unwrap();
     game.dispatch(Command::SelectNode { id: treasure }).unwrap();
     assert_ne!(game.path, other.path);
+    let mut skipped = game.clone();
+    let skipped_deck = skipped.deck.clone();
+    let skipped_relics = skipped.relics.clone();
+    skipped.dispatch(Command::SkipTreasure).unwrap();
+    assert_eq!(skipped.phase, RunPhase::Map);
+    assert_eq!(skipped.deck, skipped_deck);
+    assert_eq!(skipped.relics, skipped_relics);
+    assert_eq!(skipped.completed, vec![start, treasure]);
+    assert_eq!(skipped.available_nodes(), original.nodes[treasure].next);
+    assert!(skipped.dispatch(Command::SkipTreasure).is_err());
     let deck_before = game.deck.len();
     let relics_before = game.relics.len();
     game.dispatch(Command::ClaimTreasure).unwrap();

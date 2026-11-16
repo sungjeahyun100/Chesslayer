@@ -1,49 +1,38 @@
 import { test, expect } from "@playwright/test";
-import { readFileSync } from "node:fs";
+import { newRun, dispatch, snapshot, winHillBattle, enemyTurn } from "./helpers/uiRuns";
 import type { Command, RelicId, Snapshot } from "../src/types";
 
-const runs: { relic: RelicId; seed: number; commands: Command[] }[] = JSON.parse(
-  readFileSync("../crates/chesslayer/tests/fixtures/relic-runs.json", "utf8"),
-);
-
+const relicIds: RelicId[] = ["kings_indian", "queens_indian", "hedgehog", "initiative", "ice_cream"];
 test("신규 유물 5종: 실제 획득·배치·선공권·누적 코스트·명령별 저장 복원", async ({ page }) => {
+  test.setTimeout(120000);
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
-  for (const run of runs) {
-    const result = await page.evaluate(async (run) => {
-      const url = "/src/wasm/chesslayer_web.js";
-      const { default: init, WebGame } = await import(url);
-      await init();
-      const game = new WebGame("vanguard", run.seed);
-      const check = () => {
-        const restored = WebGame.restore(game.save());
-        try {
-          if (restored.snapshot() !== game.snapshot()) throw new Error("relic replay diverged");
-        } finally { restored.free(); }
-      };
-      const dispatch = (command: Command) => {
-        const s: Snapshot = JSON.parse(game.dispatch(JSON.stringify(command)));
-        check();
-        return s;
-      };
+  for (const relicId of relicIds) {
+    const run = { relic: relicId };
+    let result: {start: Snapshot; saved: string; next: Snapshot; nextSave: string} | undefined;
+    for (let seed = 0; seed < 80 && !result; seed++) {
+      const game = newRun("guardian", seed);
       try {
-        for (const command of run.commands) {
-          let s = dispatch(command);
-          while (s.phase === "combat" && s.turn === 1) s = dispatch({ type: "enemy_step" });
-        }
-        const start: Snapshot = JSON.parse(game.snapshot());
-        const saved = game.save();
-        if (run.relic === "initiative" || run.relic === "ice_cream") {
-          dispatch({ type: "end_turn" });
-          let s: Snapshot = JSON.parse(game.snapshot());
-          while (s.phase === "combat" && s.turn === 1) s = dispatch({ type: "enemy_step" });
-        }
-        return { start, saved, next: JSON.parse(game.snapshot()) as Snapshot, nextSave: game.save() };
+        dispatch(game, { type: "developer_set_upgrade", id: 5, target: 94 });
+        winHillBattle(game, snapshot(game).map.nodes.find(n => n.available)!.id);
+        const index = snapshot(game).rewards.findIndex(r => r.type === "relic" && r.definition.id === relicId);
+        if (index < 0) continue;
+        dispatch(game, { type: "claim_reward", index });
+        dispatch(game, { type: "continue_reward" });
+        const nextNode = snapshot(game).map.nodes.find(n => n.available && !n.visited && n.kind === "combat")!;
+        dispatch(game, { type: "select_node", id: nextNode.id });
+        const start = snapshot(game), saved = game.save();
+        if (relicId === "initiative" || relicId === "ice_cream") { dispatch(game, { type: "end_turn" }); enemyTurn(game); }
+        const restored = (await import("../src/wasm/chesslayer_web")).WebGame.restore(game.save());
+        try { expect(restored.snapshot()).toBe(game.snapshot()); } finally { restored.free(); }
+        result = {start, saved, next: snapshot(game), nextSave: game.save()};
       } finally { game.free(); }
-    }, run);
-    expect(JSON.parse(result.saved).version).toBe(20);
+    }
+    expect(result).toBeTruthy();
+    if (!result) throw new Error(`No legitimate reward fixture for ${relicId}`);
+    expect(JSON.parse(result.saved).version).toBe(23);
     expect(result.start.relics.some((r) => r.id === run.relic)).toBe(true);
     if (run.relic === "initiative") {
       expect(result.start.initiative_turns_left).toBe(10);
@@ -65,6 +54,7 @@ test("신규 유물 5종: 실제 획득·배치·선공권·누적 코스트·�
     await page.reload();
     await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
     await expect(page.locator("main")).toHaveAttribute("data-phase", result.next.phase);
+    await page.locator(".relic-panel summary").click();
     const relic = result.next.relics.find((r) => r.id === run.relic)!;
     await expect(page.locator(".relic").filter({ hasText: relic.name })).toBeVisible();
     const relicImage = page.locator(".relic").filter({ hasText: relic.name }).locator("img");
@@ -82,7 +72,7 @@ test("신규 유물 5종: 실제 획득·배치·선공권·누적 코스트·�
     }
     if (run.relic === "ice_cream") {
       await expect(page.locator(".mana-orb")).toHaveText("6");
-      await expect(page.locator(".mana small")).toContainText("남은 코스트에 3");
+      await expect(page.locator(".relic").filter({ hasText: "아이스크림" })).toContainText(result.next.relics.find(r => r.id === "ice_cream")!.description);
     }
     if (run.relic === "kings_indian") {
       expect(result.start.pieces.find((p) => p.id === 4)?.square).toBe("d1");

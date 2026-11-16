@@ -1,4 +1,5 @@
 //! Card IDs, explicit registration and shared acquisition lists.
+pub mod avenger;
 mod fleeting_ward;
 mod gun;
 mod jeans;
@@ -59,6 +60,42 @@ pub use gun::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum CardKind {
+    PawnOrder,
+    MinorOrder,
+    MajorOrder,
+    Castling,
+    EnPassant,
+    MindControl,
+    Exile,
+    Revolution,
+    RoyalRevolution,
+    Aerobics,
+    Anaerobics,
+    SwapStats,
+    BadHand,
+    PotOfGreed,
+    Optimize,
+    Overestimate,
+    Steroids,
+    FullArmor,
+    AlekhineGun,
+    MakeBaby,
+    BloodOffering,
+    WealthOffering,
+    Bounty,
+    TacticalMove,
+    Rename,
+    AvengerLimiter,
+    Divinity,
+    Scp500,
+    ClaudeOptimize,
+    AllCharge,
+    DisarmAll,
+    BabyRank,
+    GunBarrage,
+    ComeHere,
+    Interference,
+
     Jeans,
     Ward,
     Gun,
@@ -112,7 +149,42 @@ pub enum CardKind {
 }
 impl CardKind {
     pub fn definition(self) -> CardDefinition {
-        match self {
+        let mut d = match self {
+            Self::PawnOrder
+            | Self::MinorOrder
+            | Self::MajorOrder
+            | Self::Castling
+            | Self::EnPassant
+            | Self::MindControl
+            | Self::Exile
+            | Self::Revolution
+            | Self::RoyalRevolution
+            | Self::Aerobics
+            | Self::Anaerobics
+            | Self::SwapStats
+            | Self::BadHand
+            | Self::PotOfGreed
+            | Self::Optimize
+            | Self::Overestimate
+            | Self::Steroids
+            | Self::FullArmor
+            | Self::AlekhineGun
+            | Self::MakeBaby
+            | Self::BloodOffering
+            | Self::WealthOffering
+            | Self::Bounty
+            | Self::TacticalMove
+            | Self::Rename
+            | Self::AvengerLimiter
+            | Self::Divinity
+            | Self::Scp500
+            | Self::ClaudeOptimize
+            | Self::AllCharge
+            | Self::DisarmAll
+            | Self::BabyRank
+            | Self::GunBarrage
+            | Self::ComeHere
+            | Self::Interference => avenger::definition(self),
             Self::Jeans => jeans::definition(),
             Self::Ward => ward::definition(),
             Self::Gun => gun::definition(),
@@ -163,7 +235,16 @@ impl CardKind {
             Self::SuppressionFire => suppression_fire::definition(),
             Self::FocusFire => focus_fire::definition(),
             Self::LastDefense => last_defense::definition(),
+        };
+        if !avenger::is_avenger(self) {
+            d.rarity = match d.cost {
+                0 | 1 => avenger::Rarity::Common,
+                2 => avenger::Rarity::Rare,
+                3 => avenger::Rarity::Epic,
+                _ => avenger::Rarity::Legendary,
+            };
         }
+        d
     }
 }
 
@@ -200,6 +281,7 @@ impl CardSelection {
 
 #[derive(Clone, Serialize)]
 pub struct CardDefinition {
+    pub rarity: avenger::Rarity,
     pub kind: CardKind,
     pub name: &'static str,
     pub cost: u32,
@@ -228,6 +310,7 @@ impl CardDefinition {
         effect: CardEffect,
     ) -> Self {
         Self {
+            rarity: avenger::Rarity::Common,
             kind,
             name,
             cost,
@@ -299,6 +382,7 @@ pub fn starter_deck() -> Vec<Card> {
 /// Separate troop pools: the Guardian keeps its existing card definitions.
 pub fn reward_pool(character: &str) -> &'static [CardKind] {
     match character {
+        "avenger" => avenger::REWARD_POOL,
         "vanguard" => &[
             CardKind::Stimpack,
             CardKind::BodySlam,
@@ -355,6 +439,10 @@ pub fn reward_pool(character: &str) -> &'static [CardKind] {
 pub fn starting_deck(character: &str) -> Vec<Card> {
     use CardKind::*;
     let kinds: &[CardKind] = match character {
+        "avenger" => &[
+            PawnOrder, PawnOrder, PawnOrder, PawnOrder, MinorOrder, MinorOrder, MinorOrder,
+            MinorOrder, MajorOrder, MajorOrder,
+        ],
         "vanguard" => &[
             Stimpack,
             Stimpack,

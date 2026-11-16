@@ -9,7 +9,7 @@ export const nodeTypes: Record<NodeKind, { icon: ReactNode; label: string }> = {
   rest: { icon: "⌂", label: "휴식" },
   treasure: { icon: "◇", label: "보물" },
   boss: { icon: "♛", label: "보스" },
-  event: { icon: "♨", label: "식당" },
+  event: { icon: "?", label: "이벤트" },
   shop: { icon: "¤", label: "상점" },
 };
 const status = (node: MapNode) =>

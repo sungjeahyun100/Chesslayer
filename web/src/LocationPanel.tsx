@@ -3,12 +3,16 @@ import { CardFace } from "./CardFace";
 import type { Command, Snapshot } from "./types";
 
 export function LocationPanel({ state, send }: { state: Snapshot; send: (command: Command) => void }) {
-  if (state.phase === "event") return <>
-    <p className="eyebrow">A WARM MEAL</p><h2>작은 식당</h2>
-    <p>오랜 원정 끝에 작은 식당을 발견했다.<br />주인은 말없이 따뜻한 음식을 내놓았다.</p>
-    <p className="muted">아군 모두의 공복·굶주림·기아를 해소합니다.</p>
-    <div className="location-actions"><button className="primary large" onClick={() => send({ type: "event_choice", choice: "eat" })}>식사하기 · 무료</button>
-      <button className="text-button" onClick={() => send({ type: "event_choice", choice: "leave" })}>떠나기 →</button></div>
+  if (state.phase === "event" && state.event) return <>
+    <p className="eyebrow">UNKNOWN ENCOUNTER · {{common:"일반", danger:"위험", rare:"희귀"}[state.event.grade]}</p><h2>{state.event.title}</h2>
+    <p>{state.event.description}</p>
+    {state.event.result && <p className="event-result" role="status">{state.event.result}</p>}
+    <div className={state.event.choices.some(c => c.card) ? "event-card-grid" : "location-actions"}>
+      {state.event.choices.map(c => <button key={c.id} disabled={c.disabled}
+        className={c.card ? "playing-card" : "primary large"} data-rarity={c.card ? c.card.rarity ?? "common" : undefined} onClick={() => send({type:"event_choice",choice:c.id})}>
+        {c.card ? <><CardFace card={c.card} /><span className="reward-select">{c.label}</span></> : c.label}
+      </button>)}
+    </div>
   </>;
   if (state.phase === "shop") return <ShopPanel state={state} send={send} />;
   return null;
@@ -36,7 +40,7 @@ function ShopPanel({ state, send }: { state: Snapshot; send: (command: Command) 
         </div>
         <div className="shop-burn-detail">
           {selected ? <>
-            <article className="playing-card" data-card-kind={selected.definition.kind}><CardFace card={selected.definition} /></article>
+            <article className="playing-card" data-card-kind={selected.definition.kind} data-rarity={selected.definition.rarity ?? "common"}><CardFace card={selected.definition} /></article>
             <p>소각 비용 <strong>{state.burn_cost}금화</strong></p>
             <button className="primary" disabled={state.gold < state.burn_cost}
               onClick={() => send({ type: "shop_burn", id: selected.id })}>
@@ -47,7 +51,7 @@ function ShopPanel({ state, send }: { state: Snapshot; send: (command: Command) 
       </div>
     </div> : <div className="shop-cards">{state.shop_offers.map((card, index) => {
       const bought = state.shop_bought.includes(index);
-      return <button className="playing-card" key={index} disabled={bought || state.gold < 20}
+      return <button className="playing-card" data-rarity={card.rarity ?? "common"} key={index} disabled={bought || state.gold < 20}
         onClick={() => send({ type: "shop_buy", index })} title={bought ? "이미 구매했습니다." : state.gold < 20 ? "금화가 부족합니다." : `${card.name} 구매 · 20금화`}>
         <CardFace card={card} /><span className="reward-select">{bought ? "구매 완료 ✓" : "20금화 · 구매"}</span>
       </button>;

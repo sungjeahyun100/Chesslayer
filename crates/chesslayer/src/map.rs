@@ -6,7 +6,7 @@ use crate::content::{
 use serde::Serialize;
 
 pub const MAP_ROWS: usize = 15;
-pub const MAP_LANES: usize = 5;
+pub const MAP_LANES: usize = 7;
 // Stages 5 and 11 are guaranteed rests. Stage 13 offers a third rest
 // instead of another reward; every route can visit at most three.
 const REST_ROWS: [usize; 2] = [4, 10];
@@ -37,7 +37,7 @@ impl MapNode {
         match self.kind {
             NodeKind::Rest => "작은 쉼터",
             NodeKind::Treasure => "남겨진 보물",
-            NodeKind::Event => "식당",
+            NodeKind::Event => "미지의 사건",
             NodeKind::Shop => "원정 상점",
             _ => ENCOUNTERS[self.encounter.expect("combat node has encounter")].name,
         }
@@ -57,7 +57,7 @@ impl MapNode {
                 self.relic.unwrap().name()
             ),
             NodeKind::Boss => "격파하면 다음 층과 보스 부대를 해금하고 이번 런을 마칩니다.".into(),
-            NodeKind::Event => "따뜻한 식사로 아군 전체의 허기를 해소합니다.".into(),
+            NodeKind::Event => "뜻밖의 보상이나 위험이 기다립니다. 진입 후 사건과 선택지를 확인하세요.".into(),
             NodeKind::Shop => "금화로 부대 전용 카드를 구입하거나 덱의 카드를 소각합니다.".into(),
         }
     }
@@ -104,17 +104,17 @@ impl ActMap {
         let mut treasure_rng = Rng::new(seed ^ 0x7a1e_0004 ^ (u32::from(floor - 1) << 24));
         let widths = [
             3,
-            4,
+            6 + rng.index(2),
             2,
-            3 + rng.index(2),
+            6 + rng.index(2),
             2,
-            3 + rng.index(2),
+            6 + rng.index(2),
             1,
-            4,
+            6 + rng.index(2),
             2,
-            3 + later_width_rng.index(2),
+            6 + later_width_rng.index(2),
             2,
-            3 + later_width_rng.index(2),
+            6 + later_width_rng.index(2),
             2,
             2,
             1,
@@ -134,17 +134,32 @@ impl ActMap {
                 0 => vec![NodeKind::Combat; width],
                 row if REST_ROWS.contains(&row) => vec![NodeKind::Rest; width],
                 BOSS_ROW => vec![NodeKind::Boss],
-                1 | 7 => vec![
-                    NodeKind::Combat,
-                    NodeKind::Combat,
-                    NodeKind::Treasure,
-                    NodeKind::Combat,
-                ],
+                1 | 7 => {
+                    let mut kinds = vec![
+                        NodeKind::Combat,
+                        NodeKind::Combat,
+                        NodeKind::Treasure,
+                        NodeKind::Combat,
+                        NodeKind::Treasure,
+                        NodeKind::Elite,
+                    ];
+                    if width == 7 {
+                        kinds.push(NodeKind::Treasure);
+                    }
+                    kinds
+                }
                 2 | 8 | 13 => vec![NodeKind::Combat, NodeKind::Elite],
                 3 | 5 | 9 | 11 => {
-                    let mut kinds = vec![NodeKind::Combat, NodeKind::Treasure, NodeKind::Combat];
-                    if width == 4 {
-                        kinds.push(NodeKind::Elite);
+                    let mut kinds = vec![
+                        NodeKind::Combat,
+                        NodeKind::Treasure,
+                        NodeKind::Combat,
+                        NodeKind::Elite,
+                        NodeKind::Treasure,
+                        NodeKind::Elite,
+                    ];
+                    if width == 7 {
+                        kinds.push(NodeKind::Treasure);
                     }
                     kinds
                 }
@@ -220,9 +235,11 @@ impl ActMap {
                 first_section_edges = Some(rng.clone());
             }
         }
-        // Each of the three starts offers two distinct, non-crossing routes.
-        for i in 0..3 {
-            nodes[layers[0][i]].next = vec![layers[1][i], layers[1][i + 1]];
+        // Cover every destination in the wider second row while giving each
+        // start at least two distinct, non-crossing choices.
+        for (j, &to) in layers[1].iter().enumerate() {
+            let i = j * layers[0].len() / layers[1].len();
+            nodes[layers[0][i]].next.push(to);
         }
         // An ordered staircase covers every source and destination. It allows forks,
         // merges and one-to-one edges without crossings, islands or dead ends.
@@ -255,6 +272,27 @@ impl ActMap {
                     }
                 }
             }
+        }
+        // Add shops and events on separate branch rows without changing the
+        // graph, encounter rolls, or the guaranteed event/shop placements.
+        let mut special_rng = Rng::new(seed ^ 0x5a0b_e7e3 ^ (u32::from(floor - 1) << 24));
+        let mut special_rows = [2, 5, 7, 8, 11, 13];
+        special_rng.shuffle(&mut special_rows);
+        for (row, kind) in special_rows.into_iter().zip([
+            NodeKind::Shop,
+            NodeKind::Shop,
+            NodeKind::Shop,
+            NodeKind::Event,
+            NodeKind::Event,
+        ]) {
+            let combat_nodes = nodes
+                .iter()
+                .filter(|node| node.row == row && node.kind == NodeKind::Combat)
+                .map(|node| node.id)
+                .collect::<Vec<_>>();
+            let id = combat_nodes[special_rng.index(combat_nodes.len())];
+            nodes[id].kind = kind;
+            nodes[id].encounter = None;
         }
         Self {
             nodes,

@@ -3,12 +3,13 @@ import { CardFace } from "./CardFace";
 import { RelicIcon } from "./ContentArt";
 import { PieceImage } from "./PieceImage";
 import { UpgradeTree } from "./UpgradeTree";
-import type { CardDefinition, Character, RestOption, UpgradePath } from "./types";
+import { rarityNames } from "./rarity";
+import type { CardDefinition, Character, Rarity, RestOption, UpgradePath } from "./types";
 
 export interface CompendiumSquad {
   id: string;
   cards: { definition: CardDefinition; starting: boolean; available: boolean }[];
-  relics: { id: string; name: string; description: string; starting: boolean }[];
+  relics: { id: string; name: string; description: string; rarity?: Rarity; starting: boolean }[];
   pieces: CompendiumPiece[];
 }
 export interface CompendiumPiece {
@@ -95,7 +96,7 @@ export function Compendium({ choices, entries, onBack }: { choices: Character[];
     </nav>
     {!squad && <p>도감 정보를 불러오는 중입니다.</p>}
     {squad && category === "cards" && <div className="compendium-grid">
-      {squad.cards.map((card) => <article key={card.definition.kind} className="compendium-card">
+      {squad.cards.map((card) => <article key={card.definition.kind} className="compendium-card" data-rarity={card.definition.rarity ?? "common"}>
         <div className="compendium-badges"><span>{cardOwners(card.definition.kind) > 1 ? "공용" : "부대 전용"}</span>{card.starting && <span>시작 덱</span>}{!card.available && <span>현재 획득 경로 없음</span>}</div>
         <CardFace card={card.definition} />
         <p className="compendium-condition">{card.definition.cost_per_target ? "대상 기물마다 코스트 1" : `코스트 ${card.definition.cost}`}
@@ -104,8 +105,8 @@ export function Compendium({ choices, entries, onBack }: { choices: Character[];
       {!squad.cards.length && <p>현재 정의된 카드가 없습니다.</p>}
     </div>}
     {squad && category === "relics" && <div className="compendium-grid relics">
-      {squad.relics.map((relic) => <article key={relic.id} className="compendium-relic">
-        <div className="compendium-badges"><span>{relicOwners(relic.id) > 1 ? "공용" : "부대 전용"}</span>{relic.starting && <span>시작 유물</span>}</div>
+      {squad.relics.map((relic) => <article key={relic.id} className="compendium-relic" data-rarity={relic.rarity ?? "common"}>
+        <div className="compendium-badges"><span>{rarityNames[relic.rarity ?? "common"]}</span><span>{relicOwners(relic.id) > 1 ? "공용" : "부대 전용"}</span>{relic.starting && <span>시작 유물</span>}</div>
         <RelicIcon id={relic.id} name={relic.name} /><h3>{relic.name}</h3><p>{relic.description}</p>
       </article>)}
       {!squad.relics.length && <p>현재 정의된 유물이 없습니다.</p>}

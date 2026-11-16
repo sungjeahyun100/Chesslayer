@@ -218,7 +218,7 @@ export function PieceSandbox({ choices, entries, onBack }: { choices: Character[
         {snapshot.events.length > 0 && <p className="sandbox-v2-event" role="status">{snapshot.events.at(-1)}</p>}
         <section className="sandbox-v2-hand"><div className="sandbox-v2-section-title"><h2>손패</h2><span>마나 <strong>{snapshot.mana}</strong> · 드로우 {snapshot.draw_count} · 버림 {snapshot.discard_count} · 소멸 {snapshot.exhausted_count}</span></div>
           <div className="sandbox-v2-hand-tools"><button onClick={() => run(() => engine.current!.draw_card(), true)}>1장 드로우</button><button onClick={() => { run(() => engine.current!.redraw_hand(), true); cancelCard(); }}>손패 다시 뽑기</button><button onClick={() => run(() => engine.current!.set_mana(snapshot.mana + 3), true)}>마나 +3</button><label>마나 <input type="number" min="0" max="9999" value={snapshot.mana} onChange={(event) => run(() => engine.current!.set_mana(Number(event.target.value) || 0), true)} /></label></div>
-          <div className="sandbox-v2-hand-list">{snapshot.hand.map((card) => <button key={card.id} className={`sandbox-v2-hand-card ${activeCardId === card.id ? "selected" : ""}`} onClick={() => {
+          <div className="sandbox-v2-hand-list">{snapshot.hand.map((card) => <button key={card.id} className={`sandbox-v2-hand-card ${activeCardId === card.id ? "selected" : ""}`} data-rarity={card.definition.rarity ?? "common"} onClick={() => {
             if (card.disabled_reason) { setError(card.disabled_reason); return; }
             setActiveCardId(card.id); setStagedTargets([]); setStagedUpgrades([]); setUpgradeFocus(null); setAbilityMode(false);
           }}><CardFace card={card.definition} /></button>)}{!snapshot.hand.length && <span className="sandbox-v2-empty">손패가 비어 있습니다.</span>}</div>

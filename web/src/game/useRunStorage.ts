@@ -44,9 +44,12 @@ export function useRunStorage() {
   const persist = useCallback((saved: string, snapshot: Snapshot, developerRun: boolean) => {
     const endless = snapshot.mode === "endless";
     if (!endless && !developerRun) setProgress((previous) => mergeProgress(previous, snapshot.progress ?? initialProgress));
-    if (endless && snapshot.cleared_stages > 0) {
+    if (endless && !developerRun && (snapshot.map.current !== null || snapshot.cleared_stages > 0)) {
       bestRef.current = updateEndlessBest(mergeEndlessRecord(bestRef.current, {
         clearedStages: snapshot.cleared_stages, highestFloor: snapshot.floor,
+        reachedStage: (snapshot.floor - 1) * 15 + (snapshot.map.nodes.find(n => n.current)?.row ?? 0) + 1, runSeed: snapshot.seed,
+        squad: snapshot.character, achievedAt: new Date().toISOString(), bossesDefeated: snapshot.bosses_defeated ?? 0,
+        deckSize: snapshot.deck_count, relicCount: snapshot.relics.length,
       }));
       setEndlessBest(bestRef.current);
     }

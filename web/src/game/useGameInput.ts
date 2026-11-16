@@ -1,4 +1,4 @@
-import { useEffect, useReducer } from "react";
+import { useEffect, useReducer, useState } from "react";
 import type { Ability, Card, Command, EnemyInspection, Snapshot } from "../types";
 import type { RestChoice } from "../RestPanel";
 import { idleInput, inputPolicy, inputReducer, inputView, type InputGate } from "./inputState";
@@ -15,6 +15,7 @@ interface Options {
 }
 
 export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnemy, setError, closeRewardUpgrade, returnToBoard }: Options) {
+  const [renameName, setRenameName] = useState("폰");
   const [input, dispatch] = useReducer(inputReducer, idleInput);
   const view = inputView(input);
   const { selected, enemyInspection, activeAbility, abilityTargets, targetCard, cardTargets, cardUpgrades, upgradeFocus } = view;
@@ -93,7 +94,7 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
         dispatch({ type: "focus-upgrade", id: piece.id });
       } else if (targetCard.definition.selection_mode === "multiple") {
         dispatch({ type: "toggle-card-target", id: targetId });
-      } else if (["limiter_release", "sacred_domain"].includes(targetCard.definition.kind)) {
+      } else if (["limiter_release", "sacred_domain", "rename"].includes(targetCard.definition.kind)) {
         dispatch({ type: "single-card-target", id: targetId });
       } else execute({ type: "play_card", id: targetCard.id, target: targetId });
       return;
@@ -115,6 +116,9 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
       else execute({ type: "move", from: selected, to: cell });
       return;
     }
+    if (piece?.owner === 1 && policy.act && state.squad_id === "avenger" && (piece.stats?.move_rights ?? 0) > 0) {
+      dispatch({ type: "select-piece", cell }); return;
+    }
     if (piece?.owner === 1 && policy.inspect) {
       const inspection = enemyInspection?.piece_id === piece.id ? null : inspectEnemy(cell);
       dispatch(inspection ? { type: "inspect-enemy", inspection } : { type: "reset" });
@@ -124,7 +128,9 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
   }
   function confirmCard() {
     if (!policy.act || !targetCard || stagedCount < 1 || stagedCost > state.mana) return;
-    if (["multiple", "upgrade"].includes(targetCard.definition.selection_mode)) {
+    if (targetCard.definition.kind === "rename") {
+      execute({ type: "play_named_card", id: targetCard.id, target: cardTargets[0], name: renameName });
+    } else if (["multiple", "upgrade"].includes(targetCard.definition.selection_mode)) {
       execute({ type: "play_card_selection", id: targetCard.id,
         targets: targetCard.definition.selection_mode === "multiple" ? cardTargets : [],
         upgrades: targetCard.definition.selection_mode === "upgrade" ? cardUpgrades : [] });
@@ -168,7 +174,7 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
   function hoverAbility(cell: number | null) {
     if (!policy.blocked) dispatch({ type: "hover-ability", cell });
   }
-  return { input, ...view, policy, focusedUpgrade, stagedCount, stagedCost, clickSquare, chooseCard, chooseAbility,
+  return { renameName, setRenameName, input, ...view, policy, focusedUpgrade, stagedCount, stagedCost, clickSquare, chooseCard, chooseAbility,
     confirmCard, cancelCard, confirmAbility, cancelAbility, confirmPromotion, cancelPromotion,
     confirmCardUpgrade, closeCardUpgrade, chooseDeadPawn, removeCardUpgrade, chooseRest, hoverAbility,
     send: execute, reset: () => dispatch({ type: "reset" }) };

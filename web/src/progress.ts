@@ -5,7 +5,7 @@ export const DEVELOPER_MODE_KEY = "chesslayer.developer_mode.v1";
 export const DEVELOPER_RUN_KEY = "chesslayer.run.developer.v1";
 export const initialProgress: Progress = {
   highest_floor: 1,
-  unlocked_squads: ["guardian"],
+  unlocked_squads: ["guardian", "avenger"],
   final_unlocked: false,
   final_defeated: false,
 };
@@ -13,7 +13,7 @@ export const initialProgress: Progress = {
 export function mergeProgress(previous: Progress, next: Progress): Progress {
   return {
     highest_floor: Math.min(4, Math.max(1, previous.highest_floor || 1, next.highest_floor || 1)),
-    unlocked_squads: [...new Set(["guardian", ...previous.unlocked_squads, ...next.unlocked_squads])],
+    unlocked_squads: [...new Set(["guardian", "avenger", ...previous.unlocked_squads, ...next.unlocked_squads])],
     final_unlocked: previous.final_unlocked || next.final_unlocked,
     final_defeated: previous.final_defeated || next.final_defeated,
   };

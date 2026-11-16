@@ -1,5 +1,6 @@
 import type { Relic } from "../types";
 import { RelicIcon } from "../ContentArt";
+import { rarityNames } from "../rarity";
 
 export function RelicList({ relics }: { relics: Relic[] }) {
   return (
@@ -8,10 +9,10 @@ export function RelicList({ relics }: { relics: Relic[] }) {
         보유 유물 <span>{relics.length}</span>
       </summary>
       {relics.map((r) => (
-        <div className="relic" key={r.id}>
+        <div className="relic" data-rarity={r.rarity ?? "common"} key={r.id}>
           <RelicIcon id={r.id} name={r.name} />
           <div>
-            <strong>{r.name}</strong>
+            <strong>{r.name}</strong> <small className="relic-rarity">{rarityNames[r.rarity ?? "common"]}</small>
             <p>{r.description}</p>
             {r.status && <small className="relic-status" role="status">{r.status}</small>}
           </div>

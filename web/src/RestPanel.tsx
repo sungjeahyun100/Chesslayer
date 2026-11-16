@@ -106,6 +106,14 @@ export function RestPanel({ state, choice, onChoose, onCancel, send, history, on
       {!piece ? (
         <div className="rest-intro">
           <h2>{reward ? "강화할 기물 선택" : "기물 선택"}</h2>
+          {!reward && state.mode === "endless" && <>
+            <details><summary>카드 무료 소각 · 휴식 행동 1회</summary><p>선택한 카드 한 장을 덱에서 영구 제거합니다.</p>
+              {state.deck.map(c => <button key={c.id} onClick={() => send({type:"rest_burn",id:c.id})}>{c.definition.name} #{c.id} 소각</button>)}
+            </details>
+            <details><summary>유물 교체 · 휴식 행동 1회</summary><p>선택한 유물을 버리고 미보유 유물 중 하나를 무작위로 얻습니다.</p>
+              {state.relics.map(r => <button key={r.id} disabled={!state.relic_exchange_available} onClick={() => send({type:"rest_replace_relic",relic:r.id})}>{r.name} 교체</button>)}
+            </details>
+          </>}
           <p>{reward ? "보드에서 아군 기물을 선택하세요." : "아군 기물 또는 부활할 기물의 초기 칸을 선택하세요."}</p>
           {!reward && state.rest_options.some((option) => option.can_confess) && <div className="confession-options"><h3>고해성사가 필요한 기물</h3>
             {state.rest_options.filter((option) => option.can_confess).map((option) => <button key={option.id} onClick={() => onChoose({ id: option.id, cell: option.cell ?? option.origin ?? 0 })}>

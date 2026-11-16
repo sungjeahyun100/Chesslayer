@@ -1,5 +1,6 @@
 import type { CardDefinition } from "./types";
 import { CardArt } from "./ContentArt";
+import { rarityNames } from "./rarity";
 
 export function CardFace({ card, selectedCount = 0 }: { card: CardDefinition; selectedCount?: number }) {
   return <>
@@ -13,6 +14,7 @@ export function CardFace({ card, selectedCount = 0 }: { card: CardDefinition; se
     <h3>{card.name}</h3>
     <p>{card.description}</p>
     <div className="tags">
+      {card.rarity && <span data-rarity={card.rarity}>{rarityNames[card.rarity]}</span>}
       {card.innate && <span>선천성</span>}
       {card.exhaust && <span>소멸</span>}
       {card.retain && <span>보존</span>}

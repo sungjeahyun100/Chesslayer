@@ -25,6 +25,8 @@ export function BoardPiece({
       aria-hidden="true"
     >
       <PieceImage pieceKey={previewKey || piece.key} owner={piece.owner} />
+      {piece.stats && <span className="piece-stats"><span>⚔{piece.stats.attack}</span><span>♥{piece.stats.health}</span><span>↪{piece.stats.move_rights}</span></span>}
+      {piece.stats?.disarmed && <span className="disarmed-mark">비무장</span>}
       {piece.royal && <span className="royal-mark">★</span>}
       {piece.dice_roll && <span className="dice-mark" title={`주사위 ${piece.dice_roll} · 현재 행마`}>🎲{piece.dice_roll}</span>}
       <StatusBadges piece={piece} onSelect={onSelect} />

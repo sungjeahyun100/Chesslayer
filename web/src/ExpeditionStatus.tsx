@@ -5,6 +5,7 @@ import { PieceStatuses } from "./PieceStatuses";
 import { CardFace } from "./CardFace";
 import { RelicIcon } from "./ContentArt";
 import { UpgradeTree } from "./UpgradeTree";
+import { rarityNames } from "./rarity";
 import type { RestOption, Snapshot } from "./types";
 
 export function ExpeditionStatus({ state, onClose, developerMode = false, onUpgrade }: {
@@ -86,7 +87,7 @@ export function ExpeditionStatus({ state, onClose, developerMode = false, onUpgr
           <section className="status-section status-deck" aria-labelledby="status-deck-title">
             <h3 id="status-deck-title">보유 카드 <span>{state.deck.length}</span></h3>
             <div className="status-deck-list" aria-label="보유 카드 목록">
-              {state.deck.map((card) => <article key={card.id} className="playing-card status-deck-card" data-card-kind={card.definition.kind}>
+              {state.deck.map((card) => <article key={card.id} className="playing-card status-deck-card" data-card-kind={card.definition.kind} data-rarity={card.definition.rarity ?? "common"}>
                 <CardFace card={card.definition} />
               </article>)}
               {state.deck.length === 0 && <p className="status-deck-empty">보유 카드가 없습니다.</p>}
@@ -138,10 +139,10 @@ export function ExpeditionStatus({ state, onClose, developerMode = false, onUpgr
           <section className="status-section status-relics" aria-labelledby="status-relics-title">
             <h3 id="status-relics-title">보유 유물 <span>{state.relics.length}</span></h3>
             <div className="status-relic-list">
-              {state.relics.map((relic) => <button key={relic.id} className={`status-relic ${selectedRelicId === relic.id ? "is-selected" : ""}`}
+              {state.relics.map((relic) => <button key={relic.id} className={`status-relic ${selectedRelicId === relic.id ? "is-selected" : ""}`} data-rarity={relic.rarity ?? "common"}
                 title={relic.description} aria-pressed={selectedRelicId === relic.id}
                 onMouseEnter={() => setSelectedRelicId(relic.id)} onFocus={() => setSelectedRelicId(relic.id)} onClick={() => setSelectedRelicId(relic.id)}>
-                <RelicIcon id={relic.id} name={relic.name} /><span>{relic.name}</span>
+                <RelicIcon id={relic.id} name={relic.name} /><span>{relic.name}</span><small>{rarityNames[relic.rarity ?? "common"]}</small>
               </button>)}
             </div>
             {selectedRelic && <div className="status-relic-detail"><strong>{selectedRelic.name}</strong><p>{selectedRelic.description}</p>{selectedRelic.status && <small>{selectedRelic.status}</small>}</div>}

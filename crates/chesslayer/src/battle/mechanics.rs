@@ -1642,7 +1642,13 @@ impl Battle {
                     self.boss_on_death(victim, step.take);
                     self.eat_corpse(captor.id)?;
                     self.forced_turn_end = true;
-                } else if !self.boss_hit(victim, Some(captor.id)) {
+                } else if victim.kind != pieces::TRIBAL_DICTATOR && {
+                    let damage = self.stats(captor.id).attack.max(0);
+                    let stats = self.stats_mut(victim.id);
+                    stats.health = stats.health.saturating_sub(damage);
+                    stats.health > 0
+                } || !self.boss_hit(victim, Some(captor.id))
+                {
                     break;
                 } else if self.status(victim.id).ingredient
                     && !self.is_royal_piece(victim.id)
@@ -1803,6 +1809,7 @@ impl Battle {
     }
     fn make_corpse(&mut self, at: Position) -> Result<(), Error> {
         let p = self.board.piece_at(at)?.ok_or(Error::IllegalAction)?;
+        self.combat_stats.remove(&p.id);
         self.boss_on_death(p, at);
         self.board.set_piece(
             at,

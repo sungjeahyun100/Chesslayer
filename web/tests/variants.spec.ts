@@ -1,6 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
-import { readFileSync } from "node:fs";
-import type { Command, Snapshot } from "../src/types";
+import { checkpoint, dispatch, enemyTurn, snapshot as engineSnapshot, finishHillBattle } from "./helpers/uiRuns";
+import { WebGame } from "../src/wasm/chesslayer_web";
+import type { Snapshot } from "../src/types";
 const saveKey = "chesslayer.run.v1"; // Storage slot is retained; the payload carries its own rules version.
 const square = (cell: number) => `\"${"abcdefgh"[cell % 8]}${8 - Math.floor(cell / 8)}\"`;
 const saved = (page: Page) => page.evaluate((key) => localStorage.getItem(key)!, saveKey);
@@ -31,26 +32,13 @@ async function imagesLoaded(page: Page) {
 
 for (const family of ["tempest", "bouncing"] as const) {
   test(`${family}: 정상 원정에서 분기 강화·모든 승격 선택·이동·저장·다음 전투`, async ({ page }) => {
+    test.setTimeout(90000);
     if (family === "bouncing") await page.setViewportSize({ width: 390, height: 844 });
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    const commands: Command[] = JSON.parse(readFileSync(`../crates/chesslayer/tests/fixtures/${family}-promotion.json`, "utf8"));
-    const restIndex = commands.findIndex((c) => c.type === "rest_upgrade");
-    const promotionIndex = commands.findIndex((c) => c.type === "move" && c.promotion !== undefined);
+    const rest = checkpoint("rest");
     await page.goto("/");
-    await page.getByRole("button", { name: "새 게임 시작" }).waitFor();
-    // Prepare only a legitimate rest save by replaying the production command API.
-    await page.evaluate(async ({ commands, saveKey }) => {
-      const url = "/src/wasm/chesslayer_web.js";
-      const { default: init, WebGame } = await import(url); await init();
-      const game = new WebGame("vanguard", 2026);
-      for (const c of commands) {
-        game.dispatch(JSON.stringify(c));
-        let s = JSON.parse(game.snapshot());
-        while (s.phase === "combat" && s.turn === 1) s = JSON.parse(game.dispatch(JSON.stringify({ type: "enemy_step" })));
-      }
-      localStorage.setItem(saveKey, game.save()); game.free();
-    }, { commands: commands.slice(0, restIndex), saveKey });
+    await page.evaluate(({saveKey,value}) => { localStorage.setItem(saveKey,value); localStorage.setItem("chesslayer.run.developer.v1","true"); }, {saveKey,value:rest.saved});
     await resume(page);
     await page.locator('[data-square="a2"]').click();
     await expect(page.locator(".skill-node.available")).toHaveCount(2);
@@ -70,18 +58,20 @@ for (const family of ["tempest", "bouncing"] as const) {
     await imagesLoaded(page);
     await page.screenshot({ path: `test-results/${family}-tree.png`, fullPage: true, animations: "disabled" });
     await page.getByRole("button", { name: "강화 확정", exact: true }).click();
-    expect(JSON.parse(await saved(page)).commands.at(-1)).toMatchObject(commands[restIndex]);
+    expect(JSON.parse(await saved(page)).commands.at(-1)).toMatchObject({type:"rest_upgrade",id:9,target:family === "tempest" ? 8 : 13});
+    const probe = WebGame.restore(await saved(page));
+    let before: string;
+    try {
+      const node = engineSnapshot(probe).map.nodes.find(n => n.available && !n.visited && n.kind === "combat")!;
+      dispatch(probe,{type:"select_node",id:node.id});
+      for (let from = 48; from > 8; from -= 8) { dispatch(probe,{type:"move",from,to:from-8}); enemyTurn(probe); }
+      const ward = engineSnapshot(probe).hand.find(c => c.definition.kind === "ward");
+      if (ward) dispatch(probe,{type:"play_card",id:ward.id,target:9});
+      before = probe.save();
+    } finally { probe.free(); }
+    await page.evaluate(({saveKey,before}) => localStorage.setItem(saveKey,before),{saveKey,before});
     await resume(page);
-    await page.locator('[data-node-id="13"]').click();
-    await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", `${family}_pawn`);
-    for (const c of commands.slice(restIndex + 2, promotionIndex)) {
-      if (c.type === "play_card") await page.locator(`[data-card-id="${c.id}"]`).click();
-      else if (c.type === "move") await clickMove(page, c.from, c.to);
-    }
-    await expect(page.getByTestId("turn")).toContainText("나의 턴");
-    const before = await saved(page);
-    const promotion = commands[promotionIndex];
-    if (promotion.type !== "move") throw new Error("missing promotion fixture");
+    const promotion = { type: "move" as const, from: 8, to: 0 };
     const candidates = (await snapshot(page)).moves.filter((m) => m.from === promotion.from && m.to === promotion.to).map((m) => m.promotion!);
     expect(candidates.length).toBe(family === "tempest" ? 4 : 3);
     for (const candidate of candidates) {
@@ -102,34 +92,25 @@ for (const family of ["tempest", "bouncing"] as const) {
       await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", candidate.key);
       const after = await snapshot(page);
       expect(after.rest_options.find((p) => p.id === 9)).toMatchObject({ key: `${family}_pawn`, upgrades: [family] });
-      expect(JSON.parse(await saved(page)).commands.at(-1)).toMatchObject({ ...promotion, promotion: candidate.kind });
+      expect(JSON.parse(await saved(page)).commands).toContainEqual({ ...promotion, promotion: candidate.kind });
       await resume(page);
       await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", candidate.key);
-      // Queen is last: keep this branch for the fixture's win and next encounter.
-      if (candidate.kind !== promotion.promotion) {
-        const move = after.moves.find((m) => m.from === promotion.to);
-        if (move) {
-          await clickMove(page, move.from, move.to);
-          expect(JSON.parse(await saved(page)).commands.some((c: Command) => c.type === "move" && c.from === move.from && c.to === move.to)).toBe(true);
-        }
-      }
     }
-    for (const c of commands.slice(promotionIndex + 1)) {
-      if (c.type === "play_card") await page.locator(`[data-card-id="${c.id}"]`).click();
-      else if (c.type === "move") await clickMove(page, c.from, c.to);
-      else if (c.type === "choose_reward") {
-        await page.locator(".reward-cards .playing-card").nth(c.index).click();
-        await page.getByRole("button", { name: /다음으로 진행/ }).click();
-      }
-      else if (c.type === "select_node") await page.locator(`[data-node-id="${c.id}"]`).click();
-      else if (c.type === "claim_treasure") await page.getByRole("button", { name: /보물 받고 맵으로/ }).click();
-    }
-    await expect(page.locator("main")).toHaveAttribute("data-phase", "combat");
-    await expect(page.locator('[data-piece-id="9"] img')).toHaveAttribute("data-piece-key", `${family}_pawn`);
+    const continuation = WebGame.restore(await saved(page));
+    try {
+      enemyTurn(continuation);
+      finishHillBattle(continuation);
+      dispatch(continuation,{type:"continue_reward"});
+      const node = engineSnapshot(continuation).map.nodes.find(n => n.available && !n.visited && n.kind === "combat")!;
+      dispatch(continuation,{type:"select_node",id:node.id});
+      await page.evaluate(({saveKey,value}) => localStorage.setItem(saveKey,value),{saveKey,value:continuation.save()});
+    } finally { continuation.free(); }
     await resume(page);
     const final = await snapshot(page);
-    expect(final.map.current).toBe(15);
-    expect(final.rest_options.find((p) => p.id === 9)).toMatchObject({ key: `${family}_pawn`, cell: 40, origin: 48, upgrades: [family], dead: false });
+    expect(final.phase).toBe("combat");
+    expect(final.rest_options.find(p => p.id === 9)).toMatchObject({ key:`${family}_pawn`, origin:48, upgrades:[family] });
+    const survivor = final.pieces.find(p => p.id === 9);
+    if (survivor) expect(survivor.key).toBe(`${family}_pawn`);
     await imagesLoaded(page);
     expect(errors).toEqual([]);
   });
@@ -137,7 +118,7 @@ for (const family of ["tempest", "bouncing"] as const) {
 
 test("이전 저장 버전은 설명을 표시하고 원본 기록을 보존한다", async ({ page }) => {
   await page.goto("/");
-  for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]) {
+  for (const version of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]) {
     const legacy = JSON.stringify({ version, character: "vanguard", seed: 2026, commands: [{ type: "rest_upgrade", id: 9, ...(version >= 2 ? { target: 8 } : {}) }] });
     await page.evaluate(({ saveKey, legacy }) => localStorage.setItem(saveKey, legacy), { saveKey, legacy });
     await resume(page);

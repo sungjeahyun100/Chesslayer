@@ -203,6 +203,8 @@ pub enum PieceFamily {
 pub type NativeMovement = fn(&Board, Position) -> Result<Vec<DefaultAction>, MovementError>;
 
 pub struct PieceDefinition {
+    /// Optional variant-specific class and game score, independent of royal status and AI value.
+    pub combat_profile: Option<(crate::battle::PieceClass, i32)>,
     pub kind: PieceType,
     pub key: &'static str,
     pub name: &'static str,
@@ -228,6 +230,7 @@ impl PieceDefinition {
             name,
             movement,
             native_movement: None,
+            combat_profile: None,
             value: 10,
             description: "",
             upgrades: &[],

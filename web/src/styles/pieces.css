@@ -120,3 +120,10 @@
   max-height: 250px;
   overflow-y: auto;
 }
+
+.piece-stats { position: absolute; left: 3%; right: 3%; bottom: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; font: 700 clamp(10px, 1.15vw, 13px)/1.25 system-ui; color: white; pointer-events: none; z-index: 4; }
+.piece-stats span { background: #1e2634ed; border-radius: 3px; padding: 0 1px; text-align: center; }
+.piece-stats span:nth-child(2) { color: #ffb6b6; }
+.piece-stats span:nth-child(3) { color: #a4e9ff; position: absolute; right: 0; bottom: calc(100% + 1px); font-size: 9px; min-width: 16px; }
+.disarmed-mark { position: absolute; top: 4%; left: 2%; background: #622a37; color: #fff; font-size: 9px; border-radius: 3px; padding: 1px; }
+.tags [data-rarity=rare] { color: #93c5fd; } .tags [data-rarity=epic] { color: #d8b4fe; } .tags [data-rarity=legendary] { color: #fcd34d; }

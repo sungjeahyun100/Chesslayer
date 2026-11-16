@@ -118,7 +118,7 @@ fn initial_position_moves_ai_and_seed_replay() {
     assert_eq!(a.cards.hand.len(), 1);
     assert_eq!(a.cards.draw.len(), 9);
     assert_eq!(a.battle.outcome(), characters::roster("vanguard"));
-    assert_eq!(a.snapshot().pieces.len(), 17);
+    assert_eq!(a.snapshot().pieces.len(), 21);
     assert!(a
         .snapshot()
         .moves

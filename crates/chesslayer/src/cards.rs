@@ -10,6 +10,12 @@ pub struct Card {
     pub id: u32,
     pub kind: CardKind,
 }
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum CardTurnRule {
+    #[default]
+    Standard,
+    FreshFive,
+}
 #[derive(Clone, Default)]
 pub struct CardCombat {
     pub draw: Vec<Card>,
@@ -17,15 +23,29 @@ pub struct CardCombat {
     pub discard: Vec<Card>,
     pub exhausted: Vec<Card>,
     pub mana: u32,
+    pub cost_overrides: std::collections::BTreeMap<u32, u32>,
+    pub draw_locked: bool,
+    pub turn_rule: CardTurnRule,
 }
 impl CardCombat {
+    pub fn effective_definition(&self, card: &Card) -> CardDefinition {
+        let mut d = card.kind.definition();
+        if let Some(&cost) = self.cost_overrides.get(&card.id) {
+            d.cost = cost;
+        }
+        d
+    }
     pub fn start(deck: &[Card], rng: &mut Rng) -> Self {
+        Self::start_with_rule(deck, rng, CardTurnRule::Standard)
+    }
+    pub fn start_with_rule(deck: &[Card], rng: &mut Rng, turn_rule: CardTurnRule) -> Self {
         let mut draw = deck.to_vec();
         rng.shuffle(&mut draw);
         // pop() draws from the end. Stable partition puts innate cards first.
         draw.sort_by_key(|c| c.kind.definition().innate);
         let mut state = Self {
             draw,
+            turn_rule,
             ..Self::default()
         };
         state.begin_turn(rng, false);
@@ -37,9 +57,18 @@ impl CardCombat {
         } else {
             BASE_MANA
         };
-        self.draw_cards(DRAW_PER_TURN, rng);
+        self.draw_cards(
+            match self.turn_rule {
+                CardTurnRule::Standard => DRAW_PER_TURN,
+                CardTurnRule::FreshFive => 5,
+            },
+            rng,
+        );
     }
     pub fn draw_cards(&mut self, count: usize, rng: &mut Rng) {
+        if self.draw_locked {
+            return;
+        }
         for _ in 0..count {
             if self.hand.len() >= HAND_LIMIT {
                 break;
@@ -56,6 +85,11 @@ impl CardCombat {
         }
     }
     pub fn end_turn(&mut self) {
+        self.draw_locked = false;
+        if self.turn_rule == CardTurnRule::FreshFive {
+            self.discard.append(&mut self.hand);
+            return;
+        }
         // Count the original hand, before ethereal cards are exhausted.
         let discard_hand = self.hand.len() >= 5;
         let mut retained = vec![];
@@ -73,6 +107,7 @@ impl CardCombat {
     }
     pub fn spend_with_cost(&mut self, index: usize, definition: &CardDefinition, cost: u32) {
         let card = self.hand.remove(index);
+        self.cost_overrides.remove(&card.id);
         self.mana -= cost;
         if definition.exhaust {
             self.exhausted.push(card);

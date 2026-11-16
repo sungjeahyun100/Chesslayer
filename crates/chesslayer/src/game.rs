@@ -7,6 +7,11 @@ use crate::{
     *,
 };
 use serde::{Deserialize, Serialize};
+mod events;
+mod expansion;
+#[cfg(test)]
+mod expansion_tests;
+pub use events::{EventKind, EventView};
 use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -44,7 +49,7 @@ impl Default for Progress {
     fn default() -> Self {
         Self {
             highest_floor: 1,
-            unlocked_squads: vec!["guardian".into()],
+            unlocked_squads: vec!["guardian".into(), "avenger".into()],
             final_unlocked: false,
             final_defeated: false,
         }
@@ -63,6 +68,11 @@ pub enum Command {
         to: usize,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         promotion: Option<PieceType>,
+    },
+    PlayNamedCard {
+        id: u32,
+        target: u32,
+        name: String,
     },
     PlayCard {
         id: u32,
@@ -130,6 +140,7 @@ pub enum Command {
         id: usize,
     },
     ClaimTreasure,
+    SkipTreasure,
     RestUpgrade {
         id: u32,
         target: PieceType,
@@ -142,6 +153,12 @@ pub enum Command {
         id: u32,
     },
     RestSkip,
+    RestBurn {
+        id: u32,
+    },
+    RestReplaceRelic {
+        relic: Relic,
+    },
 }
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -151,6 +168,9 @@ pub struct CardUpgradeChoice {
 }
 #[derive(Clone)]
 pub struct Game {
+    event_state: events::EventState,
+    pub endless_scaling: Option<content::endless::Scaling>,
+    pub bosses_defeated: u32,
     pub battle: Battle,
     pub cards: CardCombat,
     pub deck: Vec<Card>,
@@ -225,6 +245,9 @@ impl Game {
         })
         .map_err(engine_error)?;
         let mut game = Self {
+            event_state: events::EventState::default(),
+            endless_scaling: None,
+            bosses_defeated: 0,
             battle,
             cards: CardCombat::default(),
             deck,
@@ -283,7 +306,7 @@ impl Game {
         progress: Progress,
         mode: RunMode,
     ) -> Result<Self, String> {
-        if !progress.unlocked_squads.iter().any(|id| id == character) {
+        if character != "avenger" && !progress.unlocked_squads.iter().any(|id| id == character) {
             return Err("아직 해금되지 않은 부대입니다.".into());
         }
         if floor > 4 {
@@ -418,8 +441,26 @@ impl Game {
         if let Some(relic) = self.latest_formation() {
             self.log(format!("{}: 시작 진형을 적용했습니다.", relic.name()));
         }
+        let occupied: Vec<_> = players.iter().filter_map(|p| p.position).collect();
+        if self
+            .current_node
+            .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Combat)
+        {
+            content::endless::defend_normal(&mut encounter, &occupied);
+        }
+        self.endless_scaling = (self.mode == RunMode::Endless).then(|| {
+            content::endless::Scaling::for_node(
+                self.seed,
+                self.cleared_stages + 1,
+                self.map.nodes[self.current_node.unwrap()].kind,
+            )
+        });
+        if let Some(scaling) = &self.endless_scaling {
+            scaling.deploy(&mut encounter, &occupied);
+        }
         let haste = self.relics.contains(&Relic::Haste);
         let options = BattleOptions {
+            enemy_racing_goal: self.relics.contains(&Relic::Omnipotence).then_some(7),
             actions_per_turn: if haste { HASTE_ACTIONS } else { 1 },
             self_defense: self.relics.contains(&Relic::SelfDefense),
             initiative: self.relics.contains(&Relic::Initiative),
@@ -436,11 +477,32 @@ impl Game {
         }
         self.phase = RunPhase::Combat;
         self.round = 1;
-        self.cards = CardCombat::start(&self.deck, &mut self.rng);
+        self.cards = CardCombat::start_with_rule(
+            &self.deck,
+            &mut self.rng,
+            if self.squad_id == "avenger" {
+                CardTurnRule::FreshFive
+            } else {
+                CardTurnRule::Standard
+            },
+        );
         if let Some(ammo) = self.ammo {
             self.cards.mana = ammo;
         }
+        if self.event_state.next_battle_penalty {
+            if let Some(card) = self.cards.hand.pop() {
+                self.cards.draw.push(card);
+            }
+        }
         self.battle.configure_v030(&self.relics);
+        self.configure_expansion()?;
+        if let Some(scaling) = &self.endless_scaling {
+            scaling.apply(&mut self.battle);
+        }
+        if self.event_state.next_battle_penalty {
+            self.cards.mana = self.cards.mana.saturating_sub(1);
+            self.event_state.next_battle_penalty = false;
+        }
         self.resource_effects();
         self.events();
         self.check_finish()?;
@@ -766,6 +828,32 @@ impl Game {
         }
     }
     fn generate_rewards(&mut self) {
+        if self.squad_id == "avenger"
+            || self.event_state.ambush_combat
+            || (self.mode == RunMode::Endless && self.floor >= 3)
+        {
+            use content::cards::avenger::Rarity;
+            let minimum = if self.event_state.ambush_combat {
+                Rarity::Epic
+            } else if self
+                .current_node
+                .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Boss)
+            {
+                if self.squad_id == "avenger" {
+                    Rarity::Legendary
+                } else {
+                    Rarity::Epic
+                }
+            } else if self.mode == RunMode::Endless && self.floor >= 5 {
+                Rarity::Rare
+            } else {
+                Rarity::Common
+            };
+            self.rewards = (0..3)
+                .map(|_| Reward::Card(self.roll_reward_card(minimum)))
+                .collect();
+            return;
+        }
         let mut cards = content::cards::reward_pool(&self.squad_id).to_vec();
         if self
             .current_node
@@ -776,7 +864,12 @@ impl Game {
                 if cards.is_empty() {
                     cards = content::cards::reward_pool(&self.squad_id).to_vec();
                 }
-                rewards.push(Reward::Card(cards.swap_remove(self.rng.index(cards.len()))));
+                rewards.push(Reward::Card({
+                    let chosen =
+                        self.roll_card_candidates(&cards, content::cards::avenger::Rarity::Common);
+                    let index = cards.iter().position(|k| *k == chosen).unwrap();
+                    cards.swap_remove(index)
+                }));
             }
             self.rewards = rewards;
             return;
@@ -786,7 +879,11 @@ impl Game {
             .copied()
             .filter(|r| !self.relics.contains(r))
             .collect();
-        let mut rewards = vec![Reward::Card(cards.swap_remove(self.rng.index(cards.len())))];
+        let mut rewards = vec![Reward::Card({
+            let chosen = self.roll_card_candidates(&cards, content::cards::avenger::Rarity::Common);
+            let index = cards.iter().position(|k| *k == chosen).unwrap();
+            cards.swap_remove(index)
+        })];
         if !relics.is_empty() {
             rewards.push(Reward::Relic(
                 relics.swap_remove(self.rng.index(relics.len())),
@@ -807,7 +904,26 @@ impl Game {
                         .map(Reward::Card),
                 );
             }
-            rewards.push(remaining.swap_remove(self.rng.index(remaining.len())));
+            let mut index = self.rng.index(remaining.len());
+            if matches!(remaining[index], Reward::Card(_)) {
+                let candidates: Vec<_> = remaining
+                    .iter()
+                    .filter_map(|r| {
+                        if let Reward::Card(k) = r {
+                            Some(*k)
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+                let chosen =
+                    self.roll_card_candidates(&candidates, content::cards::avenger::Rarity::Common);
+                index = remaining
+                    .iter()
+                    .position(|r| *r == Reward::Card(chosen))
+                    .unwrap();
+            }
+            rewards.push(remaining.swap_remove(index));
         }
         self.rng.shuffle(&mut rewards);
         self.rewards = rewards;
@@ -839,8 +955,15 @@ impl Game {
                     lane: n.lane,
                     kind: n.kind,
                     name: n.name(),
-                    description: if self.mode == RunMode::Endless && n.kind == NodeKind::Boss {
-                        "격파하면 보상을 받고 다음 무작위 층으로 진행합니다.".into()
+                    description: if self.mode == RunMode::Endless
+                        && matches!(n.kind, NodeKind::Combat | NodeKind::Elite | NodeKind::Boss)
+                    {
+                        content::endless::Scaling::for_node(
+                            self.seed,
+                            (u64::from(self.floor) - 1) * 15 + n.row as u64 + 1,
+                            n.kind,
+                        )
+                        .description()
                     } else {
                         n.description()
                     },
@@ -932,6 +1055,16 @@ impl Game {
                 })? {
                     return Err("합법적인 이동이 아닙니다.".into());
                 }
+            }
+            Command::PlayNamedCard { id, target, name } => {
+                self.require_player()?;
+                let index = self
+                    .cards
+                    .hand
+                    .iter()
+                    .position(|c| c.id == id && c.kind == CardKind::Rename)
+                    .ok_or("이름 변경 카드가 없습니다.")?;
+                self.play_avenger_card(index, Some(target), Some(&name))?;
             }
             Command::PlayCard { id, target } => {
                 self.play_card(id, content::cards::CardSelection::single(target))?
@@ -1112,27 +1245,7 @@ impl Game {
                 self.hunger_protection_used = true;
                 self.log("마지막 접시: 선택한 아군의 허기 악화를 방지했습니다.");
             }
-            Command::EventChoice { choice } => {
-                if self.phase != RunPhase::Event {
-                    return Err("이벤트 중이 아닙니다.".into());
-                }
-                match choice.as_str() {
-                    "eat" => {
-                        let mut roster = self.battle.outcome();
-                        for p in &mut roster {
-                            p.persistent.remove("hunger");
-                            p.persistent.remove("hunger_worsened");
-                        }
-                        self.battle
-                            .replace_roster_at_rest(roster)
-                            .map_err(engine_error)?;
-                        self.log("식당: 모든 아군이 식사를 마치고 허기를 해소했습니다.");
-                    }
-                    "leave" => self.log("식당을 떠났습니다."),
-                    _ => return Err("올바른 이벤트 선택이 아닙니다.".into()),
-                }
-                self.complete_node();
-            }
+            Command::EventChoice { choice } => self.choose_event(&choice)?,
             Command::ShopBuy { index } => {
                 if self.phase != RunPhase::Shop || self.shop_bought.contains(&index) {
                     return Err("구입할 수 없는 상품입니다.".into());
@@ -1239,8 +1352,7 @@ impl Game {
                         self.log("작은 쉼터 · 강화 또는 부활을 한 번 선택하세요.");
                     }
                     NodeKind::Event => {
-                        self.phase = RunPhase::Event;
-                        self.log("작은 식당에서 따뜻한 음식을 내놓았습니다.");
+                        self.enter_random_event();
                     }
                     NodeKind::Shop => {
                         self.phase = RunPhase::Shop;
@@ -1261,6 +1373,13 @@ impl Game {
                 }
                 self.grant_node_relic();
                 self.complete_node();
+            }
+            Command::SkipTreasure => {
+                if self.phase != RunPhase::Treasure {
+                    return Err("지금은 보물방을 떠날 수 없습니다.".into());
+                }
+                self.complete_node();
+                self.log("보물을 두고 떠났습니다.");
             }
             Command::RestUpgrade { id, target } => {
                 if self.phase != RunPhase::Rest {
@@ -1299,6 +1418,41 @@ impl Game {
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
                 self.log(format!("휴식: {}에서 아군이 부활했습니다.", square(origin)));
+                self.complete_node();
+            }
+            Command::RestBurn { id } => {
+                if self.phase != RunPhase::Rest || self.mode != RunMode::Endless {
+                    return Err("무한 원정의 휴식에서만 무료 소각할 수 있습니다.".into());
+                }
+                let index = self
+                    .deck
+                    .iter()
+                    .position(|c| c.id == id)
+                    .ok_or("덱에 없는 카드입니다.")?;
+                let card = self.deck.remove(index);
+                self.log(format!("휴식: {} 무료 소각", card.kind.definition().name));
+                self.complete_node();
+            }
+            Command::RestReplaceRelic { relic } => {
+                if self.phase != RunPhase::Rest || self.mode != RunMode::Endless {
+                    return Err("무한 원정의 휴식에서만 유물을 교체할 수 있습니다.".into());
+                }
+                let index = self
+                    .relics
+                    .iter()
+                    .position(|r| *r == relic)
+                    .ok_or("보유하지 않은 유물입니다.")?;
+                let candidates: Vec<_> = content::relics::reward_pool(&self.squad_id)
+                    .iter()
+                    .copied()
+                    .filter(|r| !self.relics.contains(r))
+                    .collect();
+                if candidates.is_empty() {
+                    return Err("교체할 미보유 유물이 없습니다.".into());
+                }
+                let replacement = candidates[self.rng.index(candidates.len())];
+                self.relics.remove(index);
+                self.grant_relic(replacement);
                 self.complete_node();
             }
             Command::RestSkip => {
@@ -1399,7 +1553,9 @@ impl Game {
             if winner == PLAYER {
                 self.record_node_clear();
                 self.phase = RunPhase::Reward;
-                self.gold += if self
+                self.gold += if self.event_state.ambush_combat {
+                    45
+                } else if self
                     .current_node
                     .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Combat)
                 {
@@ -1413,9 +1569,11 @@ impl Game {
                     .current_node
                     .is_some_and(|id| self.map.nodes[id].kind == NodeKind::Boss)
                 {
+                    self.bosses_defeated += 1;
                     self.unlock_boss();
                 }
                 self.generate_rewards();
+                self.event_state.ambush_combat = false;
                 self.reward_node = self.current_node;
                 self.reward_choice = None;
                 self.upgrade_claimed = false;
@@ -1579,7 +1737,13 @@ impl Game {
             .iter()
             .position(|c| c.id == id)
             .ok_or("손패에 없는 카드입니다.")?;
-        let d = self.cards.hand[index].kind.definition();
+        if content::cards::avenger::is_avenger(self.cards.hand[index].kind) {
+            if !selection.targets.is_empty() || !selection.upgrades.is_empty() {
+                return Err("기물 하나를 선택하세요.".into());
+            }
+            return self.play_avenger_card(index, selection.target, None);
+        }
+        let d = self.cards.effective_definition(&self.cards.hand[index]);
         self.resolve_selection(index, &selection, d)
     }
     #[cfg(test)]
@@ -1652,10 +1816,18 @@ impl Game {
                     .map(|index| (cell(from), index))
             }));
         }
-        let budget = match self.current_node.map(|id| self.map.nodes[id].kind) {
-            Some(NodeKind::Boss) => Budget::boss(),
-            Some(NodeKind::Elite) => Budget::elite(),
-            _ => Budget::normal(),
+        let budget = if self
+            .endless_scaling
+            .as_ref()
+            .is_some_and(|s| s.modifiers.contains(&"전술 교리"))
+        {
+            Budget::boss()
+        } else {
+            match self.current_node.map(|id| self.map.nodes[id].kind) {
+                Some(NodeKind::Boss) => Budget::boss(),
+                Some(NodeKind::Elite) => Budget::elite(),
+                _ => Budget::normal(),
+            }
         };
         let choice = ai::choose(&self.battle, budget).map_err(engine_error)?;
         let Some(choice) = choice else {
@@ -1789,7 +1961,14 @@ impl Game {
                     .map(|p| PieceView {
                         id: p.id,
                         kind: p.kind,
-                        name: piece_name(p.kind),
+                        name: self
+                            .battle
+                            .stats(p.id)
+                            .name
+                            .unwrap_or_else(|| piece_name(p.kind).into()),
+                        stats: self.battle.stats(p.id),
+                        class: self.battle.piece_class(p.id),
+                        score: self.battle.piece_score(p.id),
                         key: content::pieces::definition(p.kind).unwrap().key,
                         description: content::pieces::definition(p.kind).unwrap().description,
                         owner: p.owner,
@@ -1817,7 +1996,10 @@ impl Game {
         let moves = if self.phase == RunPhase::Combat && self.battle.turn == PLAYER {
             pieces
                 .iter()
-                .filter(|p| p.owner == PLAYER)
+                .filter(|p| {
+                    p.owner == PLAYER
+                        || (self.battle.card_movement() && self.battle.stats(p.id).move_rights > 0)
+                })
                 .flat_map(|p| {
                     self.battle
                         .legal_actions(pos(p.cell).unwrap())
@@ -1850,7 +2032,7 @@ impl Game {
             .hand
             .iter()
             .map(|c| {
-                let mut d = c.kind.definition();
+                let mut d = self.cards.effective_definition(c);
                 if c.kind == CardKind::Volley {
                     d.cost = self.battle.volley_shot_count() as u32;
                 }
@@ -1868,6 +2050,8 @@ impl Game {
                     Some("발동 효과의 대상을 먼저 선택하세요.")
                 } else if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
                     Some("내 턴을 기다리세요.")
+                } else if c.kind == CardKind::Bounty && self.gold < 10 {
+                    Some("10골드 이상이 필요합니다.")
                 } else if c.kind == CardKind::Volley && d.cost == 0 {
                     Some("사격할 적이 없습니다.")
                 } else if self.cards.mana < if d.cost_per_target { 1 } else { d.cost } {
@@ -1915,7 +2099,10 @@ impl Game {
                                 PieceView {
                                     id: p.id,
                                     kind: p.kind,
-                                    name: definition.name,
+                                    name: definition.name.into(),
+                                    stats: crate::battle::CombatStats::default(),
+                                    class: crate::battle::classification(p.kind).0,
+                                    score: crate::battle::classification(p.kind).1,
                                     key: definition.key,
                                     description: definition.description,
                                     owner: PLAYER,
@@ -2041,6 +2228,14 @@ impl Game {
             vec![]
         };
         Snapshot {
+            relic_exchange_available: self.mode == RunMode::Endless
+                && self.phase == RunPhase::Rest
+                && content::relics::reward_pool(&self.squad_id)
+                    .iter()
+                    .any(|r| !self.relics.contains(r)),
+            endless_scaling: self.endless_scaling.clone(),
+            bosses_defeated: self.bosses_defeated,
+            event: self.event_state.active.clone(),
             combat_events: self
                 .battle
                 .combat_events
@@ -2058,13 +2253,13 @@ impl Game {
                         hook_name: hook.map(|(_, p)| piece_name(p.kind)),
                         learned: self
                             .battle
-                            .absorbed_kinds(self.battle.royal_id)
+                            .absorbed_kinds(self.battle.boss_id)
                             .into_iter()
                             .map(piece_name)
                             .collect(),
                         learned_abilities: self
                             .battle
-                            .absorbed_kinds(self.battle.royal_id)
+                            .absorbed_kinds(self.battle.boss_id)
                             .into_iter()
                             .filter_map(content::pieces::definition)
                             .map(|definition| BossAbilityView {
@@ -2122,6 +2317,7 @@ impl Game {
                 .and_then(|id| self.map.nodes[id].relic)
                 .map(|r| RelicView {
                     id: r,
+                    rarity: r.rarity(),
                     status: self.relics.contains(&r).then(|| {
                         "이미 가진 유물입니다. 대신 부대 전용 카드 1장을 얻습니다.".into()
                     }),
@@ -2167,6 +2363,7 @@ impl Game {
                 .iter()
                 .map(|r| RelicView {
                     id: *r,
+                    rarity: r.rarity(),
                     status: if *r == Relic::Initiative {
                         Some(if self.phase != RunPhase::Combat {
                             "다음 전투 시작 시 보호가 활성화됩니다.".into()
@@ -2206,6 +2403,7 @@ impl Game {
                     Reward::Card(kind) => RewardView::Card(kind.definition()),
                     Reward::Relic(relic) => RewardView::Relic(RelicView {
                         id: *relic,
+                        rarity: relic.rarity(),
                         status: None,
                         name: relic.name(),
                         description: relic.description(),
@@ -2436,7 +2634,7 @@ impl From<&CombatEvent> for CombatEventView {
             } => Self::StatusTriggered {
                 piece_id: *piece_id,
                 cell: cell(*at),
-                status: *status,
+                status,
             },
             CombatEvent::Shotgun {
                 actor_id,
@@ -2486,6 +2684,10 @@ impl From<&CombatEvent> for CombatEventView {
 }
 #[derive(Serialize)]
 pub struct Snapshot {
+    pub relic_exchange_available: bool,
+    pub endless_scaling: Option<content::endless::Scaling>,
+    pub bosses_defeated: u32,
+    pub event: Option<EventView>,
     pub combat_events: Vec<CombatEventView>,
     pub boss: Option<BossView>,
     pub effect_choice: Option<crate::EffectChoice>,
@@ -2549,11 +2751,14 @@ pub enum RewardView {
 }
 #[derive(Serialize)]
 pub struct PieceView {
+    pub stats: crate::battle::CombatStats,
+    pub class: crate::battle::PieceClass,
+    pub score: i32,
     pub statuses: Vec<String>,
     pub dice_roll: Option<u8>,
     pub id: u32,
     pub kind: u16,
-    pub name: &'static str,
+    pub name: String,
     pub key: &'static str,
     pub description: &'static str,
     pub owner: u16,
@@ -2612,6 +2817,7 @@ fn sorted_pile_view(pile: &[Card]) -> Vec<PileCardView> {
 #[derive(Serialize)]
 pub struct RelicView {
     pub id: Relic,
+    pub rarity: content::cards::avenger::Rarity,
     pub name: &'static str,
     pub description: &'static str,
     pub status: Option<String>,

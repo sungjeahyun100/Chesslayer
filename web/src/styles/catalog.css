@@ -2,6 +2,9 @@
 .selection-page { max-width: 1280px; padding-top: 24px; }
 .selection-page > .eyebrow { margin-top: 20px; }
 .characters { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
+.test-squad-section { border-top: 1px solid var(--line); padding-top: 20px; margin-bottom: 24px; }
+.test-squad-section > h2 { font: 700 18px "Noto Serif KR", serif; }
+.test-squad-choices { margin: 12px 0 0; }
 .character, .character.chosen { padding: 20px 16px; }
 .character.chosen { padding: 19px 15px; }
 .character .character-icon { width: 52px; height: 52px; margin-bottom: 10px; }

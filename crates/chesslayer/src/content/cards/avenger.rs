@@ -1,0 +1,132 @@
+use super::*;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Rarity {
+    Common,
+    Rare,
+    Epic,
+    Legendary,
+}
+pub const ALL: &[CardKind] = &[
+    CardKind::PawnOrder,
+    CardKind::MinorOrder,
+    CardKind::MajorOrder,
+    CardKind::Castling,
+    CardKind::EnPassant,
+    CardKind::MindControl,
+    CardKind::Exile,
+    CardKind::Revolution,
+    CardKind::RoyalRevolution,
+    CardKind::Aerobics,
+    CardKind::Anaerobics,
+    CardKind::SwapStats,
+    CardKind::BadHand,
+    CardKind::PotOfGreed,
+    CardKind::Optimize,
+    CardKind::Overestimate,
+    CardKind::Steroids,
+    CardKind::FullArmor,
+    CardKind::AlekhineGun,
+    CardKind::MakeBaby,
+    CardKind::BloodOffering,
+    CardKind::WealthOffering,
+    CardKind::Bounty,
+    CardKind::TacticalMove,
+    CardKind::Rename,
+    CardKind::AvengerLimiter,
+    CardKind::Divinity,
+    CardKind::Scp500,
+    CardKind::ClaudeOptimize,
+    CardKind::AllCharge,
+    CardKind::DisarmAll,
+    CardKind::BabyRank,
+    CardKind::GunBarrage,
+    CardKind::ComeHere,
+    CardKind::Interference,
+];
+pub const REWARD_POOL: &[CardKind] = &[
+    CardKind::Divinity,
+    CardKind::Castling,
+    CardKind::EnPassant,
+    CardKind::MindControl,
+    CardKind::Exile,
+    CardKind::Revolution,
+    CardKind::RoyalRevolution,
+    CardKind::Aerobics,
+    CardKind::Anaerobics,
+    CardKind::SwapStats,
+    CardKind::BadHand,
+    CardKind::PotOfGreed,
+    CardKind::Optimize,
+    CardKind::Overestimate,
+    CardKind::Steroids,
+    CardKind::FullArmor,
+    CardKind::AlekhineGun,
+    CardKind::MakeBaby,
+    CardKind::BloodOffering,
+    CardKind::WealthOffering,
+    CardKind::Bounty,
+    CardKind::TacticalMove,
+    CardKind::Rename,
+    CardKind::AvengerLimiter,
+    CardKind::Scp500,
+    CardKind::ClaudeOptimize,
+    CardKind::AllCharge,
+    CardKind::DisarmAll,
+    CardKind::BabyRank,
+    CardKind::GunBarrage,
+    CardKind::ComeHere,
+    CardKind::Interference,
+];
+pub fn is_avenger(kind: CardKind) -> bool {
+    ALL.contains(&kind)
+}
+pub fn definition(kind: CardKind) -> CardDefinition {
+    let (name,cost,description,rarity,targets): (&str,u32,&str,Rarity,Option<CardTargets>) = match kind {
+        CardKind::PawnOrder => ("폰 행동명령",1,"아군 폰 하나에 행마권 1.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::PawnOrder))),
+        CardKind::MinorOrder => ("마이너 행동명령",2,"아군 마이너 하나에 행마권 1.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::MinorOrder))),
+        CardKind::MajorOrder => ("메이져 행동명령",3,"아군 메이져 하나에 행마권 1.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::MajorOrder))),
+        CardKind::Castling => ("캐슬링",2,"경로가 빈 같은 행·열의 로얄을 메이져 쪽 2칸으로, 메이져를 그 뒤 칸으로 이동. 즉시 턴 종료.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::Castling))),
+        CardKind::EnPassant => ("앙파상",1,"직전 적 턴에 두 칸 전진한 폰을 인접 폰으로 앙파상. 즉시 턴 종료.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::EnPassant))),
+        CardKind::MindControl => ("마인드 컨트롤",0,"적 기물 하나에 플레이어가 사용하는 행마권 1.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::MindControl))),
+        CardKind::Exile => ("추방령",0,"양측의 폰과 마이너 기물을 체력과 무관하게 제거.",Rarity::Common,None),
+        CardKind::Revolution => ("레볼루숑!",0,"양측의 메이져 기물을 체력과 무관하게 제거.",Rarity::Common,None),
+        CardKind::RoyalRevolution => ("두 유 히여 더 피플 씽",0,"선택한 아군을 이번 원정의 로얄로 변경하고 기존 킹 제거.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::RoyalRevolution))),
+        CardKind::Aerobics => ("유산소 운동",1,"이번 턴 기물 하나의 체력 +1.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::Aerobics))),
+        CardKind::Anaerobics => ("무산소 운동",1,"이번 턴 기물 하나의 공격력 +1.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::Anaerobics))),
+        CardKind::SwapStats => ("오른손엔 방패 왼손엔 창",1,"기물 하나의 현재 체력과 공격력을 교환.",Rarity::Common,Some(|b| b.avenger_targets(CardKind::SwapStats))),
+        CardKind::BadHand => ("나쁜 손",0,"카드 2장 드로우 후 이번 턴 추가 드로우 금지.",Rarity::Common,None),
+        CardKind::PotOfGreed => ("욕망의 단지",0,"카드 2장 드로우.",Rarity::Rare,None),
+        CardKind::Optimize => ("최적화",1,"현재 손패 카드의 비용을 모두 1 감소.",Rarity::Rare,None),
+        CardKind::Overestimate => ("과대평가",1,"이번 전투 아군 하나의 기물점수 2배.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::Overestimate))),
+        CardKind::Steroids => ("스테로이드",1,"이번 턴 기물 하나의 공격력 2배.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::Steroids))),
+        CardKind::FullArmor => ("풀 플레이트 아머",2,"이번 전투 기물 하나의 현재·최대 체력 +3.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::FullArmor))),
+        CardKind::AlekhineGun => ("알레킨의 총",0,"룩-룩-퀸 진형의 맨 앞 룩을 선택. 전방 3개 파일의 양측 기물을 보드 끝까지 제거.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::AlekhineGun))),
+        CardKind::MakeBaby => ("아기 만들기",1,"룩-킹-퀸 앞에 폰 3개가 있으면 마지막 랭크 이외 빈칸에 폰 생성.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::MakeBaby))),
+        CardKind::BloodOffering => ("피의 인신공양",2,"아군 비로얄 하나를 제거하고 기물점수만큼 마나 획득.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::BloodOffering))),
+        CardKind::WealthOffering => ("재물의 인신공양",2,"아군 비로얄 하나를 제거하고 기물점수만큼 드로우.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::WealthOffering))),
+        CardKind::Bounty => ("포상금",2,"10골드 이상 필요. 전 재산을 소모하고 골드÷10의 몫만큼 아군 하나에 행마권.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::Bounty))),
+        CardKind::TacticalMove => ("전술적 이동",0,"아군 하나에 이번 턴 비무장과 행마권 1.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::TacticalMove))),
+        CardKind::Rename => ("인쟈부터 니 이름은 춘식이여",1,"이번 턴 아군 하나의 이름을 원하는 기물 이름으로 변경.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::Rename))),
+        CardKind::AvengerLimiter => ("리미터 해제",3,"기물 하나에 죽음의 문턱과 행마권 3. 돌아오는 플레이어 턴 시작 시 사망.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::AvengerLimiter))),
+        CardKind::Divinity => ("신성",2,"모든 아군을 가능한 경로 중 하나로 강화.",Rarity::Legendary,None),
+        CardKind::Scp500 => ("SCP-500",3,"기물 하나의 모든 상태이상 제거. 소멸.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::Scp500))),
+        CardKind::ClaudeOptimize => ("클로드 100불 플렌의 최적화",3,"현재 손패 카드의 비용을 모두 0으로. 소멸.",Rarity::Legendary,None),
+        CardKind::AllCharge => ("전군 돌격",3,"모든 아군 기물에 행마권 1.",Rarity::Legendary,None),
+        CardKind::DisarmAll => ("갈!!!",0,"다음 적 턴 동안 모든 적 기물에 비무장.",Rarity::Legendary,None),
+        CardKind::BabyRank => ("얼마나 박아댄 거야",3,"아기만들기 모양이 있으면 마지막 랭크를 제외한 완전히 빈 랭크를 선택해 폰으로 채움.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::BabyRank))),
+        CardKind::GunBarrage => ("아-자-자-잣!!!",1,"룩-룩-퀸을 희생하고 맨 앞 룩 바로 전방 4개 랭크의 모든 기물 제거.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::GunBarrage))),
+        CardKind::ComeHere => ("일루와잇!",2,"킹 주변에 빈칸이 있으면 선택한 기물을 그중 무작위 한 칸으로 끌어옴.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::ComeHere))),
+        CardKind::Interference => ("내정 간섭",4,"상대 로얄을 선택한 다른 적 기물로 변경.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::Interference))),
+        _ => unreachable!("avenger definition"),
+    };
+    let mut d = CardDefinition::new(kind, name, cost, description, |_, _| {
+        Err("복수귀 카드 실행 경로를 사용하세요.".into())
+    });
+    d.rarity = rarity;
+    d.exhaust = matches!(kind, CardKind::Scp500 | CardKind::ClaudeOptimize);
+    if let Some(targets) = targets {
+        d = d.with_targets(targets);
+    }
+    d
+}

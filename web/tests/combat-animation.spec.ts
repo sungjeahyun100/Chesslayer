@@ -233,12 +233,14 @@ test("rifle fire shows a three-shot tracer burst while the shooter stays put", a
   await page.locator('[data-node-id="0"]').click();
   await page.locator('.square[data-square="e2"]').click();
   await page.getByRole("button", { name: /특수 능력.*대상 선택/ }).click();
-  await page.locator('.square[data-square="e8"]').click();
+  const target = page.locator(".square.targetable").first();
+  const targetSquare = await target.getAttribute("data-square");
+  await target.click();
   await expect(page.locator(".combat-projectiles")).toHaveCount(1);
   await expect(page.locator('.piece[data-piece-id="13"][data-cell="52"]')).toHaveCount(1);
   await expect(page.locator(".combat-projectiles")).toHaveCount(0);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("chesslayer.run.v1")!));
-  expect(saved.commands.at(-1)).toMatchObject({ type: "special_action", from: 52, to: 4 });
+  expect(saved.commands.at(-1)).toMatchObject({ type: "special_action", from: 52, to: (8 - Number(targetSquare![1])) * 8 + "abcdefgh".indexOf(targetSquare![0]) });
 });
 
 test("reduced motion applies the committed move without a moving overlay", async ({ page }) => {

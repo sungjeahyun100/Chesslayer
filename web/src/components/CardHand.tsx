@@ -27,7 +27,8 @@ export function CardHand({ state, movement, selectedCardId, selectedCount, disab
     const newHand = new Set(next.hand.map((card) => card.id));
     const entering = next.hand.filter((card) => !oldHand.has(card.id)).length;
     const leaving = before.hand.filter((card) => !newHand.has(card.id)).length;
-    const reshuffled = before.draw_count === 0 && before.discard_count > next.discard_count;
+    const reshuffled = before.discard_count > next.discard_count &&
+      (before.draw_count === 0 || (before.squad_id === "avenger" && entering > before.draw_count));
     if (!entering && !leaving && before.draw_count === next.draw_count && before.discard_count === next.discard_count) {
       setVisibleCounts(final);
       return;
@@ -68,6 +69,7 @@ export function CardHand({ state, movement, selectedCardId, selectedCount, disab
           {state.hand.length === 0 && <p className="empty-hand">손패 없음</p>}
           {state.hand.map((card) => <button data-card-id={card.id}
             className={`playing-card ${selectedCardId === card.id ? "active-card" : ""}`}
+            data-rarity={card.definition.rarity ?? "common"}
             key={card.id} onClick={() => onChoose(card)} disabled={!!card.disabled_reason || disabled}
             title={card.disabled_reason || card.definition.description}>
             <CardFace card={card.definition} selectedCount={selectedCardId === card.id ? selectedCount : 0} />
@@ -86,7 +88,7 @@ export function CardHand({ state, movement, selectedCardId, selectedCount, disab
     }}><div className="card-list-dialog" role="dialog" aria-modal="true" aria-label={openPile === "draw" ? "덱 카드 목록" : "묘지 카드 목록"}>
       <header><h2>{openPile === "draw" ? "덱" : "묘지"} <span>{cards.length}</span></h2>
         <button ref={closeButton} onClick={() => setOpenPile(null)} aria-label="카드 목록 닫기">닫기 ×</button></header>
-      <div className="card-list-grid">{cards.map((card) => <article className="playing-card" key={card.id}>
+      <div className="card-list-grid">{cards.map((card) => <article className="playing-card" data-rarity={card.definition.rarity ?? "common"} key={card.id}>
         <CardFace card={card.definition} /></article>)}
         {cards.length === 0 && <p className="empty-hand">카드 없음</p>}</div>
     </div></div>, document.body)}

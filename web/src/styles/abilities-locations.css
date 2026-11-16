@@ -84,3 +84,8 @@
   .shop-burn-layout { grid-template-columns: minmax(0, 1fr); }
   .shop-burn-list { max-height: 170px; }
 }
+
+.event-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 16px; width: 100%; }
+.event-result { padding: 20px; background: #183e30; border: 1px solid #6ba88a; border-radius: 8px; }
+.event-card-grid .playing-card { width: 100%; min-width: 0; }
+.event-result { color: #e8f3dc; }

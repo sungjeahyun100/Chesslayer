@@ -98,11 +98,27 @@ fn endless_counts_each_completed_node_once_and_continues_without_unlocks() {
                 }
                 NodeKind::Rest => game.dispatch(Command::RestSkip).unwrap(),
                 NodeKind::Treasure => game.dispatch(Command::ClaimTreasure).unwrap(),
-                NodeKind::Event => game
-                    .dispatch(Command::EventChoice {
-                        choice: "leave".into(),
-                    })
-                    .unwrap(),
+                NodeKind::Event => {
+                    let event = game.snapshot().event.unwrap();
+                    let choice = event
+                        .choices
+                        .iter()
+                        .find(|c| c.id == "leave")
+                        .or_else(|| event.choices.iter().find(|c| !c.disabled))
+                        .unwrap()
+                        .id
+                        .clone();
+                    game.dispatch(Command::EventChoice { choice }).unwrap();
+                    if game.phase == RunPhase::Combat {
+                        win_battle(&mut game);
+                        game.dispatch(Command::ContinueReward).unwrap();
+                    } else {
+                        game.dispatch(Command::EventChoice {
+                            choice: "continue".into(),
+                        })
+                        .unwrap();
+                    }
+                }
                 NodeKind::Shop => game.dispatch(Command::ShopLeave).unwrap(),
             }
             assert_eq!(game.cleared_stages, expected);

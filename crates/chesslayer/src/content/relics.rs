@@ -5,6 +5,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Relic {
+    DesireBag,
+    GhostBoots,
+    FullyArmed,
+    Pride,
+    AlekhineMuzzle,
+    PalaceFamily,
+    DevilSugar,
+    Sugar,
+    Omnipotence,
+
     Haste,
     SelfDefense,
     KingsIndian,
@@ -100,9 +110,35 @@ pub const HEDGEHOG: [(i32, i32); 16] = [
 ];
 
 impl Relic {
+    pub fn rarity(self) -> crate::content::cards::avenger::Rarity {
+        use crate::content::cards::avenger::Rarity::*;
+        match self {
+            Self::DesireBag => Common,
+            Self::GhostBoots => Rare,
+            Self::FullyArmed => Rare,
+            Self::Pride => Rare,
+            Self::AlekhineMuzzle => Epic,
+            Self::PalaceFamily => Epic,
+            Self::DevilSugar => Epic,
+            Self::Sugar => Legendary,
+            Self::Omnipotence => Legendary,
+            Self::IceCream | Self::Initiative => Legendary,
+            _ => Common,
+        }
+    }
     pub fn name(self) -> &'static str {
         match self {
             Self::Haste => "민첩성",
+            Self::DesireBag => "욕망의 가방",
+            Self::GhostBoots => "유체화 신발",
+            Self::FullyArmed => "완전무장",
+            Self::Pride => "오만함",
+            Self::AlekhineMuzzle => "알레킨의 총구",
+            Self::PalaceFamily => "궁궐농밀 아기만들기",
+            Self::DevilSugar => "악마의 설탕",
+            Self::Sugar => "설탕",
+            Self::Omnipotence => "전능",
+
             Self::SelfDefense => "호신용품",
             Self::KingsIndian => "인디언 킹의 전략책",
             Self::QueensIndian => "인디언 퀸의 전략책",
@@ -132,6 +168,16 @@ impl Relic {
     pub fn description(self) -> &'static str {
         match self {
             Self::Haste => "아군 부대가 한 턴에 최대 두 번 움직일 수 있습니다.",
+            Self::DesireBag => "전투 시작 시 카드 2장 추가 드로우.",
+            Self::GhostBoots => "전투 시작 시 무작위 아군 하나에 행마권 2.",
+            Self::FullyArmed => "모든 아군의 공격력 +1.",
+            Self::Pride => "모든 아군의 기물점수 +2.",
+            Self::AlekhineMuzzle => "d3 룩, d2 룩, d1 퀸을 포함한 알레킨의 총 프리셋으로 시작. 가장 최근 진형 적용.",
+            Self::PalaceFamily => "f1 룩, g1 킹, h1 퀸과 f2·g2·h2 폰을 포함한 프리셋으로 시작. 가장 최근 진형 적용.",
+            Self::DevilSugar => "초기 마나 4. 전투 시작 시 무작위 아군 비로얄 하나 제거. 마나 설정은 중첩되지 않음.",
+            Self::Sugar => "초기 마나 4. 마나 설정은 중첩되지 않음.",
+            Self::Omnipotence => "적 로얄이 아군 마지막 랭크에 도착하면 패배. 아군 로얄 제거만으로는 패배하지 않습니다.",
+
             Self::SelfDefense => "전투 시작 시 무작위 아군 하나를 보호합니다. 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다.",
             Self::KingsIndian => "다음 전투부터 아군을 킹사이드 피앙케토의 KIA 프리셋으로 배치합니다. 가장 최근에 얻은 시작 진형만 적용됩니다.",
             Self::QueensIndian => "다음 전투부터 아군을 백 진영으로 변환한 b파일 피앙케토의 QID 프리셋으로 배치합니다. 가장 최근에 얻은 시작 진형만 적용됩니다.",
@@ -161,6 +207,8 @@ impl Relic {
     }
     pub fn formation(self) -> Option<&'static [(i32, i32); 16]> {
         match self {
+            Self::PalaceFamily => Some(&PALACE_FAMILY),
+            Self::AlekhineMuzzle => Some(&ALEKHINE_MUZZLE),
             Self::KingsIndian => Some(&KIA),
             Self::QueensIndian => Some(&QID),
             Self::Hedgehog => Some(&HEDGEHOG),
@@ -176,6 +224,7 @@ impl Relic {
 /// Rewards are private to the selected troop in v0.3.0.
 pub fn reward_pool(character: &str) -> &'static [Relic] {
     match character {
+        "avenger" => AVENGER_RELICS,
         "vanguard" => &[
             Relic::Haste,
             Relic::Reinforcement,
@@ -201,3 +250,57 @@ pub fn reward_pool(character: &str) -> &'static [Relic] {
         _ => RELIC_REWARD_POOL,
     }
 }
+
+pub const PALACE_FAMILY: [(i32, i32); 16] = [
+    (3, 7),
+    (2, 5),
+    (1, 6),
+    (7, 7),
+    (6, 7),
+    (4, 6),
+    (5, 5),
+    (5, 7),
+    (0, 6),
+    (1, 5),
+    (2, 6),
+    (3, 6),
+    (4, 5),
+    (5, 6),
+    (6, 6),
+    (7, 6),
+];
+pub const ALEKHINE_MUZZLE: [(i32, i32); 16] = [
+    (3, 6),
+    (1, 7),
+    (2, 7),
+    (3, 7),
+    (7, 7),
+    (5, 7),
+    (4, 7),
+    (3, 5),
+    (0, 6),
+    (1, 6),
+    (2, 5),
+    (3, 4),
+    (4, 5),
+    (5, 6),
+    (6, 6),
+    (7, 6),
+];
+pub const AVENGER_RELICS: &[Relic] = &[
+    Relic::Omnipotence,
+    Relic::SelfDefense,
+    Relic::KingsIndian,
+    Relic::QueensIndian,
+    Relic::Hedgehog,
+    Relic::IceCream,
+    Relic::Initiative,
+    Relic::DesireBag,
+    Relic::GhostBoots,
+    Relic::FullyArmed,
+    Relic::Pride,
+    Relic::AlekhineMuzzle,
+    Relic::PalaceFamily,
+    Relic::DevilSugar,
+    Relic::Sugar,
+];

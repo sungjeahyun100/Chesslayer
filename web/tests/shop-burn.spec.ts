@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { dispatch, enemyTurn, newRun, snapshot } from "./helpers/uiRuns";
+import { dispatch, finishHillBattle, newRun, snapshot, resolveEvent } from "./helpers/uiRuns";
 
 test("상점 카드 소각은 덱과 골드를 즉시 갱신하고 저장 복원된다", async ({ page }) => {
   const game = newRun("guardian", 2026);
@@ -9,26 +9,21 @@ test("상점 카드 소각은 덱과 골드를 즉시 갱신하고 저장 복원
     const king = snapshot(game).pieces.find((piece) => piece.key === "king")!;
     dispatch(game, { type: "developer_set_upgrade", id: king.id, target: 94 });
     const nodes = snapshot(game).map.nodes;
-    const shop = nodes.find((node) => node.kind === "shop")!;
+    const shop = nodes.find((node) => node.kind === "shop" && node.row === 9)!;
     const pathCost = (id: number): number => {
       if (id === shop.id) return 0;
       const onward = Math.min(...nodes[id].next.map(pathCost));
-      return onward + (nodes[id].kind === "elite" ? 100 : nodes[id].kind === "combat" ? 1 : 0);
+      return onward - (nodes[id].kind === "elite" ? 30 : nodes[id].kind === "combat" ? 15 : 0);
     };
-    while (snapshot(game).phase !== "shop") {
+    while (snapshot(game).phase !== "shop" || snapshot(game).map.current !== shop.id) {
       const state = snapshot(game);
+      if (state.phase === "shop") { dispatch(game, { type: "shop_leave" }); continue; }
       const next = state.map.nodes.filter((node) => node.available && Number.isFinite(pathCost(node.id)))
         .sort((a, b) => pathCost(a.id) - pathCost(b.id))[0];
       if (!next) throw new Error("상점으로 이어지는 경로가 없습니다.");
       if (next.kind === "combat" || next.kind === "elite") {
         dispatch(game, { type: "select_node", id: next.id });
-        for (const [from, to] of [[52, 36], [60, 52], [52, 43], [43, 35]]) {
-          enemyTurn(game);
-          if (snapshot(game).phase !== "combat") break;
-          try { dispatch(game, { type: "move", from, to }); }
-          catch (error) { throw new Error(`노드 ${next.id} (${next.kind}), 이동 ${from}→${to}, 턴 ${snapshot(game).turn}, 상태 ${snapshot(game).phase}: ${String(error)}`); }
-          if (snapshot(game).phase !== "combat") break;
-        }
+        finishHillBattle(game);
         if (snapshot(game).phase !== "reward") throw new Error(`노드 ${next.id} 승리 실패`);
         const cardIndex = snapshot(game).rewards.findIndex((reward) => reward.type === "card");
         if (cardIndex >= 0) dispatch(game, { type: "claim_reward", index: cardIndex });
@@ -37,9 +32,8 @@ test("상점 카드 소각은 덱과 골드를 즉시 갱신하고 저장 복원
         dispatch(game, { type: "select_node", id: next.id });
         if (next.kind === "treasure") dispatch(game, { type: "claim_treasure" });
         if (next.kind === "rest") dispatch(game, { type: "rest_skip" });
-        if (next.kind === "event") dispatch(game, { type: "event_choice", choice: "eat" });
+        if (next.kind === "event") resolveEvent(game);
       }
-      enemyTurn(game);
     }
     before = snapshot(game);
     saved = game.save();

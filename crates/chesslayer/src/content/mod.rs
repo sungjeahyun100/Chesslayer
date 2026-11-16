@@ -3,6 +3,7 @@ pub mod cards;
 pub mod characters;
 pub mod compendium;
 pub mod encounters;
+pub mod endless;
 pub mod pieces;
 pub mod relics;
 pub use cards::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};

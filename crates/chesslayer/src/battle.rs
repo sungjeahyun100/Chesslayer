@@ -7,7 +7,10 @@ use chessembly::{Error as DslError, Program};
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::hash::{Hash, Hasher};
 use std::sync::Arc;
+mod avenger;
 mod boss;
+mod combat_state;
+pub use combat_state::{classification, CombatStats, PieceClass};
 mod mechanics;
 pub use boss::BossState;
 pub(crate) use mechanics::shot_preview;
@@ -24,6 +27,7 @@ use crate::content::{pieces, Rng, INITIATIVE_TURNS};
 
 #[derive(Debug, Clone, Copy)]
 pub struct BattleOptions {
+    pub enemy_racing_goal: Option<i32>,
     pub actions_per_turn: u8,
     pub self_defense: bool,
     pub initiative: bool,
@@ -32,6 +36,7 @@ pub struct BattleOptions {
 impl Default for BattleOptions {
     fn default() -> Self {
         Self {
+            enemy_racing_goal: None,
             actions_per_turn: 1,
             self_defense: false,
             initiative: false,
@@ -167,6 +172,10 @@ impl From<ActionError> for Error {
 #[derive(Clone)]
 pub struct Battle {
     pub board: Board,
+    combat_stats: BTreeMap<PieceId, CombatStats>,
+    card_movement: bool,
+    en_passant: Option<(PieceId, Position)>,
+    pub enemy_racing_goal: Option<i32>,
     pub turn: PlayerId,
     pub result: GameResult,
     pub phase: Phase,
@@ -190,6 +199,7 @@ pub struct Battle {
     enemy_initiative_turns_left: u8,
     absorbed: HashMap<PieceId, HashSet<PieceType>>,
     boss: Option<BossState>,
+    pub(crate) boss_id: PieceId,
     players: Vec<PlayerPiece>,
     dead_at_start: HashSet<PieceId>,
     programs: Arc<BTreeMap<PieceType, Program>>,
@@ -227,6 +237,14 @@ impl Battle {
     pub(crate) fn search_hash(&self) -> u64 {
         let mut h = std::collections::hash_map::DefaultHasher::new();
         self.board.cells().hash(&mut h);
+        self.combat_stats.hash(&mut h);
+        self.card_movement.hash(&mut h);
+        self.en_passant.hash(&mut h);
+        self.king_id.hash(&mut h);
+        self.royal_id.hash(&mut h);
+        self.boss_id.hash(&mut h);
+        self.additional_royal_ids.hash(&mut h);
+        self.enemy_racing_goal.hash(&mut h);
         self.turn.hash(&mut h);
         self.actions_left.hash(&mut h);
         self.normal_actions_used.hash(&mut h);
@@ -237,6 +255,7 @@ impl Battle {
         self.self_defense_target.hash(&mut h);
         if let Some(boss) = &self.boss {
             boss.hp.hash(&mut h);
+            boss.max_health.hash(&mut h);
             boss.ammo.hash(&mut h);
             boss.hook.hash(&mut h);
             boss.movement_used.hash(&mut h);
@@ -319,7 +338,13 @@ impl Battle {
             {
                 return Err(Error::InvalidSetup);
             }
-            if pieces::is_royal(p.kind) && king_id.replace(p.id).is_some() {
+            if (p
+                .persistent
+                .get("royal")
+                .map(|&v| v != 0)
+                .unwrap_or_else(|| pieces::is_royal(p.kind)))
+                && king_id.replace(p.id).is_some()
+            {
                 return Err(Error::InvalidSetup);
             }
             if let Some(pos) = p.position {
@@ -407,6 +432,10 @@ impl Battle {
             .map(|p| p.id)
             .collect();
         let mut battle = Self {
+            combat_stats: BTreeMap::new(),
+            card_movement: false,
+            en_passant: None,
+            enemy_racing_goal: options.enemy_racing_goal,
             events,
             combat_events: vec![],
             wards: HashSet::new(),
@@ -426,6 +455,7 @@ impl Battle {
                 0
             },
             absorbed: HashMap::new(),
+            boss_id: start.encounter.royal_id,
             boss: start
                 .encounter
                 .enemies
@@ -433,6 +463,7 @@ impl Battle {
                 .any(|p| p.id == start.encounter.royal_id && p.kind == pieces::TRIBAL_DICTATOR)
                 .then_some(BossState {
                     hp: 5,
+                    max_health: 5,
                     ammo: 2,
                     hook: None,
                     movement_used: false,
@@ -458,6 +489,16 @@ impl Battle {
             mechanics: mechanics::Mechanics::new(rng.clone()),
             sandbox,
         };
+        if let Some(boss) = &battle.boss {
+            battle.combat_stats.insert(
+                battle.boss_id,
+                CombatStats {
+                    health: boss.hp,
+                    max_health: boss.hp,
+                    ..CombatStats::default()
+                },
+            );
+        }
         battle.initialize_statuses();
         battle.roll_all_gambler_dice();
         battle.trigger_death_thresholds()?;
@@ -688,6 +729,7 @@ impl Battle {
                 )?;
             }
         }
+        self.combat_stats.clear();
         self.wards.clear();
         self.kind_passives.clear();
         self.gambler_dice.clear();
@@ -1021,13 +1063,17 @@ impl Battle {
             return Err(Error::Finished);
         }
         let piece = self.board.piece_at(from)?.ok_or(Error::IllegalAction)?;
-        if enforce_turn && piece.owner != self.turn {
+        if enforce_turn
+            && piece.owner != self.turn
+            && !(self.card_movement && self.turn == PLAYER && self.player_controls(piece))
+        {
             return Err(Error::WrongTurn);
         }
         if (enforce_turn && self.pending_choice().is_some()) || !self.can_act(piece) {
             return Ok(vec![]);
         }
         if enforce_turn
+            && !(self.card_movement && self.turn == PLAYER)
             && self.normal_actions_used >= self.side_actions(piece.owner)
             && self.agility(piece.id) == 0
             && !self.limiter.contains_key(&piece.id)
@@ -1042,6 +1088,7 @@ impl Battle {
             return Ok(vec![]);
         }
         if enforce_turn
+            && !(self.card_movement && self.turn == PLAYER)
             && self.limiter_turn
             && !self.limiter.contains_key(&piece.id)
             && self.agility(piece.id) == 0
@@ -1162,6 +1209,28 @@ impl Battle {
             }
         }
         self.filter_hunger(piece, &mut result);
+        if self.stats(piece.id).disarmed {
+            result.retain(|a| {
+                !a.steps().any(|s| {
+                    !matches!(s.effect, crate::Effect::Move | crate::Effect::Shift)
+                        && self
+                            .board
+                            .piece_at(s.take)
+                            .ok()
+                            .flatten()
+                            .is_some_and(|p| p.owner != piece.owner)
+                })
+            });
+        }
+        if enforce_turn && self.card_movement && self.turn == PLAYER {
+            result.retain(|a| {
+                if a.first.effect == crate::Effect::Catch {
+                    piece.owner == PLAYER && self.normal_actions_used == 0
+                } else {
+                    self.stats(piece.id).move_rights > 0
+                }
+            });
+        }
         if enforce_turn && self.is_boss_actor(piece) {
             result.retain(|action| self.boss_action_available(action));
         }
@@ -1216,7 +1285,9 @@ impl Battle {
             .board
             .piece_at(action.first.from)?
             .ok_or(Error::IllegalAction)?;
-        if piece.owner != self.turn {
+        if piece.owner != self.turn
+            && !(self.card_movement && self.turn == PLAYER && self.player_controls(piece))
+        {
             return Err(Error::WrongTurn);
         }
         if !self.legal_actions(action.first.from)?.contains(action) {
@@ -1235,7 +1306,9 @@ impl Battle {
             .board
             .piece_at(action.first.from)?
             .ok_or(Error::IllegalAction)?;
-        if piece.owner != self.turn {
+        if piece.owner != self.turn
+            && !(self.card_movement && self.turn == PLAYER && self.player_controls(piece))
+        {
             return Err(Error::WrongTurn);
         }
         let boss_actor = self.is_boss_actor(piece);
@@ -1282,11 +1355,31 @@ impl Battle {
             self.apply_effect(action, ActionSource::PieceMove)?;
             self.check_king_goal(piece, action.first.from);
         }
+        if piece.owner == ENEMY {
+            self.en_passant = if self.matches_kind(piece, PAWN)
+                && (action.first.from.rank - action.first.move_to.rank).abs() == 2
+            {
+                Some((
+                    piece.id,
+                    Position::new(
+                        action.first.from.file,
+                        (action.first.from.rank + action.first.move_to.rank) / 2,
+                    ),
+                ))
+            } else {
+                None
+            };
+        }
         if boss_actor {
             self.spend_boss_action(action);
         }
-        self.forced_turn_end |= shooting && !boss_actor;
-        self.complete_piece_action(piece)
+        self.forced_turn_end |= shooting && !boss_actor && !self.card_movement;
+        if self.card_movement && self.turn == PLAYER && action.first.effect == crate::Effect::Catch
+        {
+            self.complete_nonmovement_action(piece)
+        } else {
+            self.complete_piece_action(piece)
+        }
     }
     pub(super) fn complete_piece_action(&mut self, piece: Piece) -> Result<(), Error> {
         self.complete_action(piece, true)
@@ -1298,6 +1391,16 @@ impl Battle {
         self.mechanics.statuses.entry(piece.id).or_default().dining = false;
         if moved {
             self.moved_ids.insert(piece.id);
+        }
+        if self.card_movement && self.turn == PLAYER {
+            if moved {
+                self.stats_mut(piece.id).move_rights =
+                    self.stats(piece.id).move_rights.saturating_sub(1);
+            } else {
+                self.normal_actions_used = self.normal_actions_used.saturating_add(1);
+            }
+            self.forced_turn_end = false;
+            return Ok(());
         }
         let limiter_expired = if let Some(state) = self.limiter.get_mut(&piece.id) {
             state.moves_left = state.moves_left.saturating_sub(1);
@@ -1381,6 +1484,9 @@ impl Battle {
             return Err(Error::Finished);
         }
         self.forced_turn_end = false;
+        if self.turn == PLAYER {
+            self.en_passant = None;
+        }
         if self.turn == ENEMY && self.initiative_turns_left > 0 {
             self.initiative_turns_left -= 1;
             if self.initiative_turns_left == 0 {
@@ -1395,11 +1501,13 @@ impl Battle {
                     .push("선공권: 아군 턴 10회가 지나 적의 보호가 끝났습니다.".into());
             }
         }
+        self.finish_stats_turn()?;
         self.finish_mechanics_turn()?;
         if self.phase != Phase::Active {
             return Ok(());
         }
         self.turn = if self.turn == PLAYER { ENEMY } else { PLAYER };
+        self.start_stats_turn()?;
         self.start_mechanics_turn()?;
         if self.phase != Phase::Active {
             return Ok(());
@@ -1730,6 +1838,7 @@ impl Battle {
                         next,
                         victim.unwrap(),
                         attacker,
+                        1,
                     )
                 {
                     continue;
@@ -1746,7 +1855,7 @@ impl Battle {
                             &mut self.boss,
                             &mut self.absorbed,
                             &mut self.events,
-                            self.royal_id,
+                            self.boss_id,
                             next,
                             victim,
                             step.take,
@@ -1771,6 +1880,24 @@ impl Battle {
                 // Resolve the actual captor and victim at this step, including multi-step moves.
                 let captor = next.piece_at(step.from)?;
                 let victim = next.piece_at(step.take)?;
+                if !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift) {
+                    if let (Some(captor), Some(victim)) = (captor, victim) {
+                        if victim.kind != pieces::CORPSE && victim.kind != pieces::TRIBAL_DICTATOR {
+                            let damage = self
+                                .combat_stats
+                                .get(&captor.id)
+                                .cloned()
+                                .unwrap_or_default()
+                                .attack
+                                .max(0);
+                            let stats = self.combat_stats.entry(victim.id).or_default();
+                            stats.health = stats.health.saturating_sub(damage);
+                            if stats.health > 0 {
+                                break;
+                            }
+                        }
+                    }
+                }
                 if captor.is_some_and(|p| p.owner == ENEMY && p.kind == pieces::EMPEROR)
                     && victim.is_some_and(|p| p.owner == PLAYER)
                     && !matches!(step.effect, crate::Effect::Move | crate::Effect::Shift)
@@ -1789,9 +1916,12 @@ impl Battle {
                         next,
                         victim.unwrap(),
                         captor.map(|p| p.id),
+                        captor
+                            .and_then(|p| self.combat_stats.get(&p.id))
+                            .map_or(1, |s| s.attack.max(0)),
                     )
                 {
-                    continue;
+                    break;
                 }
                 apply_default_action(next, &DefaultAction::one(step.clone()))?;
                 corpse_captured |= victim.is_some_and(|p| p.kind == pieces::CORPSE)
@@ -1805,7 +1935,7 @@ impl Battle {
                             &mut self.boss,
                             &mut self.absorbed,
                             &mut self.events,
-                            self.royal_id,
+                            self.boss_id,
                             next,
                             victim,
                             step.take,
@@ -1893,6 +2023,16 @@ impl Battle {
         Ok(())
     }
     fn sync_players(&mut self) {
+        if self.boss.is_some()
+            && !self
+                .board
+                .cells()
+                .iter()
+                .flatten()
+                .any(|p| p.id == self.boss_id)
+        {
+            self.boss = None;
+        }
         self.mechanics.pending_agility.retain(|id, _| {
             self.board
                 .cells()
@@ -1944,7 +2084,18 @@ impl Battle {
             .iter()
             .flatten()
             .any(|p| p.owner == ENEMY && self.is_enemy_royal(p.id));
-        self.result = if !king_alive {
+        let racing_loss = self.enemy_racing_goal.is_some_and(|rank| {
+            self.board.cells().iter().enumerate().any(|(i, p)| {
+                i as i32 / 8 == rank
+                    && p.is_some_and(|p| p.owner == ENEMY && self.is_enemy_royal(p.id))
+            })
+        });
+        self.result = if racing_loss {
+            GameResult::Win {
+                winner: ENEMY,
+                reason: ResultReason::RacingGoal,
+            }
+        } else if !king_alive && self.enemy_racing_goal.is_none() {
             GameResult::Win {
                 winner: ENEMY,
                 reason,
@@ -1960,7 +2111,10 @@ impl Battle {
         self.finalize_result();
     }
     fn check_king_goal(&mut self, actor: Piece, from: Position) {
-        if self.sandbox || self.result != GameResult::Ongoing {
+        if self.sandbox
+            || self.result != GameResult::Ongoing
+            || (actor.owner == ENEMY && self.enemy_racing_goal.is_some())
+        {
             return;
         }
         let Some((at, current)) = self.piece_position(actor.id) else {

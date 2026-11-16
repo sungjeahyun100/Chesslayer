@@ -24,6 +24,7 @@ pub struct CardEntry {
 #[derive(Serialize)]
 pub struct RelicEntry {
     pub id: Relic,
+    pub rarity: cards::avenger::Rarity,
     pub name: &'static str,
     pub description: &'static str,
     pub starting: bool,
@@ -205,6 +206,7 @@ pub fn catalog() -> Vec<SquadEntry> {
                 .into_iter()
                 .map(|relic| RelicEntry {
                     id: relic,
+                    rarity: relic.rarity(),
                     name: relic.name(),
                     description: relic.description(),
                     starting: relic == character.relic,

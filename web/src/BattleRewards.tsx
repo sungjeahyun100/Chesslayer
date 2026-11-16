@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { CardFace } from "./CardFace";
 import { RelicIcon } from "./ContentArt";
 import { PieceImage } from "./PieceImage";
+import { rarityNames } from "./rarity";
 import type { Command, Snapshot } from "./types";
 
 export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snapshot; send: (command: Command) => void; revisit: boolean; onUpgrade: () => void }) {
@@ -49,6 +50,7 @@ export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snap
           return (
             <button
               className={`playing-card ${reward.type === "relic" ? "relic-reward" : ""} ${claimed ? "is-claimed" : ""}`}
+              data-rarity={reward.definition.rarity ?? "common"}
               key={index}
               data-reward-type={reward.type}
               disabled={choiceMade}
@@ -60,7 +62,7 @@ export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snap
                 <CardFace card={reward.definition} />
               ) : (
                 <>
-                  <div className="card-top"><span className="relic-type">유물</span><span>영구 효과</span></div>
+                  <div className="card-top"><span className="relic-type">유물</span><span>{rarityNames[reward.definition.rarity ?? "common"]}</span></div>
                   <div className="card-symbol"><RelicIcon id={reward.definition.id} name={reward.definition.name} /></div>
                   <h3>{reward.definition.name}</h3>
                   <p>{reward.definition.description}</p>

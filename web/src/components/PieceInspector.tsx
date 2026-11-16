@@ -18,6 +18,7 @@ export function PieceInspector({ piece: selectedPiece, enemy: inspectedEnemy, ab
         <strong>
           {selectedPiece.name} {selectedPiece.royal && <span className="royal-info">★ 로얄</span>}
         </strong>
+        {selectedPiece.stats && <p>체력 {selectedPiece.stats.health}/{selectedPiece.stats.max_health} · 공격력 {selectedPiece.stats.attack} · 행마권 {selectedPiece.stats.move_rights}<br />분류 {({pawn:"폰",minor:"마이너",major:"메이져",other:"별도"})[selectedPiece.class ?? "other"]} · 기물점수 {selectedPiece.score}{selectedPiece.stats.disarmed ? " · 비무장" : ""}</p>}
         {selectedMovement && <p><b>행마:</b> {selectedMovement.movement}</p>}
         {selectedMovement?.special && <p>{selectedMovement.special}</p>}
         {selectedPiece.key === "tribal_dictator" && boss && <small className="effect-note">

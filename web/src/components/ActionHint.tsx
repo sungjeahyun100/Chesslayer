@@ -31,12 +31,13 @@ export function ActionHint({ state, input }: { state: Snapshot; input: GameInput
         {state.effect_choice ? <><strong>{state.effect_choice.name}</strong><span>표시된 대상을 선택하세요.</span>{state.effect_choice.can_finish && <button className="primary" onClick={() => send({ type: "resolve_effect", target: 0 })}>배치 완료</button>}</> : targetCard ? (
           <>
             <strong>{targetCard.definition.name}</strong>
+            {targetCard.definition.kind === "rename" && <label>이번 턴 이름 <input aria-label="변경할 기물 이름" value={input.renameName} onChange={e => input.setRenameName(e.target.value)} placeholder="폰, 룩, 킹, 퀸…" /></label>}
             {targetCard.definition.kind === "limiter_release" && <span>세 번째 이동 직후 대상 사망 · 턴 종료 · 다음 전투 시작 시 살아 있다면 즉사</span>}
             <span>선택 {stagedCount}개 · 비용 {stagedCost} / {state.ammo !== null ? `탄약 ${state.ammo}` : `마나 ${state.mana}`}</span>
             {targetCard.definition.selection_mode === "multiple" && <span className="card-target-instruction">{cardSelectionHint(targetCard.definition.kind)}</span>}
             {targetCard.definition.kind === "emergency_conscription" && <span className="staged-upgrades">{state.rest_options.filter((piece) => piece.dead && targetCard.targets.includes(piece.id)).map((piece) => <button key={piece.id} onClick={() => input.chooseDeadPawn(piece.id)}>{cardTargets.includes(piece.id) ? "✓ " : ""}{piece.name} #{piece.id}</button>)}</span>}
             {targetCard.definition.selection_mode === "upgrade" && cardUpgrades.length > 0 && <span className="staged-upgrades">{cardUpgrades.map((choice) => <button key={choice.id} onClick={() => input.removeCardUpgrade(choice.id)}>{state.pieces.find((p) => p.id === choice.id)?.name} ×</button>)}</span>}
-            {stagedCount > 0 && (["multiple", "upgrade"].includes(targetCard.definition.selection_mode) || ["limiter_release", "sacred_domain"].includes(targetCard.definition.kind)) ? <button className="primary" onClick={confirmCard} disabled={stagedCost > state.mana}>확인</button> : null}
+            {stagedCount > 0 && (["multiple", "upgrade"].includes(targetCard.definition.selection_mode) || ["limiter_release", "sacred_domain", "rename"].includes(targetCard.definition.kind)) ? <button className="primary" onClick={confirmCard} disabled={stagedCost > state.mana}>확인</button> : null}
             <button
               className="text-button"
               onClick={cancelCard}

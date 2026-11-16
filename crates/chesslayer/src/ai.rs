@@ -26,7 +26,7 @@ impl Budget {
         Self {
             nodes: 90,
             turns: 2,
-            style: Style::Aggressive,
+            style: Style::Guarded,
         }
     }
     pub(crate) fn elite() -> Self {
@@ -813,7 +813,7 @@ fn evaluate(battle: &Battle, style: Style) -> i32 {
             if battle.is_royal_piece(p.id) {
                 if p.owner == ENEMY {
                     enemy_royal_cells.push(i);
-                } else if p.owner == PLAYER {
+                } else if p.owner == PLAYER && battle.enemy_racing_goal.is_none() {
                     player_royal_cells.push(i);
                 }
             }
@@ -860,7 +860,10 @@ fn evaluate(battle: &Battle, style: Style) -> i32 {
                 })
                 .count() as i32
         };
+        let stats = battle.stats(p.id);
         let value = base
+            + (stats.health.clamp(1, 10_000) - 1) * 60
+            + (stats.attack.clamp(1, 10_000) - 1) * 40
             + activity * if guarded { 2 } else { 5 }
             + pressure * if guarded { 1 } else { 4 }
             + support * if guarded { 16 } else { 6 }
@@ -882,6 +885,13 @@ fn evaluate(battle: &Battle, style: Style) -> i32 {
     // Non-boss royals already decide the game on capture. A survival bonus here
     // made their guardians avoid useful trades; bosses retain that positional bias.
     let mut score = enemy - player + enemy_royals * if guarded { 300 } else { 0 };
+    if let Some(goal) = battle.enemy_racing_goal {
+        score += enemy_royal_cells
+            .iter()
+            .map(|&cell| (7 - (goal - (cell / 8) as i32).abs()) * 180)
+            .max()
+            .unwrap_or(0);
+    }
     if matches!(style, Style::Dictator) {
         if let Some(boss) = battle.boss() {
             // Damage and adjacent-death healing leave the same piece on the

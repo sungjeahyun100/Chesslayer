@@ -1,6 +1,8 @@
 import type { Snapshot } from "../types";
 
-export function BattleHeading({ state, rewardUpgradeOpen = false }: { state: Snapshot; rewardUpgradeOpen?: boolean }) {
+export function BattleHeading({ state, rewardUpgradeOpen = false, onEndTurn, endTurnDisabled = false }: {
+  state: Snapshot; rewardUpgradeOpen?: boolean; onEndTurn?: () => void; endTurnDisabled?: boolean;
+}) {
   const turn = state.turn === 0;
   const restView = state.phase === "rest" || rewardUpgradeOpen;
   return (
@@ -31,7 +33,7 @@ export function BattleHeading({ state, rewardUpgradeOpen = false }: { state: Sna
             <>
               <i />
               {turn ? "나의 턴" : "적의 턴"}
-              <small>{state.actions_left}회 행동</small>
+              <small>{state.squad_id === "avenger" && turn ? `행마권 ${state.pieces.reduce((n,p)=>n+(p.stats?.move_rights ?? 0),0)} · 수동 턴 종료` : `${state.actions_left}회 행동`}</small>
             </>
           ) : restView ? (
             rewardUpgradeOpen ? "전투 보상 · 기물 강화" : "쉼터 · 행동 1회"
@@ -39,6 +41,7 @@ export function BattleHeading({ state, rewardUpgradeOpen = false }: { state: Sna
             "진형 계승"
           )}
         </div>
+        {state.phase === "combat" && state.squad_id === "avenger" && onEndTurn && <button className="primary turn-end-button" disabled={endTurnDisabled} onClick={onEndTurn}>턴 종료</button>}
       </div>
     </div>
   );

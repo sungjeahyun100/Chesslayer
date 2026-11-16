@@ -79,13 +79,13 @@ test("endless start, reward revisit, reload and defeat keep records and campaign
   await page.locator('.map-node[data-node-id="1"]').click();
   await page.locator(".reward-continue").click();
   await expect(page.locator(".map-heading")).toContainText("누적 1단계 클리어");
-  expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), ENDLESS_BEST_KEY)).toEqual({ clearedStages: 1, highestFloor: 1 });
+  expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), ENDLESS_BEST_KEY)).toBeNull();
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(campaign);
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.progress.v1"))).toBe(progress);
 
   await page.evaluate(({ defeat, previousBest, key }) => localStorage.setItem(key, JSON.stringify({ run: defeat, developerRun: true, previousBest })), { defeat, previousBest, key: ENDLESS_SAVE_KEY });
   await page.reload();
-  await expect(page.getByRole("region", { name: "무한 모드", exact: true })).toContainText("1단계 클리어 · 1층 도달");
+  await expect(page.getByRole("region", { name: "무한 모드", exact: true })).toContainText("0단계 클리어 · 0층 도달");
   await page.getByRole("button", { name: "무한 원정 이어하기" }).click();
   await expect(page.locator(".endless-result")).toContainText("신기록!");
   await expect(page.locator(".endless-result")).toContainText("이번 무한 원정: 1단계 클리어 · 1층 도달");
@@ -94,7 +94,7 @@ test("endless start, reward revisit, reload and defeat keep records and campaign
   await page.getByRole("button", { name: "무한 원정 시작", exact: false }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.locator(".map-heading")).toContainText("누적 0단계 클리어");
-  expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), ENDLESS_BEST_KEY)).toEqual({ clearedStages: 1, highestFloor: 1 });
+  expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), ENDLESS_BEST_KEY)).toBeNull();
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.locator(".map-heading h1")).toHaveText("갈림길의 숲");
@@ -115,6 +115,21 @@ test("unavailable storage still allows starting and playing endless mode on mobi
   await page.locator('.map-node[data-node-id="1"]').click();
   await page.locator('.board [data-square="e2"]').click();
   await page.locator('.board [data-square="e4"]').click();
-  await expect(page.getByRole("button", { name: "e4 백 폰", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^e4 백 폰/ })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+
+test("normal endless records preserve reached stage and expedition metadata on reload", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.goto("/");
+  await page.getByRole("button", { name: "무한 원정 시작", exact: false }).click();
+  await page.locator("button.character").filter({ hasText: "복수귀 부대" }).click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await page.locator(".map-node:enabled").first().click();
+  const record = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), ENDLESS_BEST_KEY);
+  expect(record).toMatchObject({ reachedStage: 1, clearedStages: 0, highestFloor: 1, squad: "복수귀 부대", bossesDefeated: 0, deckSize: 10, relicCount: 1 });
+  expect(Number.isNaN(Date.parse(record.achievedAt))).toBe(false);
+  await page.reload();
+  await page.getByRole("button", { name: "무한 원정 이어하기" }).click();
+  expect(await page.evaluate((key) => JSON.parse(localStorage.getItem(key)!), ENDLESS_BEST_KEY)).toEqual(record);
 });

@@ -17,6 +17,9 @@ export interface Character {
   unlock_floor: number;
 }
 export interface Piece {
+  stats?: { health: number; max_health: number; attack: number; move_rights: number; disarmed: boolean; name: string | null };
+  class?: "pawn" | "minor" | "major" | "other";
+  score?: number;
   id: number;
   kind: number;
   name: string;
@@ -70,7 +73,9 @@ export type CombatEvent =
       hits: { cell: number; piece_id: number; result: "hit" | "miss" | "ward" | "corpse" }[] }
   | { kind: "chain_pull"; boss_id: number; boss_cell: number; piece_id: number; from: number; to: number }
   | { kind: "status_triggered"; piece_id: number; cell: number; status: "death_threshold" | "ward" };
+export type Rarity = "common" | "rare" | "epic" | "legendary";
 export interface CardDefinition {
+  rarity?: Rarity;
   kind: string;
   name: string;
   cost: number;
@@ -97,6 +102,7 @@ export interface PileCard {
 export type RelicId = string;
 export interface Relic {
   id: RelicId;
+  rarity?: Rarity;
   name: string;
   description: string;
   status: string | null;
@@ -105,6 +111,10 @@ export type Reward =
   | { type: "card"; definition: CardDefinition }
   | { type: "relic"; definition: Relic };
 export interface Snapshot {
+  relic_exchange_available?: boolean;
+  bosses_defeated?: number;
+  endless_scaling?: { stage: number; extra_pieces: number; health: number; attack: number; modifiers: string[]; special: string } | null;
+  event?: { kind: string; title: string; description: string; grade: string; result: string | null; choices: { id: string; label: string; disabled: boolean; card: CardDefinition | null }[] } | null;
   boss: BossState | null;
   combat_events: CombatEvent[];
   phase: Phase;
@@ -167,11 +177,14 @@ export interface Snapshot {
   effect_choice: { name: string; targets: number[]; can_finish: boolean } | null;
 }
 export type Command =
+  | { type: "rest_burn"; id: number }
+  | { type: "rest_replace_relic"; relic: string }
+  | { type: "play_named_card"; id: number; target: number; name: string }
   | { type: "select_node"; id: number }
   | { type: "move"; from: number; to: number; promotion?: number }
   | { type: "play_card"; id: number; target?: number }
   | { type: "play_card_selection"; id: number; targets?: number[]; upgrades?: { id: number; target: number }[] }
-  | { type: "end_turn" | "enemy_step" | "claim_treasure" | "rest_skip" }
+  | { type: "end_turn" | "enemy_step" | "claim_treasure" | "skip_treasure" | "rest_skip" }
   | { type: "enemy_step_selected"; from: number | null; index: number | null }
   | { type: "choose_reward"; index: number }
   | { type: "claim_reward"; index: number }
@@ -180,7 +193,7 @@ export type Command =
   | { type: "rest_upgrade"; id: number; target: number }
   | { type: "developer_set_upgrade"; id: number; target: number }
   | { type: "rest_revive" | "rest_confess" | "rest_supply" | "reinforce"; id: number }
-  | { type: "event_choice"; choice: "eat" | "leave" }
+  | { type: "event_choice"; choice: string }
   | { type: "shop_buy"; index: number }
   | { type: "shop_burn"; id: number }
   | { type: "shop_leave" }
