@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { newRun, dispatch, snapshot, winHillBattle } from "./helpers/uiRuns";
 
-test("운수 좋은 날은 모바일에서 15장 중 한 장만 획득하고 결과·저장을 복원한다", async ({ page }) => {
+test("운수 좋은 날은 모바일에서 후보 중 한 장만 획득하고 결과·저장을 복원한다", async ({ page }) => {
   const game = newRun("guardian", 11);
   let saved: string;
   let before: ReturnType<typeof snapshot>;
@@ -29,11 +29,14 @@ test("운수 좋은 날은 모바일에서 15장 중 한 장만 획득하고 결
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.getByRole("heading", { name: "운수 좋은 날", exact: true })).toBeVisible();
-  await expect(page.locator(".event-card-grid button")).toHaveCount(15);
+  const choiceCount = before.event!.choices.length;
+  expect(choiceCount).toBe(8);
+  await expect(page.locator(".event-card-grid button")).toHaveCount(choiceCount);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "test-results/event-lucky-mobile.png", fullPage: true });
-  await page.locator(".event-card-grid button").nth(7).click();
-  await expect(page.locator(".event-result")).toContainText(before.event!.choices[7].card!.name);
+  const selected = choiceCount - 1;
+  await page.locator(".event-card-grid button").nth(selected).click();
+  await expect(page.locator(".event-result")).toContainText(before.event!.choices[selected].card!.name);
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.locator(".event-result")).toContainText("획득");
@@ -44,7 +47,7 @@ test("운수 좋은 날은 모바일에서 15장 중 한 장만 획득하고 결
     try { return JSON.parse(g.snapshot()); } finally { g.free(); }
   });
   expect(after.deck_count).toBe(before.deck_count + 1);
-  expect(after.deck.at(-1).definition.kind).toBe(before.event!.choices[7].card!.kind);
+  expect(after.deck.at(-1).definition.kind).toBe(before.event!.choices[selected].card!.kind);
   await page.locator(".location-actions button").click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
 });

@@ -13,7 +13,7 @@ test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재�
     prepared = { saved: game.save(), snapshot: snapshot(game) };
   } finally { game.free(); }
   await page.goto("/");
-  expect(JSON.parse(prepared.saved).version).toBe(23);
+  expect(JSON.parse(prepared.saved).version).toBe(24);
   expect(prepared.snapshot.phase).toBe("reward");
   expect(prepared.snapshot.rewards).toHaveLength(3);
   for (const type of ["card", "relic"] as const) {

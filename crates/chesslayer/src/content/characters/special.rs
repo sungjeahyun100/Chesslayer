@@ -9,3 +9,48 @@ pub const DEFINITION: Character = Character {
     relic: Relic::ReconScope,
     unlock_floor: 4,
 };
+
+use super::{ResourceRule, SquadDefinition};
+use crate::cards::CardTurnRule;
+use crate::content::cards::CardKind;
+use crate::content::pieces::*;
+use CardKind::*;
+
+pub const SQUAD: SquadDefinition = SquadDefinition {
+    character: DEFINITION,
+    formation: Some((
+        [
+            SNIPER,
+            SCOUT,
+            COMMANDO,
+            COMMANDO,
+            SPECIAL_COMMANDER,
+            COMMANDO,
+            SCOUT,
+            SNIPER,
+        ],
+        None,
+    )),
+    starting_deck: &[
+        AimedShot,
+        AimedShot,
+        AimedShot,
+        SmokeScreen,
+        SmokeScreen,
+        SmokeScreen,
+        Infiltration,
+        Infiltration,
+        Extraction,
+        Extraction,
+    ],
+    card_pool: &[
+        CardKind::AimedShot,
+        CardKind::SmokeScreen,
+        CardKind::Infiltration,
+        CardKind::Extraction,
+    ],
+    relic_pool: &[Relic::Silencer],
+    turn_rule: CardTurnRule::Standard,
+    resource: ResourceRule::Mana,
+    card_movement: false,
+};

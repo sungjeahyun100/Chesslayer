@@ -67,7 +67,8 @@ impl Game {
         chosen
     }
     pub(super) fn configure_expansion(&mut self) -> Result<(), String> {
-        if self.squad_id == "avenger" {
+        if content::characters::definition(&self.squad_id).is_some_and(|squad| squad.card_movement)
+        {
             self.battle.enable_card_movement();
         }
         if self

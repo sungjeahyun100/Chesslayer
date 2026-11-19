@@ -80,6 +80,25 @@ fn catalog_entries_are_unique_and_connected() {
         assert_eq!(kind.definition().kind, kind, "miswired card registration");
     }
     let mut ids = HashSet::new();
+    assert_eq!(
+        content::characters::ALL.len(),
+        content::characters::SQUADS.len()
+    );
+    for (character, squad) in content::characters::ALL
+        .iter()
+        .zip(content::characters::SQUADS)
+    {
+        assert_eq!(character.id, squad.character.id);
+        assert_eq!(content::cards::reward_pool(character.id), squad.card_pool);
+        assert_eq!(content::relics::reward_pool(character.id), squad.relic_pool);
+        assert_eq!(
+            content::cards::starting_deck(character.id)
+                .iter()
+                .map(|card| card.kind)
+                .collect::<Vec<_>>(),
+            squad.starting_deck
+        );
+    }
     for character in content::characters::ALL {
         assert!(!character.id.is_empty());
         assert!(ids.insert(character.id), "duplicate character ID");

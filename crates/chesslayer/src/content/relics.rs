@@ -223,32 +223,8 @@ impl Relic {
 
 /// Rewards are private to the selected troop in v0.3.0.
 pub fn reward_pool(character: &str) -> &'static [Relic] {
-    match character {
-        "avenger" => AVENGER_RELICS,
-        "vanguard" => &[
-            Relic::Haste,
-            Relic::Reinforcement,
-            Relic::RecruitmentOffice,
-            Relic::WarBonds,
-            Relic::PopulationMobilization,
-        ],
-        "heretic" => &[
-            Relic::SilverCutlery,
-            Relic::EmptyGoblet,
-            Relic::TornMenu,
-            Relic::LastPlate,
-            Relic::GoldenTray,
-            Relic::SmilingMask,
-            Relic::EternalFeastBell,
-        ],
-        "artillery" => &[
-            Relic::BallisticComputer,
-            Relic::AmmunitionLine,
-            Relic::GunMount,
-        ],
-        "special" => &[Relic::Silencer],
-        _ => RELIC_REWARD_POOL,
-    }
+    crate::content::characters::definition(character)
+        .map_or(RELIC_REWARD_POOL, |squad| squad.relic_pool)
 }
 
 pub const PALACE_FAMILY: [(i32, i32); 16] = [

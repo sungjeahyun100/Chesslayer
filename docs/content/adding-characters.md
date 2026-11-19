@@ -1,104 +1,11 @@
-# 캐릭터 추가
+# 부대 추가 (v0.4.0)
 
-현재 캐릭터의 차이는 **설명과 시작 유물 한 개**다. 파일 위치는 `crates/chesslayer/src/content/characters/`이며, 기존 `vanguard.rs`, `wanderer.rs`, `guardian.rs`와 같은 형태로 정의한다.
+부대의 등록 단위는 `crates/chesslayer/src/content/characters/<id>.rs`의 `SQUAD: SquadDefinition`입니다. 기존 부대 파일을 복사하면 ID·이름·설명, 시작 기물 진형, 시작 덱, 카드 보상 풀, 유물 보상 풀, 턴 방식, 자원을 한곳에서 볼 수 있습니다. `Character`는 웹 카탈로그에 사용하는 기존 자료형으로 유지합니다.
 
-## 1. 완전한 정의 파일 만들기
+1. `content/characters/<id>.rs`에 `DEFINITION: Character`와 `SQUAD: SquadDefinition`을 만듭니다. `formation`은 8개의 후열 기물과 선택적 전열 기물 종류를 지정합니다. `None`이면 기존 표준 16기 진형을 씁니다. 배치 순서가 기물 ID와 영구 강화 기록의 기준이므로 출시 후 재정렬하지 마세요.
+2. `starting_deck`은 카드 종류를 **인스턴스 ID 순서**로 나열합니다. 카드 종류는 `content/cards/mod.rs`의 `CardKind`에 등록하고, 카드 설명·비용·대상·효과는 각 카드 파일에 둡니다. `card_pool`과 `relic_pool`은 원정의 보상과 상점에서 사용됩니다. 배열 순서를 바꾸면 같은 시드의 결과가 달라질 수 있습니다.
+3. `turn_rule`은 현재 `Standard` 또는 `FreshFive`를 선택합니다. `resource`는 일반 마나와 포병대대의 지속 탄약을 구분합니다. `card_movement`는 복수귀의 카드 기반 행마권 규칙을 켭니다. 새로운 자원/턴 모델이 필요하면 `ResourceRule`/`CardTurnRule`과 해당 전투 경계만 확장하고, 기존 ID의 동작은 유지하세요.
+4. `content/characters/mod.rs`에 모듈을 선언하고 `ALL`과 `SQUADS`에 같은 위치로 추가합니다. `ALL` 순서가 선택 화면 순서입니다. `characters::definition(id)`가 원정 초기화, 진형, 카드·유물 풀을 연결합니다.
+5. 새 부대 전용 카드가 필요하면 `content/cards/<카드>.rs`의 `CardDefinition` 함수 포인터로 대상과 효과를 연결하세요. 기존 전투 효과 계열에 속하면 `battle/mechanics/*_cards.rs`의 해당 계열에 실행을 추가합니다. 새 부대 고유 전투 규칙은 `battle`의 작은 전용 모듈에서 구현하고, 시작 경계에서만 연결하세요.
 
-아래는 기존 가속 유물을 사용하는 **새 캐릭터 예시**다. 현재 등록된 캐릭터가 아니며 2단계 등록을 함께 적용해야 선택할 수 있다.
-
-`crates/chesslayer/src/content/characters/tactician.rs` 전체:
-
-```rust
-use super::{Character, Relic};
-
-pub const DEFINITION: Character = Character {
-    id: "tactician",
-    name: "전술가",
-    title: "다음 한 수까지",
-    description: "가속으로 두 수를 연속해서 둡니다. 적의 두 수까지 고려하세요.",
-    relic: Relic::Haste,
-};
-```
-
-필수 속성은 다음 다섯 개다. 현재 캐릭터 구조에는 추가 선택 속성이 없다.
-
-| 속성 | 설명 |
-| --- | --- |
-| `id: &'static str` | 다른 캐릭터와 겹치지 않는 문자열. UI 선택값과 `Game::new(id, seed)`의 조회 키 |
-| `name: &'static str` | 선택 화면과 런 스냅샷의 이름 |
-| `title: &'static str` | 선택 화면의 짧은 제목 |
-| `description: &'static str` | 현재 지원하는 기능을 설명하는 문장 |
-| `relic: Relic` | 시작 유물 한 개. 아래 기존 enum 중 하나 |
-
-기존 문자열 ID를 바꾸지 않는다. 파일명과 ID를 같게 유지하면 찾기 쉽지만, 실제 조회는 파일명이 아닌 `id`를 사용한다.
-
-## 2. 등록하기 — 필수
-
-`crates/chesslayer/src/content/characters/mod.rs`에 모듈을 선언한다.
-
-모듈 선언은 파일 첫 줄의 `//!` 문서 주석 아래, 기존 `mod` 선언들과 함께 둔다.
-
-```rust
-mod tactician;
-```
-
-같은 파일의 `ALL` 끝에 추가한다.
-
-```rust
-tactician::DEFINITION,
-```
-
-`ALL`의 순서가 선택 화면의 순서다. `characters()`가 이 목록을 반환하고 `chesslayer-web::catalog()`가 JSON으로 전달한다. `Game::new()`도 같은 목록을 사용하므로 UI나 별도 ID `match`를 수정하지 않는다. 같은 시작 유물을 쓰는 캐릭터가 여러 개 있어도 된다.
-
-## 3. 고유 능력과 콘텐츠 연결
-
-현재는 `relic` 선택으로 기존 유물 기능을 연결한다.
-
-| 유물 | 실제 효과 | 구현 위치 |
-| --- | --- | --- |
-| `Relic::Haste` | 양 진영이 턴마다 최대 2행동 | `content/mod.rs::HASTE_ACTIONS`, `game.rs::start_battle()` → `BattleOptions.actions_per_turn` |
-| `Relic::SelfDefense` | 역습으로 아군이 제거되면 겹친 적도 제거하되 적 로얄 제외 | `game.rs::start_battle()` → `BattleOptions.self_defense`, `battle.rs::with_options()` |
-
-유물의 이름·설명은 `content/mod.rs`의 `Relic`에 있다. 유물은 보물·엘리트 보상에서도 획득하므로 캐릭터 정의에 실행 코드를 복제하지 않는다. UI의 캐릭터 아이콘은 기존 유물 종류에서 결정된다.
-
-### 초기 구성
-
-`Game::new()`의 현재 순서는 다음과 같다.
-
-1. 캐릭터 ID를 `characters()`에서 찾는다.
-2. `content/cards/mod.rs::starter_deck()`으로 빈 공통 시작 덱을 만든다.
-3. `Battle::standard_roster()`로 공통 백 16기를 만든다.
-4. `relics`에 선택 캐릭터의 `relic` 하나를 넣는다.
-5. 시드로 맵을 만들고 지도 단계에서 시작한다.
-
-시작 유물의 전투 효과는 첫 전투 노드를 선택할 때 적용된다. 모든 캐릭터의 공통 덱을 바꾸려면 `content/cards/mod.rs`, 공통 진형을 바꾸려면 `battle.rs::standard_roster()`를 수정한다. 캐릭터 정의에 카드/기물 ID를 넣는 필드는 현재 없다.
-
-## 4. 현재 미지원 기능
-
-다음은 정의 파일에 임의의 필드를 추가해도 실행되지 않는다.
-
-- 캐릭터별 시작 덱·진형·마나
-- 여러 시작 유물 또는 시작 유물 없음
-- 유물과 독립적인 캐릭터 전용 패시브·액티브 스킬
-- 레벨, 경험치, 성장 트리, 해금 조건
-- 캐릭터 전용 카드 보상 풀
-
-이 작업에서는 이런 기능을 위한 추상화나 이벤트 훅을 만들지 않았다. 요구가 생기면 `Character`와 `Game::new()` 등 실제 사용부를 함께 확장해야 한다. 특히 진형을 다르게 만들려면 `RestRevive`와 `rest_options`가 현재 공통 표준 진형에서 부활 원점을 조회하는 점도 검토해야 한다.
-
-**새 유물 효과**는 기존 유물 재사용과 다르다. `content/mod.rs::Relic`의 종류·이름·설명, 실제 발동 시점인 `game.rs`/`battle.rs`, 필요 시 `map.rs`의 유물 공급 목록을 수정해야 한다. 새 유물을 화면에 표시하려면 `web/src/types.ts`의 유물 문자열 타입과 `web/src/main.tsx`의 `relicIcons`도 추가한다. 캐릭터 파일 하나만으로 새 전투 규칙이 생기는 것으로 취급하지 않는다.
-
-## 5. 확인하기
-
-```sh
-cargo fmt --all --check
-cargo test -p chesslayer --test content
-cargo test -p chesslayer --test prototype
-cargo clippy --workspace --all-targets -- -D warnings
-npm run wasm --prefix web
-npm run build --prefix web
-npm run dev --prefix web
-```
-
-등록 테스트는 문자열 ID 중복을 검사하고 모든 등록 캐릭터에 대해 `Game::new()`가 성공하며 이름과 시작 유물이 연결되는지 확인한다.
-
-브라우저에서 새 게임을 시작해 전술가의 이름·제목·설명·가속 아이콘을 확인한다. 선택 후 지도에 진입하고 첫 전투를 시작한다. 가속 기록, 양측 2행동, 공통 16기 진형과 빈 영구 덱이 유지되는지 확인한다. 유물 재사용이므로 기존 가속 시나리오도 계속 통과해야 한다. 전체 회귀 검증은 [TESTING.md](../TESTING.md)를 따른다.
+기존 저장은 부대 문자열 ID와 명령 기록을 재생합니다. 기존 부대의 ID, 시작 덱 순서, 진형의 기물 ID, 보상 후보 순서, 난수 호출 시점을 바꾸지 마세요. `cargo test --workspace`와 `chesslayer-web`의 저장 복원 테스트로 확인합니다.

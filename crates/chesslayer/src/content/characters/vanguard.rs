@@ -8,3 +8,63 @@ pub const DEFINITION: Character = Character {
     relic: Relic::Haste,
     unlock_floor: 1,
 };
+
+use super::{ResourceRule, SquadDefinition};
+use crate::cards::CardTurnRule;
+use crate::content::cards::CardKind;
+use crate::content::pieces::*;
+use CardKind::*;
+
+pub const SQUAD: SquadDefinition = SquadDefinition {
+    character: DEFINITION,
+    formation: Some((
+        [
+            SPEAR_INFANTRY,
+            AXE_INFANTRY,
+            SWORD_INFANTRY,
+            VANGUARD_OFFICER,
+            VANGUARD_COMMANDER,
+            SWORD_INFANTRY,
+            AXE_INFANTRY,
+            SPEAR_INFANTRY,
+        ],
+        Some(AXE_INFANTRY),
+    )),
+    starting_deck: &[
+        Stimpack,
+        Stimpack,
+        Stimpack,
+        Stimpack,
+        InfantrySupport,
+        InfantrySupport,
+        Sacrifice,
+        Sacrifice,
+        BodySlam,
+        LastStand,
+    ],
+    card_pool: &[
+        CardKind::Stimpack,
+        CardKind::BodySlam,
+        CardKind::InfantrySupport,
+        CardKind::Sacrifice,
+        CardKind::LastStand,
+        CardKind::EmergencyConscription,
+        CardKind::GeneralMobilization,
+        CardKind::AssaultOrder,
+        CardKind::ComradeRevenge,
+        CardKind::Expendables,
+        CardKind::ReliefForce,
+        CardKind::RecklessCharge,
+        CardKind::HumanWave,
+    ],
+    relic_pool: &[
+        Relic::Haste,
+        Relic::Reinforcement,
+        Relic::RecruitmentOffice,
+        Relic::WarBonds,
+        Relic::PopulationMobilization,
+    ],
+    turn_rule: CardTurnRule::Standard,
+    resource: ResourceRule::Mana,
+    card_movement: false,
+};

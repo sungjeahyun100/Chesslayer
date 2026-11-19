@@ -9,3 +9,17 @@ pub const DEFINITION: Character = Character {
     relic: Relic::SelfDefense,
     unlock_floor: 0,
 };
+
+use super::{ResourceRule, SquadDefinition};
+use crate::cards::CardTurnRule;
+
+pub const SQUAD: SquadDefinition = SquadDefinition {
+    character: DEFINITION,
+    formation: None,
+    starting_deck: &[],
+    card_pool: crate::content::cards::REWARD_POOL,
+    relic_pool: crate::content::relics::RELIC_REWARD_POOL,
+    turn_rule: CardTurnRule::Standard,
+    resource: ResourceRule::Mana,
+    card_movement: false,
+};

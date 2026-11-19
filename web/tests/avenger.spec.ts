@@ -41,7 +41,7 @@ test("복수귀는 카드로 행마권을 얻고 수동 턴 종료와 저장 복
   await expect(page.getByTestId("turn")).toContainText("나의 턴", { timeout: 20000 });
   await expect(page.locator(".hand .playing-card")).toHaveCount(5);
   const saved = await page.evaluate(() => localStorage.getItem("chesslayer.run.v1")!);
-  expect(JSON.parse(saved).version).toBe(23);
+  expect(JSON.parse(saved).version).toBe(24);
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.getByTestId("turn")).toContainText("나의 턴");
@@ -73,7 +73,7 @@ test("테스트용 부대는 일반 목록과 분리되어 선택되고 카드·
   });
   expect(snapshot.state.deck_count).toBe(10);
   const catalog = snapshot.catalog.find((c: {id:string}) => c.id === "avenger");
-  expect(catalog.cards).toHaveLength(35);
+  expect(catalog.cards).toHaveLength(37);
   expect(catalog.cards.every((c: {available: boolean}) => c.available)).toBe(true);
   expect(catalog.relics).toHaveLength(15);
   expect(catalog.relics.some((r: {id:string}) => r.id === "palace_family")).toBe(true);

@@ -1,5 +1,6 @@
 //! Playable troops with independent rosters, card pools and relics.
 mod artillery;
+mod avenger;
 mod guardian;
 mod heretic;
 mod special;
@@ -20,68 +21,50 @@ pub struct Character {
 }
 pub const ALL: &[Character] = &[
     guardian::DEFINITION,
-    Character { id: "avenger", name: "복수귀 부대", title: "카드로 지휘하는 복수", description: "행마권을 카드로 부여하고 같은 기물을 여러 번 움직입니다. 턴 종료 버튼으로 적에게 차례를 넘깁니다.", relic: Relic::SelfDefense, unlock_floor: 0 },
+    avenger::DEFINITION,
     vanguard::DEFINITION,
     heretic::DEFINITION,
     artillery::DEFINITION,
     special::DEFINITION,
 ];
 
+/// All content and entry rules needed to register an existing or new squad.
+#[derive(Clone, Copy)]
+pub enum ResourceRule {
+    Mana,
+    ArtilleryAmmo { initial: u32 },
+}
+#[derive(Clone, Copy)]
+pub struct SquadDefinition {
+    pub character: Character,
+    pub formation: Option<([crate::PieceType; 8], Option<crate::PieceType>)>,
+    pub starting_deck: &'static [crate::content::cards::CardKind],
+    pub card_pool: &'static [crate::content::cards::CardKind],
+    pub relic_pool: &'static [Relic],
+    pub turn_rule: crate::cards::CardTurnRule,
+    pub resource: ResourceRule,
+    pub card_movement: bool,
+}
+pub const SQUADS: &[SquadDefinition] = &[
+    guardian::SQUAD,
+    avenger::SQUAD,
+    vanguard::SQUAD,
+    heretic::SQUAD,
+    artillery::SQUAD,
+    special::SQUAD,
+];
+pub fn definition(id: &str) -> Option<&'static SquadDefinition> {
+    SQUADS.iter().find(|squad| squad.character.id == id)
+}
 pub fn characters() -> Vec<Character> {
     ALL.to_vec()
 }
 
 pub fn roster(character: &str) -> Vec<crate::PlayerPiece> {
-    use crate::content::pieces::*;
     use crate::{Battle, PlayerPiece, Position};
     use std::collections::BTreeMap;
-    let (back, pawn): ([crate::PieceType; 8], Option<crate::PieceType>) = match character {
-        "vanguard" => (
-            [
-                SPEAR_INFANTRY,
-                AXE_INFANTRY,
-                SWORD_INFANTRY,
-                VANGUARD_OFFICER,
-                VANGUARD_COMMANDER,
-                SWORD_INFANTRY,
-                AXE_INFANTRY,
-                SPEAR_INFANTRY,
-            ],
-            Some(AXE_INFANTRY),
-        ),
-        "heretic" => (
-            [
-                BUTCHER_CART,
-                FRENZIED_DANCER,
-                INTOXICATED_PRIEST,
-                MASKED_LADY,
-                SMILING_KING,
-                INTOXICATED_PRIEST,
-                FRENZIED_DANCER,
-                BUTCHER_CART,
-            ],
-            Some(PROCESSION_FOLLOWER),
-        ),
-        "artillery" => (
-            [
-                MORTAR, DRONE, WAREHOUSE, TANK, TANK, WAREHOUSE, DRONE, MORTAR,
-            ],
-            Some(RIFLEMAN),
-        ),
-        "special" => (
-            [
-                SNIPER,
-                SCOUT,
-                COMMANDO,
-                COMMANDO,
-                SPECIAL_COMMANDER,
-                COMMANDO,
-                SCOUT,
-                SNIPER,
-            ],
-            None,
-        ),
-        _ => return Battle::standard_roster(),
+    let Some((back, pawn)) = definition(character).and_then(|squad| squad.formation) else {
+        return Battle::standard_roster();
     };
     (0..if pawn.is_some() { 16 } else { 8 })
         .map(|index| {

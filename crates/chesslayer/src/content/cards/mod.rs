@@ -384,107 +384,12 @@ pub fn starter_deck() -> Vec<Card> {
 
 /// Separate troop pools: the Guardian keeps its existing card definitions.
 pub fn reward_pool(character: &str) -> &'static [CardKind] {
-    match character {
-        "avenger" => avenger::REWARD_POOL,
-        "vanguard" => &[
-            CardKind::Stimpack,
-            CardKind::BodySlam,
-            CardKind::InfantrySupport,
-            CardKind::Sacrifice,
-            CardKind::LastStand,
-            CardKind::EmergencyConscription,
-            CardKind::GeneralMobilization,
-            CardKind::AssaultOrder,
-            CardKind::ComradeRevenge,
-            CardKind::Expendables,
-            CardKind::ReliefForce,
-            CardKind::RecklessCharge,
-            CardKind::HumanWave,
-        ],
-        "heretic" => &[
-            CardKind::ExcitedSteps,
-            CardKind::BloodyInvitation,
-            CardKind::DiningEtiquette,
-            CardKind::Masquerade,
-            CardKind::ClearTablecloth,
-            CardKind::IntermissionWaltz,
-            CardKind::LateDinner,
-            CardKind::MealTime,
-            CardKind::DeliveredSupper,
-            CardKind::BackstageSacrifice,
-            CardKind::TornMask,
-            CardKind::CrackedConscience,
-            CardKind::LastSupper,
-            CardKind::EndlessEcstasy,
-        ],
-        "artillery" => &[
-            CardKind::Volley,
-            CardKind::Frontline,
-            CardKind::AimCorrection,
-            CardKind::RapidReload,
-            CardKind::ExtraPropellant,
-            CardKind::FireDataSharing,
-            CardKind::EntrenchedDefense,
-            CardKind::SuppressionFire,
-            CardKind::FocusFire,
-            CardKind::LastDefense,
-        ],
-        "special" => &[
-            CardKind::AimedShot,
-            CardKind::SmokeScreen,
-            CardKind::Infiltration,
-            CardKind::Extraction,
-        ],
-        _ => REWARD_POOL,
-    }
+    crate::content::characters::definition(character).map_or(REWARD_POOL, |squad| squad.card_pool)
 }
 
 pub fn starting_deck(character: &str) -> Vec<Card> {
-    use CardKind::*;
-    let kinds: &[CardKind] = match character {
-        "avenger" => &[
-            PawnOrder, PawnOrder, PawnOrder, PawnOrder, MinorOrder, MinorOrder, MinorOrder,
-            MinorOrder, MajorOrder, MajorOrder,
-        ],
-        "vanguard" => &[
-            Stimpack,
-            Stimpack,
-            Stimpack,
-            Stimpack,
-            InfantrySupport,
-            InfantrySupport,
-            Sacrifice,
-            Sacrifice,
-            BodySlam,
-            LastStand,
-        ],
-        "heretic" => &[
-            ExcitedSteps,
-            ExcitedSteps,
-            ExcitedSteps,
-            ExcitedSteps,
-            BloodyInvitation,
-            BloodyInvitation,
-            BloodyInvitation,
-            DiningEtiquette,
-            DiningEtiquette,
-            Masquerade,
-        ],
-        "artillery" => &[Volley, Volley, Volley, Volley, Frontline, Frontline],
-        "special" => &[
-            AimedShot,
-            AimedShot,
-            AimedShot,
-            SmokeScreen,
-            SmokeScreen,
-            SmokeScreen,
-            Infiltration,
-            Infiltration,
-            Extraction,
-            Extraction,
-        ],
-        _ => return starter_deck(),
-    };
+    let kinds = crate::content::characters::definition(character)
+        .map_or(&[][..], |squad| squad.starting_deck);
     kinds
         .iter()
         .enumerate()

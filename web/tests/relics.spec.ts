@@ -32,7 +32,7 @@ test("신규 유물 5종: 실제 획득·배치·선공권·누적 코스트·�
     }
     expect(result).toBeTruthy();
     if (!result) throw new Error(`No legitimate reward fixture for ${relicId}`);
-    expect(JSON.parse(result.saved).version).toBe(23);
+    expect(JSON.parse(result.saved).version).toBe(24);
     expect(result.start.relics.some((r) => r.id === run.relic)).toBe(true);
     if (run.relic === "initiative") {
       expect(result.start.initiative_turns_left).toBe(10);

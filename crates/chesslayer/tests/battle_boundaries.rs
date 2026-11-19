@@ -272,9 +272,9 @@ fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
         .iter()
         .find(|n| {
             n.row == 4
-                && n.next.iter().any(|&id| {
-                    matches!(g.map.nodes[id].kind, NodeKind::Combat | NodeKind::Elite)
-                })
+                && n.next
+                    .iter()
+                    .any(|&id| matches!(g.map.nodes[id].kind, NodeKind::Combat | NodeKind::Elite))
         })
         .unwrap()
         .id;
