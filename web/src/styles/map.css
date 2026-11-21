@@ -55,27 +55,10 @@
   width: 100%;
   overflow: visible;
 }
-.map-connections path {
-  fill: none;
-  stroke: #789073;
-  stroke-width: 2.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  vector-effect: non-scaling-stroke;
-}
-.map-connections path.taken {
-  stroke: #285e43;
-  stroke-width: 4.5;
-}
-.map-connections path.next {
-  stroke: #5d873e;
-  stroke-width: 4;
-  stroke-dasharray: 9 5;
-}
-.map-connections path.skipped {
-  stroke: #c7cfc1;
-  stroke-width: 2;
-}
+.map-connections .road-point { fill: #789073; }
+.map-connections g.taken .road-point { fill: #285e43; }
+.map-connections g.next .road-point { fill: #5d873e; }
+.map-connections g.skipped .road-point { fill: #c7cfc1; }
 .map-node-slot {
   position: absolute;
   transform: translate(-50%, -50%);
@@ -162,24 +145,6 @@
   color: #315c43;
   font-weight: 700;
 }
-.map-start {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  font-size: 10px;
-  padding: 7px 15px;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  color: #8c9b80;
-  background: #f5f3ec;
-  white-space: nowrap;
-}
-.map-start.at-start {
-  background: #284d3b;
-  color: #f4f1dd;
-  border-color: #284d3b;
-}
 .treasure-relic {
   font-size: 65px;
   color: #a18b45;
@@ -235,4 +200,3 @@
     font-size: 9px;
   }
 }
-

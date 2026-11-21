@@ -160,6 +160,19 @@ impl Game {
         }
         if let GameResult::Win { winner, reason } = self.battle.result {
             self.resource_effects();
+            if self.simulator {
+                self.phase = if winner == PLAYER {
+                    RunPhase::Victory
+                } else {
+                    RunPhase::Defeat
+                };
+                self.log(if winner == PLAYER {
+                    format!("시뮬레이터 승리 · {reason:?}")
+                } else {
+                    format!("시뮬레이터 패배 · {reason:?}")
+                });
+                return Ok(());
+            }
             self.battle.reset_after_battle().map_err(engine_error)?;
             self.cards = CardCombat::default();
             if winner == PLAYER {

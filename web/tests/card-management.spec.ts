@@ -15,7 +15,7 @@ async function startCombat(page: Page) {
   await page.getByRole("button", { name: "개발자 모드 켜기" }).click();
   await page.locator("button.character").filter({ hasText: "선봉대" }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
-  await expect(page.locator(".map-node:enabled")).toHaveCount(3);
+  expect(await page.locator(".map-node:enabled").count()).toBeGreaterThanOrEqual(2);
   await page.locator('.map-node:enabled[data-kind="combat"]').first().click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "combat");
 }

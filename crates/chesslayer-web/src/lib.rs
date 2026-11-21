@@ -1,4 +1,4 @@
-use chesslayer::game::{Command, Game, Progress, RunMode};
+use chesslayer::game::{Command, Game, Progress, RunMode, SimulatorConfig};
 use chesslayer::Position;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -22,6 +22,8 @@ struct SavedRun {
     /// Commands saved before the card and event content update.
     #[serde(default)]
     legacy_content_commands: usize,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    simulator: Option<SimulatorConfig>,
 }
 
 const SAVE_VERSION: u32 = 24;
@@ -81,6 +83,29 @@ impl WebGame {
                 commands: vec![],
                 legacy_boss_commands: 0,
                 legacy_content_commands: 0,
+                simulator: None,
+            },
+        })
+    }
+    /// Creates a disposable battle using the normal Game battle flow and UI snapshot.
+    pub fn start_simulator(config: &str) -> Result<WebGame, JsValue> {
+        let config: SimulatorConfig = serde_json::from_str(config)
+            .map_err(|e| JsValue::from_str(&format!("시뮬레이터 설정을 읽을 수 없습니다: {e}")))?;
+        let game = Game::new_simulator(&config).map_err(|e| JsValue::from_str(&e))?;
+        Ok(Self {
+            game,
+            developer_mode: false,
+            save: SavedRun {
+                version: SAVE_VERSION,
+                character: config.squad.clone(),
+                seed: config.seed,
+                floor: 1,
+                mode: RunMode::Campaign,
+                progress: Progress::default(),
+                commands: vec![],
+                legacy_boss_commands: 0,
+                legacy_content_commands: 0,
+                simulator: Some(config),
             },
         })
     }
@@ -195,13 +220,17 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
         return Err("저장된 원정의 진행 기록이 올바르지 않습니다.".into());
     }
     save.version = SAVE_VERSION;
-    let mut game = Game::new_run_with_mode(
-        &save.character,
-        save.seed,
-        save.floor,
-        save.progress.clone(),
-        save.mode,
-    )?;
+    let mut game = if let Some(config) = &save.simulator {
+        Game::new_simulator(config)?
+    } else {
+        Game::new_run_with_mode(
+            &save.character,
+            save.seed,
+            save.floor,
+            save.progress.clone(),
+            save.mode,
+        )?
+    };
     for (index, command) in save.commands.iter().enumerate() {
         game.legacy_content = index < save.legacy_content_commands;
         let result = if index < save.legacy_boss_commands {
@@ -226,6 +255,52 @@ pub fn catalog() -> String {
 pub fn compendium() -> String {
     serde_json::to_string(&chesslayer::content::compendium::catalog())
         .expect("compendium is serializable")
+}
+
+#[wasm_bindgen]
+pub fn simulator_catalog() -> String {
+    use chesslayer::content::{cards, characters, encounters, pieces, ENCOUNTERS};
+    let squads: Vec<_> = characters::ALL
+        .iter()
+        .map(|character| {
+            let roster: Vec<_> = characters::roster(character.id)
+                .iter()
+                .map(|piece| {
+                    let definition =
+                        pieces::definition(piece.kind).expect("registered starting piece");
+                    serde_json::json!({
+                        "id": piece.id, "kind": piece.kind, "key": definition.key,
+                        "name": definition.name, "cell": piece.origin.rank * 8 + piece.origin.file,
+                    })
+                })
+                .collect();
+            serde_json::json!({
+                "id": character.id, "deck": cards::starting_deck(character.id)
+                    .iter().map(|card| card.kind).collect::<Vec<_>>(),
+                "relics": [character.relic], "pieces": roster,
+            })
+        })
+        .collect();
+    let battles: Vec<_> = ENCOUNTERS.iter().enumerate().map(|(index, definition)| {
+        let lineup = encounters::encounter(index);
+        let pieces: Vec<_> = lineup.enemies.iter().map(|piece| {
+            let name = pieces::definition(piece.kind).expect("registered enemy piece");
+            serde_json::json!({
+                "id": piece.id, "kind": piece.kind, "key": name.key, "name": name.name,
+                "cell": piece.position.rank * 8 + piece.position.file,
+            })
+        }).collect();
+        serde_json::json!({
+            "index": index, "id": definition.id, "name": definition.name,
+            "description": definition.description, "floor": definition.floor,
+            "final": index == encounters::DICTATOR_BOSS,
+            "tier": format!("{:?}", definition.tier).to_lowercase(),
+            "pieces": pieces, "royal_id": lineup.royal_id,
+            "additional_royal_ids": lineup.additional_royal_ids,
+            "random_royal": definition.royal_selection == encounters::RoyalSelection::UniformDeployed,
+        })
+    }).collect();
+    serde_json::json!({"squads": squads, "encounters": battles}).to_string()
 }
 
 /// Sandbox state is never saved with an expedition.

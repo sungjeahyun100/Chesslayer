@@ -142,7 +142,7 @@ impl Game {
             }
             Roulette => (
                 "룰렛",
-                "50%: 무작위 비로얄 영구 제거. 50%: 무작위 아군 영구 강화.",
+                "50%: 무작위 비로얄 기물 제거. 50%: 무작위 아군 영구 강화. 제거된 기물은 휴식이나 보스 격파로 부활할 수 있습니다.",
                 "common",
                 vec![choice("spin", "룰렛을 돌린다", true)],
             ),
@@ -209,9 +209,9 @@ impl Game {
                 self.event_state.hidden_outcome = outcomes[self.rng.index(outcomes.len())];
                 let (title,desc,label) = match self.event_state.hidden_outcome {
                     0 => ("히든 · 숨겨진 창고","봉인된 창고에서 유물을 발견했습니다.","무작위 유물 획득"),
-                    1 => ("히든 · 수상한 계약","위험: 무작위 아군 비로얄 하나를 영구 희생합니다. 영웅 이상 유물 하나를 얻습니다.","희생을 받아들인다"),
+                    1 => ("히든 · 수상한 계약","위험: 무작위 아군 비로얄 하나를 제거합니다. 휴식이나 보스 격파로 부활할 수 있습니다. 영웅 이상 유물 하나를 얻습니다.","희생을 받아들인다"),
                     3 => ("히든 · 비밀 병기","무작위 아군 하나를 한 단계 영구 강화합니다.","강화한다"),
-                    _ => ("히든 · 운명의 반전","위험: 골드·덱·부대 중 하나가 무작위로 바뀝니다. 골드 25 손실, 카드 영구 제거, 비로얄 영구 제거가 발생할 수 있습니다.","운명을 바꾼다"),
+                    _ => ("히든 · 운명의 반전","위험: 골드·덱·부대 중 하나가 무작위로 바뀝니다. 골드 25 손실, 카드 영구 제거, 비로얄 기물 제거가 발생할 수 있습니다. 제거된 기물은 부활할 수 있습니다.","운명을 바꾼다"),
                 };
                 (
                     title,
@@ -310,12 +310,14 @@ impl Game {
         }
         let id = ids[self.rng.index(ids.len())];
         let mut roster = self.battle.outcome();
-        let name = piece_name(roster.iter().find(|p| p.id == id).unwrap().kind);
-        roster.retain(|p| p.id != id);
+        let piece = roster.iter_mut().find(|p| p.id == id).unwrap();
+        let name = piece_name(piece.kind);
+        piece.position = None;
+        piece.moved = false;
         self.battle
             .replace_roster_at_rest(roster)
             .map_err(engine_error)?;
-        Ok(format!("{name} 영구 제거"))
+        Ok(format!("{name} 제거 · 휴식이나 보스 격파로 부활 가능"))
     }
     fn event_upgrade_random(&mut self) -> Result<String, String> {
         let options = self.event_upgrades();
@@ -526,5 +528,66 @@ impl Game {
         view.choices = vec![choice("continue", "원정 경로로 돌아가기", true)];
         *self = next;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn event_removed_piece_can_revive_at_rest_and_after_boss() {
+        let mut game = Game::new("avenger", 37).unwrap();
+        game.battle.phase = Phase::Finished;
+        let original = game.battle.outcome();
+        let message = game.event_remove_random().unwrap();
+        assert!(message.contains("부활 가능"));
+        let roster = game.battle.outcome();
+        assert_eq!(roster.len(), original.len());
+        let removed = roster.iter().find(|p| p.position.is_none()).unwrap();
+        let before = original.iter().find(|p| p.id == removed.id).unwrap();
+        assert!(!game.battle.is_royal_piece(removed.id));
+        assert_eq!(removed.kind, before.kind);
+        assert_eq!(removed.origin, before.origin);
+        assert_eq!(removed.upgrades, before.upgrades);
+        assert_eq!(removed.persistent, before.persistent);
+        assert!(!game.event_nonroyals().contains(&removed.id));
+        let removed_id = removed.id;
+
+        let mut boss = game.clone();
+        boss.finish_boss().unwrap();
+        let recovered = boss.battle.outcome();
+        assert_eq!(recovered.len(), original.len());
+        assert_eq!(
+            recovered
+                .iter()
+                .find(|p| p.id == removed_id)
+                .unwrap()
+                .position,
+            Some(before.origin)
+        );
+
+        game.phase = RunPhase::Rest;
+        game.current_node = Some(0);
+        assert!(
+            game.snapshot()
+                .rest_options
+                .iter()
+                .find(|p| p.id == removed_id)
+                .unwrap()
+                .can_revive
+        );
+        game.dispatch(Command::RestRevive { id: removed_id })
+            .unwrap();
+        let revived = game.battle.outcome();
+        assert_eq!(revived.len(), original.len());
+        assert_eq!(
+            revived
+                .iter()
+                .find(|p| p.id == removed_id)
+                .unwrap()
+                .position,
+            Some(before.origin)
+        );
     }
 }

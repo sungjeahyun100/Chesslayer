@@ -395,7 +395,7 @@ fn exhausted_relic_pool_elite_duplicates_and_boss_keep_valid_rewards_and_ids() {
         (1..=8).collect::<Vec<_>>()
     );
     let mut next = Game::new_run("guardian", 2027, 2, g.progress.clone()).unwrap();
-    assert_eq!(next.available_nodes().len(), 3);
+    assert!((2..=6).contains(&next.available_nodes().len()));
     assert!(next
         .map
         .nodes

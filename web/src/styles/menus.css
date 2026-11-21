@@ -60,6 +60,38 @@
   line-height: 1.8;
   margin: 0 0 12px;
 }
+.home .primary.large,
+.home .resume-button {
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  transition: background-color 150ms ease-out, border-color 150ms ease-out,
+    box-shadow 150ms ease-out, transform 150ms ease-out;
+}
+.home .primary.large {
+  color: var(--green);
+}
+.home .primary.large:is(:hover, :focus-visible):not(:disabled),
+.home .resume-button:is(:hover, :focus-visible):not(:disabled) {
+  background: #e7eee1;
+  border-color: #fffef8 #9cad98 #8fa38b #fffef8;
+  box-shadow: inset 2px 2px 1px #fffef8, inset -2px -2px 2px #abc0aa,
+    0 5px 10px #1d3f3029, 0 2px 3px #1d3f301a;
+}
+.home .primary.large:active:not(:disabled),
+.home .resume-button:active:not(:disabled) {
+  transform: translateY(1px);
+  background: #dce8d8;
+  border-color: #91a58f #fffef8 #fffef8 #91a58f;
+  box-shadow: inset 2px 2px 4px #58785b38, inset -1px -1px 0 #fffef8,
+    0 1px 2px #1d3f3015;
+}
+@media (prefers-reduced-motion: reduce) {
+  .home .primary.large,
+  .home .resume-button {
+    transition: none;
+  }
+}
 .home-facts span + span {
   border-left: 1px solid var(--line);
   padding-left: 20px;

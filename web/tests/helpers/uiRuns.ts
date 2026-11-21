@@ -66,21 +66,43 @@ export function winHillBattle(game: WebGame, node: number) {
   dispatch(game, { type: "select_node", id: node });
   finishHillBattle(game);
 }
-function routesTo(nodes: Snapshot["map"]["nodes"], id: number): number[][] {
+export function routesTo(nodes: Snapshot["map"]["nodes"], id: number): number[][] {
   if (nodes[id].row === 0) return [[id]];
   return nodes.filter((parent) => parent.next.includes(id))
     .flatMap((parent) => routesTo(nodes, parent.id).map((route) => [...route, id]));
+}
+export function travelRoute(game: WebGame, route: number[], claimCards = false) {
+  for (const id of route) {
+    const node = snapshot(game).map.nodes[id];
+    if (node.kind === "combat" || node.kind === "elite" || node.kind === "boss") {
+      winHillBattle(game, id);
+      if (claimCards) {
+        const card = snapshot(game).rewards.findIndex((reward) => reward.type === "card");
+        if (card >= 0) dispatch(game, { type: "claim_reward", index: card });
+      }
+      dispatch(game, { type: "continue_reward" });
+    } else {
+      dispatch(game, { type: "select_node", id });
+      if (node.kind === "rest") dispatch(game, { type: "rest_skip" });
+      else if (node.kind === "treasure") dispatch(game, { type: "claim_treasure" });
+      else if (node.kind === "shop") dispatch(game, { type: "shop_leave" });
+      else if (node.kind === "event") resolveEvent(game);
+    }
+  }
 }
 const checkpoints = new Map<string, { saved: string; state: Snapshot }>();
 export function checkpoint(target: "elite" | "rest" | "temporary" | "casualties") {
   const cached = checkpoints.get(target);
   if (cached) return cached;
-  const game = newRun("guardian", target === "temporary" ? 0 : 2026);
+  const game = newRun("guardian", target === "temporary" ? 0 : target === "elite" ? 2026 : 1);
   try {
     const king = snapshot(game).pieces.find((piece) => piece.key === "king")!;
     dispatch(game, { type: "developer_set_upgrade", id: king.id, target: 94 });
     if (target === "temporary") {
-      winHillBattle(game, 0);
+      const nodes = snapshot(game).map.nodes;
+      const start = nodes.find((node) => node.row === 0
+        && node.next.some((id) => nodes[id].kind === "combat"))!;
+      winHillBattle(game, start.id);
       const index = snapshot(game).rewards.findIndex((reward) => reward.type === "card" && reward.definition.kind === "temporary_upgrade");
       if (index < 0) throw new Error("UI fixture requires a temporary-upgrade reward");
       dispatch(game, { type: "claim_reward", index });
@@ -89,11 +111,10 @@ export function checkpoint(target: "elite" | "rest" | "temporary" | "casualties"
       dispatch(game, { type: "select_node", id: next.id });
     } else {
       const nodes = snapshot(game).map.nodes;
-      const destination = nodes.find((node) => node.row === (target === "elite" ? 2 : 3)
-        && node.kind === (target === "elite" ? "elite" : "event"))!;
+      const destination = nodes.find((node) => node.row === 1
+        && node.kind === (target === "elite" ? "elite" : "rest"))!;
       const route = routesTo(nodes, destination.id).find((ids) =>
-        ids.slice(0, -1).every((id) => ["combat", "elite"].includes(nodes[id].kind))
-        && (target === "elite" || ids.some((id) => nodes[id].kind === "elite")))!;
+        ids.slice(0, -1).every((id) => ["combat", "elite"].includes(nodes[id].kind)))!;
       if (!route) throw new Error(`No combat route reaches ${target}`);
       for (const [index, id] of route.entries()) {
         if (id === destination.id && target !== "elite") break;
@@ -105,8 +126,6 @@ export function checkpoint(target: "elite" | "rest" | "temporary" | "casualties"
       }
       if (target === "rest" || target === "casualties") {
         dispatch(game, { type: "select_node", id: destination.id });
-        resolveEvent(game);
-        dispatch(game, { type: "select_node", id: destination.next[0] });
       }
     }
     const checkpoint = { saved: game.save(), state: snapshot(game) };

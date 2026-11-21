@@ -34,7 +34,7 @@ impl Game {
                     {
                         content::endless::Scaling::for_node(
                             self.seed,
-                            (u64::from(self.floor) - 1) * 15 + n.row as u64 + 1,
+                            (u64::from(self.floor) - 1) * self.map.rows as u64 + n.row as u64 + 1,
                             n.kind,
                         )
                         .description()

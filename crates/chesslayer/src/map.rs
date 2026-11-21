@@ -7,10 +7,9 @@ use serde::Serialize;
 
 pub const MAP_ROWS: usize = 15;
 pub const MAP_LANES: usize = 7;
-// Stages 5 and 11 are guaranteed rests. Stage 13 offers a third rest
-// instead of another reward; every route can visit at most three.
-const REST_ROWS: [usize; 2] = [4, 10];
-const BOSS_ROW: usize = MAP_ROWS - 1;
+const PATH_COUNT: usize = 6;
+// The boss is a separate node after the 7x15 grid.
+const BOSS_ROW: usize = MAP_ROWS;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NodeKind {
@@ -98,102 +97,51 @@ impl ActMap {
     pub fn generate_for_floor(seed: u32, floor: u8) -> Self {
         // Map creation never consumes the combat/deck RNG stream.
         let mut rng = Rng::new(seed ^ 0x41c7_9e35 ^ (u32::from(floor - 1) << 24));
-        // Keep the graph, normal encounters and relic stream stable when elite selection changes.
         let mut elite_rng = Rng::new(seed ^ 0xe11e_0001 ^ (u32::from(floor - 1) << 24));
-        let mut later_width_rng = Rng::new(seed ^ 0x7a1e_0003 ^ (u32::from(floor - 1) << 24));
-        let mut treasure_rng = Rng::new(seed ^ 0x7a1e_0004 ^ (u32::from(floor - 1) << 24));
-        let widths = [
-            3,
-            6 + rng.index(2),
-            2,
-            6 + rng.index(2),
-            2,
-            6 + rng.index(2),
-            1,
-            6 + rng.index(2),
-            2,
-            6 + later_width_rng.index(2),
-            2,
-            6 + later_width_rng.index(2),
-            2,
-            2,
-            1,
-        ];
-        let mut nodes = vec![];
-        let mut layers = vec![];
-        let mut first_section_edges = None;
-        for (row, width) in widths.into_iter().enumerate() {
-            let mut lanes: Vec<_> = (0..MAP_LANES).collect();
-            rng.shuffle(&mut lanes);
-            lanes.truncate(width);
-            lanes.sort_unstable();
-            if row == BOSS_ROW {
-                lanes = vec![MAP_LANES / 2];
-            }
-            let mut kinds = match row {
-                0 => vec![NodeKind::Combat; width],
-                row if REST_ROWS.contains(&row) => vec![NodeKind::Rest; width],
-                BOSS_ROW => vec![NodeKind::Boss],
-                1 | 7 => {
-                    let mut kinds = vec![
-                        NodeKind::Combat,
-                        NodeKind::Combat,
-                        NodeKind::Treasure,
-                        NodeKind::Combat,
-                        NodeKind::Treasure,
-                        NodeKind::Elite,
-                    ];
-                    if width == 7 {
-                        kinds.push(NodeKind::Treasure);
-                    }
-                    kinds
-                }
-                2 | 8 | 13 => vec![NodeKind::Combat, NodeKind::Elite],
-                3 | 5 | 9 | 11 => {
-                    let mut kinds = vec![
-                        NodeKind::Combat,
-                        NodeKind::Treasure,
-                        NodeKind::Combat,
-                        NodeKind::Elite,
-                        NodeKind::Treasure,
-                        NodeKind::Elite,
-                    ];
-                    if width == 7 {
-                        kinds.push(NodeKind::Treasure);
-                    }
-                    kinds
-                }
-                6 => vec![NodeKind::Combat],
-                12 => vec![NodeKind::Rest, NodeKind::Treasure],
-                _ => unreachable!("all map rows have a node rule"),
+        let mut occupied = [[false; MAP_LANES]; MAP_ROWS];
+        let mut edges = vec![Vec::<(usize, usize)>::new(); MAP_ROWS - 1];
+        let first_start = rng.index(MAP_LANES);
+        let second_start = (first_start + 1 + rng.index(MAP_LANES - 1)) % MAP_LANES;
+        for path in 0..PATH_COUNT {
+            let mut lane = match path {
+                0 => first_start,
+                1 => second_start,
+                _ => rng.index(MAP_LANES),
             };
-            // Treasure remains possible in regular branches, but no row reserves one.
-            for kind in &mut kinds {
-                if row != 12 && *kind == NodeKind::Treasure && treasure_rng.index(2) == 0 {
-                    *kind = NodeKind::Combat;
+            occupied[0][lane] = true;
+            for row in 0..MAP_ROWS - 1 {
+                let left = lane.saturating_sub(1);
+                let right = (lane + 1).min(MAP_LANES - 1);
+                let next_lane = left + rng.index(right - left + 1);
+                if !edges[row].contains(&(lane, next_lane)) {
+                    edges[row].push((lane, next_lane));
                 }
+                occupied[row + 1][next_lane] = true;
+                lane = next_lane;
             }
-            if row == 3 {
-                kinds[0] = NodeKind::Event;
-            }
-            if row == 9 {
-                kinds[0] = NodeKind::Shop;
-            }
-            rng.shuffle(&mut kinds);
-            let mut starting_encounters = [0, 0, 1];
-            rng.shuffle(&mut starting_encounters);
-            let mut layer = vec![];
-            for (i, (lane, kind)) in lanes.into_iter().zip(kinds).enumerate() {
+        }
+
+        let mut nodes = vec![];
+        let mut ids = [[None; MAP_LANES]; MAP_ROWS];
+        for row in 0..MAP_ROWS {
+            for lane in 0..MAP_LANES {
+                if !occupied[row][lane] {
+                    continue;
+                }
+                let kind = match row {
+                    0 => NodeKind::Combat,
+                    8 => NodeKind::Treasure,
+                    14 => NodeKind::Rest,
+                    _ => match rng.index(100) {
+                        0..=44 => NodeKind::Combat,
+                        45..=66 => NodeKind::Event,
+                        67..=82 => NodeKind::Elite,
+                        83..=94 => NodeKind::Rest,
+                        _ => NodeKind::Shop,
+                    },
+                };
                 let encounter = match kind {
-                    NodeKind::Boss => Some(match floor {
-                        1 => encounters::VANGUARD_BOSS,
-                        2 => encounters::HERETIC_BOSS,
-                        3 => encounters::ARTILLERY_BOSS,
-                        _ => encounters::SPECIAL_BOSS,
-                    }),
                     NodeKind::Elite => Some(if floor == 1 {
-                        // Preserve the former four-way roll so existing seeded paths
-                        // keep their encounter unless they rolled the retired Horde.
                         match elite_rng.index(4) {
                             0 | 1 => ELITES[0],
                             2 => ELITES[1],
@@ -205,7 +153,7 @@ impl ActMap {
                         let pool = encounters::floor_elites(floor);
                         pool[elite_rng.index(pool.len())]
                     }),
-                    NodeKind::Combat if floor == 1 && row == 0 => Some(starting_encounters[i]),
+                    NodeKind::Combat if floor == 1 && row == 0 => Some(rng.index(2)),
                     NodeKind::Combat if floor == 1 => Some(1 + rng.index(3)),
                     NodeKind::Combat => Some(if floor == 2 {
                         FLOOR_TWO_NORMALS[rng.index(FLOOR_TWO_NORMALS.len())]
@@ -218,7 +166,7 @@ impl ActMap {
                 let relic = matches!(kind, NodeKind::Elite | NodeKind::Treasure)
                     .then(|| RELIC_REWARD_POOL[rng.index(RELIC_REWARD_POOL.len())]);
                 let id = nodes.len();
-                layer.push(id);
+                ids[row][lane] = Some(id);
                 nodes.push(MapNode {
                     id,
                     row,
@@ -229,74 +177,37 @@ impl ActMap {
                     next: vec![],
                 });
             }
-            layers.push(layer);
-            if row == REST_ROWS[0] {
-                // Keep the early fork stream independent of later map rolls.
-                first_section_edges = Some(rng.clone());
+        }
+        for (row, row_edges) in edges.into_iter().enumerate() {
+            for (from_lane, to_lane) in row_edges {
+                let from = ids[row][from_lane].unwrap();
+                let to = ids[row + 1][to_lane].unwrap();
+                nodes[from].next.push(to);
             }
         }
-        // Cover every destination in the wider second row while giving each
-        // start at least two distinct, non-crossing choices.
-        for (j, &to) in layers[1].iter().enumerate() {
-            let i = j * layers[0].len() / layers[1].len();
-            nodes[layers[0][i]].next.push(to);
-        }
-        // An ordered staircase covers every source and destination. It allows forks,
-        // merges and one-to-one edges without crossings, islands or dead ends.
-        let mut first_section_edges = first_section_edges.unwrap();
-        for row in 1..MAP_ROWS - 1 {
-            let (from, to) = (&layers[row], &layers[row + 1]);
-            let (mut i, mut j) = (0, 0);
-            loop {
-                nodes[from[i]].next.push(to[j]);
-                if i + 1 == from.len() && j + 1 == to.len() {
-                    break;
-                }
-                if i + 1 == from.len() {
-                    j += 1;
-                } else if j + 1 == to.len() {
-                    i += 1;
-                } else {
-                    let edge_rng = if row < REST_ROWS[0] {
-                        &mut first_section_edges
-                    } else {
-                        &mut rng
-                    };
-                    match edge_rng.index(3) {
-                        0 => i += 1,
-                        1 => j += 1,
-                        _ => {
-                            i += 1;
-                            j += 1;
-                        }
-                    }
-                }
+        let boss_id = nodes.len();
+        for lane in 0..MAP_LANES {
+            if let Some(id) = ids[MAP_ROWS - 1][lane] {
+                nodes[id].next.push(boss_id);
             }
         }
-        // Add shops and events on separate branch rows without changing the
-        // graph, encounter rolls, or the guaranteed event/shop placements.
-        let mut special_rng = Rng::new(seed ^ 0x5a0b_e7e3 ^ (u32::from(floor - 1) << 24));
-        let mut special_rows = [2, 5, 7, 8, 11, 13];
-        special_rng.shuffle(&mut special_rows);
-        for (row, kind) in special_rows.into_iter().zip([
-            NodeKind::Shop,
-            NodeKind::Shop,
-            NodeKind::Shop,
-            NodeKind::Event,
-            NodeKind::Event,
-        ]) {
-            let combat_nodes = nodes
-                .iter()
-                .filter(|node| node.row == row && node.kind == NodeKind::Combat)
-                .map(|node| node.id)
-                .collect::<Vec<_>>();
-            let id = combat_nodes[special_rng.index(combat_nodes.len())];
-            nodes[id].kind = kind;
-            nodes[id].encounter = None;
-        }
+        nodes.push(MapNode {
+            id: boss_id,
+            row: BOSS_ROW,
+            lane: MAP_LANES / 2,
+            kind: NodeKind::Boss,
+            encounter: Some(match floor {
+                1 => encounters::VANGUARD_BOSS,
+                2 => encounters::HERETIC_BOSS,
+                3 => encounters::ARTILLERY_BOSS,
+                _ => encounters::SPECIAL_BOSS,
+            }),
+            relic: None,
+            next: vec![],
+        });
         Self {
             nodes,
-            rows: MAP_ROWS,
+            rows: MAP_ROWS + 1,
         }
     }
     pub fn starts(&self) -> Vec<usize> {

@@ -1,5 +1,75 @@
 use super::*;
 use content::cards::avenger::Rarity;
+
+#[test]
+fn summoned_rank_survives_normal_run_battle_boundary() {
+    let mut game = Game::new("avenger", 8).unwrap();
+    game.relics.push(Relic::PalaceFamily);
+    game.dispatch(Command::SelectNode {
+        id: game.available_nodes()[0],
+    })
+    .unwrap();
+    game.cards.hand = vec![Card {
+        id: 999,
+        kind: CardKind::BabyRank,
+    }];
+    game.cards.mana = 3;
+    let before = game.snapshot();
+    assert_eq!(
+        before.pieces.iter().filter(|p| p.id >= 1_000_000).count(),
+        0
+    );
+    let target = game.battle.avenger_targets(CardKind::BabyRank)[0];
+    let mut staged = game.clone();
+    staged
+        .battle
+        .avenger_effect(CardKind::BabyRank, Some(target), None)
+        .unwrap();
+    assert_eq!(
+        staged
+            .snapshot()
+            .pieces
+            .iter()
+            .filter(|p| p.id >= 1_000_000)
+            .count(),
+        8
+    );
+    assert_eq!(
+        game.snapshot()
+            .pieces
+            .iter()
+            .filter(|p| p.id >= 1_000_000)
+            .count(),
+        0
+    );
+    game.dispatch(Command::PlayCard {
+        id: 999,
+        target: Some(target),
+    })
+    .unwrap();
+    let ids: Vec<_> = game
+        .snapshot()
+        .pieces
+        .iter()
+        .filter(|p| p.id >= 1_000_000)
+        .map(|p| p.id)
+        .collect();
+    assert_eq!(ids.len(), 8);
+    assert!(ids
+        .iter()
+        .all(|id| game.battle.outcome().iter().any(|p| p.id == *id)));
+
+    game.battle.force_remove(&[game.battle.royal_id]).unwrap();
+    game.check_finish().unwrap();
+    assert_eq!(game.phase, RunPhase::Reward);
+    assert!(ids
+        .iter()
+        .all(|id| game.snapshot().pieces.iter().any(|p| p.id == *id)));
+    game.start_battle().unwrap();
+    assert!(ids
+        .iter()
+        .all(|id| game.snapshot().pieces.iter().any(|p| p.id == *id)));
+}
 fn event_game(seed: u32) -> Game {
     let mut g = Game::new("avenger", seed).unwrap();
     g.battle.phase = Phase::Finished;

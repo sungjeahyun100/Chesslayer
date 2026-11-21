@@ -5,7 +5,7 @@ import type { Snapshot } from "../src/types";
 test("혼합 보상: 표시 슬롯 획득·다음 전투 드로우·저장 재현", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
-  const game = newRun("guardian", 2026);
+  const game = newRun("guardian", 0);
   let prepared: { saved: string; snapshot: Snapshot };
   try {
     dispatch(game, { type: "developer_set_upgrade", id: 5, target: 94 });

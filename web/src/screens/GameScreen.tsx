@@ -16,6 +16,7 @@ import { OutcomeScreen } from "./OutcomeScreen";
 import type { EndlessRecord } from "../endless";
 
 interface Props {
+  simulator?: boolean;
   snapshot: Snapshot;
   cardMovement: { sequence: number; before: Snapshot; next: Snapshot } | null;
   displayState: Snapshot;
@@ -36,7 +37,7 @@ interface Props {
 }
 
 export function GameScreen({ snapshot, cardMovement, displayState: state, send: dispatchCommand, inspectEnemy, setError, onRestart,
-  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, statusEffects, endlessBest, endlessRunBest }: Props) {
+  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, statusEffects, endlessBest, endlessRunBest, simulator = false }: Props) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const closeStatus = useCallback(() => setStatusOpen(false), []);
@@ -44,7 +45,7 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
   const boardRef = useRef<HTMLDivElement>(null);
   const outcomeRef = useRef<HTMLElement>(null);
   const previousPhase = useRef<string | undefined>(undefined);
-  const rewardOpen = state.phase === "reward" && !presentationBusy && !rewardUpgradeOpen;
+  const rewardOpen = !simulator && state.phase === "reward" && !presentationBusy && !rewardUpgradeOpen;
   function send(command: Command) {
     if (statusOpen || presentationBusy) return false;
     const accepted = dispatchCommand(command);
@@ -68,30 +69,30 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
     if (input.targetCard) boardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
   }, [input.targetCard]);
   const rewardRevisit = state.phase === "reward" && state.map.nodes.some((node) => node.current && node.visited);
-  const showMap = (state.phase === "map" || rewardRevisit) && !rewardUpgradeOpen;
+  const showMap = !simulator && (state.phase === "map" || rewardRevisit) && !rewardUpgradeOpen;
   const restView = state.phase === "rest" || rewardUpgradeOpen;
   const restPiece = state.rest_options.find((piece) => piece.id === input.restChoice?.id);
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
   const board = <RunBoard state={state} input={input} rewardUpgradeOpen={rewardUpgradeOpen}
     lastEnemyMove={lastEnemyMove} boardRevision={boardRevision} boardRef={boardRef} animation={animation} statusEffects={statusEffects} />;
   return <>
-    {createPortal(<div className="expedition-toolbar">
+    {!simulator && createPortal(<div className="expedition-toolbar">
       <span className="expedition-gold" aria-label={`보유 금화 ${snapshot.gold}`}><span aria-hidden="true">🪙</span>{snapshot.gold}</span>
       {!presentationBusy && <button className="primary expedition-status-trigger" onClick={() => setStatusOpen(true)} aria-haspopup="dialog" aria-expanded={statusOpen}>원정 현황</button>}
     </div>, document.body)}
     {showMap ? <ActMap state={state} send={send} coveredByReward={rewardRevisit} /> : (
       <main className="game-layout" data-phase={state.phase} data-upgrade-open={upgradeOpen || undefined}>
         <nav className="node-navigation" aria-label="원정 위치">
-          <span>{floorLabel(state.floor, state.final_battle)} / {(state.map.nodes.find((node) => node.current)?.row ?? 0) + 1}번째 지점
+          <span>{simulator ? `전투 시뮬레이터 · ${state.encounter}` : <>{floorLabel(state.floor, state.final_battle)} / {(state.map.nodes.find((node) => node.current)?.row ?? 0) + 1}번째 지점
             · {state.node_kind && nodeTypes[state.node_kind].label}
-            {state.mode === "endless" && ` · 무한 원정 · 누적 ${state.cleared_stages}단계 클리어`}</span>
+            {state.mode === "endless" && ` · 무한 원정 · 누적 ${state.cleared_stages}단계 클리어`}</>}</span>
         </nav>
         {!["treasure", "event", "shop", "victory", "defeat"].includes(state.phase) && (restView
           ? <RestScreen state={state} input={input} board={board} reward={rewardUpgradeOpen}
               history={rewardUpgradeOpen ? rewardUpgradeHistory : upgradeHistory}
               onClose={() => { input.chooseRest(null); if (rewardUpgradeOpen) closeRewardUpgrade(); }} />
           : <BattleScreen state={state} cardState={snapshot.phase === "combat" ? snapshot : state} cardMovement={cardMovement} input={input} board={board} />)}
-        {!["combat", "rest", "reward"].includes(state.phase) && <OutcomeScreen state={state} send={send}
+        {!simulator && !["combat", "rest", "reward"].includes(state.phase) && <OutcomeScreen state={state} send={send}
           endlessBest={endlessBest} endlessRunBest={endlessRunBest}
           onRestart={() => { if (!statusOpen && !presentationBusy) onRestart(); }} outcomeRef={outcomeRef} />}
       </main>

@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { dispatch, newRun, snapshot, winHillBattle } from "./helpers/uiRuns";
+import { dispatch, newRun, routesTo, snapshot, travelRoute } from "./helpers/uiRuns";
 
 test("보물방에서 유물을 받지 않고 떠나면 보유품을 유지한 채 다음 노드로 진행한다", async ({ page }) => {
   const game = newRun("guardian", 2026);
@@ -8,12 +8,15 @@ test("보물방에서 유물을 받지 않고 떠나면 보유품을 유지한 �
   let treasureId: number;
   try {
     const nodes = snapshot(game).map.nodes;
-    const treasure = nodes.find(node => node.kind === "treasure" && node.row === 1)!;
-    const start = nodes.find(node => node.row === 0 && node.next.includes(treasure.id))!;
+    const routes = nodes.filter(node => node.kind === "treasure" && node.row === 8)
+      .flatMap(node => routesTo(nodes, node.id));
+    const route = routes.sort((a, b) =>
+      a.slice(0, -1).filter(id => ["combat", "elite"].includes(nodes[id].kind)).length
+      - b.slice(0, -1).filter(id => ["combat", "elite"].includes(nodes[id].kind)).length)[0];
+    const treasure = nodes[route.at(-1)!];
     const king = snapshot(game).pieces.find(piece => piece.key === "king")!;
     dispatch(game, { type: "developer_set_upgrade", id: king.id, target: 94 });
-    winHillBattle(game, start.id);
-    dispatch(game, { type: "continue_reward" });
+    travelRoute(game, route.slice(0, -1));
     dispatch(game, { type: "select_node", id: treasure.id });
     before = snapshot(game);
     treasureId = treasure.id;

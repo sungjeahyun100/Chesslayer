@@ -1,40 +1,29 @@
 import { test, expect } from "@playwright/test";
-import { dispatch, finishHillBattle, newRun, snapshot, resolveEvent } from "./helpers/uiRuns";
+import { dispatch, newRun, routesTo, snapshot, travelRoute } from "./helpers/uiRuns";
 
 test("상점 카드 소각은 덱과 골드를 즉시 갱신하고 저장 복원된다", async ({ page }) => {
-  const game = newRun("guardian", 2026);
+  const scenario = (() => {
+    for (let seed = 0; seed < 500; seed++) {
+      const game = newRun("guardian", seed);
+      const nodes = snapshot(game).map.nodes;
+      const route = nodes.filter((node) => node.kind === "shop")
+        .flatMap((node) => routesTo(nodes, node.id))
+        .filter((ids) => ids.slice(0, -1).reduce((gold, id) =>
+          gold + (nodes[id].kind === "elite" ? 30 : nodes[id].kind === "combat" ? 15 : 0), snapshot(game).gold) >= 100)
+        .sort((a, b) => a.length - b.length)[0];
+      if (route) return { game, route };
+      game.free();
+    }
+    throw new Error("No shop route earns enough gold to burn a card");
+  })();
+  const { game, route } = scenario;
   let saved: string;
   let before: ReturnType<typeof snapshot>;
   try {
     const king = snapshot(game).pieces.find((piece) => piece.key === "king")!;
     dispatch(game, { type: "developer_set_upgrade", id: king.id, target: 94 });
-    const nodes = snapshot(game).map.nodes;
-    const shop = nodes.find((node) => node.kind === "shop" && node.row === 9)!;
-    const pathCost = (id: number): number => {
-      if (id === shop.id) return 0;
-      const onward = Math.min(...nodes[id].next.map(pathCost));
-      return onward - (nodes[id].kind === "elite" ? 30 : nodes[id].kind === "combat" ? 15 : 0);
-    };
-    while (snapshot(game).phase !== "shop" || snapshot(game).map.current !== shop.id) {
-      const state = snapshot(game);
-      if (state.phase === "shop") { dispatch(game, { type: "shop_leave" }); continue; }
-      const next = state.map.nodes.filter((node) => node.available && Number.isFinite(pathCost(node.id)))
-        .sort((a, b) => pathCost(a.id) - pathCost(b.id))[0];
-      if (!next) throw new Error("상점으로 이어지는 경로가 없습니다.");
-      if (next.kind === "combat" || next.kind === "elite") {
-        dispatch(game, { type: "select_node", id: next.id });
-        finishHillBattle(game);
-        if (snapshot(game).phase !== "reward") throw new Error(`노드 ${next.id} 승리 실패`);
-        const cardIndex = snapshot(game).rewards.findIndex((reward) => reward.type === "card");
-        if (cardIndex >= 0) dispatch(game, { type: "claim_reward", index: cardIndex });
-        dispatch(game, { type: "continue_reward" });
-      } else {
-        dispatch(game, { type: "select_node", id: next.id });
-        if (next.kind === "treasure") dispatch(game, { type: "claim_treasure" });
-        if (next.kind === "rest") dispatch(game, { type: "rest_skip" });
-        if (next.kind === "event") resolveEvent(game);
-      }
-    }
+    travelRoute(game, route.slice(0, -1), true);
+    dispatch(game, { type: "select_node", id: route.at(-1)! });
     before = snapshot(game);
     saved = game.save();
   } finally { game.free(); }

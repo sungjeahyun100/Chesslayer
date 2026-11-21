@@ -63,9 +63,9 @@ fn all_troops_start_with_distinct_playable_content_and_four_fifteen_stage_maps()
     }
     for floor in 1..=4 {
         let map = chesslayer::map::ActMap::generate_for_floor(300, floor);
-        assert_eq!(map.rows, 15);
+        assert_eq!(map.rows, 16);
         let boss = map.nodes.iter().find(|n| n.kind == NodeKind::Boss).unwrap();
-        assert_eq!(boss.row, 14);
+        assert_eq!(boss.row, 15);
         assert_eq!(
             boss.encounter,
             Some(content::encounters::VANGUARD_BOSS + usize::from(floor - 1))

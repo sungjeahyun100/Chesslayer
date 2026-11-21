@@ -16,7 +16,10 @@ test("신규 유물 5종: 실제 획득·배치·선공권·누적 코스트·�
       const game = newRun("guardian", seed);
       try {
         dispatch(game, { type: "developer_set_upgrade", id: 5, target: 94 });
-        winHillBattle(game, snapshot(game).map.nodes.find(n => n.available)!.id);
+        const nodes = snapshot(game).map.nodes;
+        const startNode = nodes.find(n => n.available && n.next.some(id => nodes[id].kind === "combat"));
+        if (!startNode) continue;
+        winHillBattle(game, startNode.id);
         const index = snapshot(game).rewards.findIndex(r => r.type === "relic" && r.definition.id === relicId);
         if (index < 0) continue;
         dispatch(game, { type: "claim_reward", index });

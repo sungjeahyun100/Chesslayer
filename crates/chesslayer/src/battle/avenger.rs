@@ -133,6 +133,13 @@ impl Battle {
         if !self.board.contains(at) || at.rank == 0 || self.board.piece_at(at)?.is_some() {
             return Err(Error::IllegalAction);
         }
+        // A created pawn is a permanent ally. Give it a distinct home before
+        // changing the board so run-boundary roster rebuilding keeps it.
+        let origin = (0..8)
+            .rev()
+            .flat_map(|rank| (0..8).map(move |file| Position::new(file, rank)))
+            .find(|pos| !self.players.iter().any(|p| p.origin == *pos))
+            .ok_or(Error::InvalidSetup)?;
         let id = (1_000_000..=1_000_064)
             .find(|id| {
                 !self.board.cells().iter().flatten().any(|p| p.id == *id)
@@ -147,6 +154,15 @@ impl Battle {
                 owner: PLAYER,
             }),
         )?;
+        self.players.push(PlayerPiece {
+            id,
+            kind: PAWN,
+            origin,
+            position: Some(at),
+            moved: false,
+            upgrades: vec![],
+            persistent: BTreeMap::new(),
+        });
         self.mechanics.statuses.insert(id, PieceStatus::default());
         Ok(id)
     }

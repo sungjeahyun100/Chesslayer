@@ -173,8 +173,21 @@ pub struct CardUpgradeChoice {
     pub id: PieceId,
     pub target: PieceType,
 }
+/// Disposable setup for a single battle. It is kept in the WASM replay envelope,
+/// never in the expedition save slots.
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SimulatorConfig {
+    pub squad: String,
+    pub encounter: usize,
+    pub seed: u32,
+    pub deck: Vec<CardKind>,
+    pub relics: Vec<Relic>,
+    pub upgrades: Vec<CardUpgradeChoice>,
+}
 #[derive(Clone)]
 pub struct Game {
+    pub simulator: bool,
     event_state: events::EventState,
     pub endless_scaling: Option<content::endless::Scaling>,
     pub bosses_defeated: u32,
@@ -252,6 +265,7 @@ impl Game {
         })
         .map_err(engine_error)?;
         let mut game = Self {
+            simulator: false,
             event_state: events::EventState::default(),
             endless_scaling: None,
             bosses_defeated: 0,
@@ -309,6 +323,69 @@ impl Game {
         progress: Progress,
     ) -> Result<Self, String> {
         Self::new_run_with_mode(character, seed, floor, progress, RunMode::Campaign)
+    }
+    pub fn new_simulator(config: &SimulatorConfig) -> Result<Self, String> {
+        let definition = content::ENCOUNTERS
+            .get(config.encounter)
+            .ok_or("등록되지 않은 전투 상대입니다.")?;
+        let squad =
+            content::characters::definition(&config.squad).ok_or("등록되지 않은 부대입니다.")?;
+        let allowed_cards: HashSet<_> = squad
+            .starting_deck
+            .iter()
+            .copied()
+            .chain(squad.card_pool.iter().copied())
+            .collect();
+        if config.deck.iter().any(|kind| !allowed_cards.contains(kind)) {
+            return Err("이 부대에서 사용할 수 없는 카드가 있습니다.".into());
+        }
+        if config.relics.iter().copied().collect::<HashSet<_>>().len() != config.relics.len() {
+            return Err("같은 유물을 중복 장착할 수 없습니다.".into());
+        }
+        if config
+            .relics
+            .iter()
+            .any(|relic| *relic != squad.character.relic && !squad.relic_pool.contains(relic))
+        {
+            return Err("이 부대에서 획득할 수 없는 유물이 있습니다.".into());
+        }
+        let mut game = Self::new(&config.squad, config.seed)?;
+        game.simulator = true;
+        game.deck.clear();
+        game.next_card_id = 1;
+        for &kind in &config.deck {
+            game.add_card(kind);
+        }
+        game.relics = config.relics.clone();
+        let mut upgraded = HashSet::new();
+        for upgrade in &config.upgrades {
+            if !upgraded.insert(upgrade.id) {
+                return Err("같은 기물의 강화가 중복되었습니다.".into());
+            }
+            game.developer_set_upgrade(upgrade.id, upgrade.target)?;
+        }
+        game.map = ActMap {
+            rows: 1,
+            nodes: vec![MapNode {
+                id: 0,
+                row: 0,
+                lane: 2,
+                kind: match definition.tier {
+                    content::encounters::EncounterTier::Normal => NodeKind::Combat,
+                    content::encounters::EncounterTier::Elite => NodeKind::Elite,
+                    content::encounters::EncounterTier::Boss => NodeKind::Boss,
+                },
+                encounter: Some(config.encounter),
+                relic: None,
+                next: vec![],
+            }],
+        };
+        game.floor = u32::from(definition.floor.max(1));
+        game.final_battle = config.encounter == content::encounters::DICTATOR_BOSS;
+        game.current_node = Some(0);
+        game.log.clear();
+        game.start_battle()?;
+        Ok(game)
     }
     pub fn new_run_with_mode(
         character: &str,

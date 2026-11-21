@@ -2,24 +2,25 @@ import { expect, test } from "@playwright/test";
 import { newRun, dispatch, snapshot, winHillBattle } from "./helpers/uiRuns";
 
 test("운수 좋은 날은 모바일에서 후보 중 한 장만 획득하고 결과·저장을 복원한다", async ({ page }) => {
-  const game = newRun("guardian", 11);
-  let saved: string;
-  let before: ReturnType<typeof snapshot>;
-  try {
-    dispatch(game, { type: "developer_set_upgrade", id: 5, target: 94 });
-    const nodes = snapshot(game).map.nodes;
-    const event = nodes.find((node) => node.row === 3 && node.kind === "event")!;
-    const routesTo = (id: number): number[][] => nodes[id].row === 0 ? [[id]]
-      : nodes.filter((parent) => parent.next.includes(id))
-        .flatMap((parent) => routesTo(parent.id).map((route) => [...route, id]));
-    const route = routesTo(event.id).find((ids) =>
-      ids.slice(0, -1).every((id) => ["combat", "elite"].includes(nodes[id].kind)))!;
-    for (const id of route.slice(0, -1)) { winHillBattle(game, id); dispatch(game, { type: "continue_reward" }); }
-    dispatch(game, { type: "select_node", id: event.id });
-    before = snapshot(game);
-    expect(before.event?.kind).toBe("lucky_day");
-    saved = game.save();
-  } finally { game.free(); }
+  const { saved, before } = (() => {
+    for (let seed = 0; seed < 200; seed++) {
+      const game = newRun("guardian", seed);
+      try {
+        dispatch(game, { type: "developer_set_upgrade", id: 5, target: 94 });
+        const nodes = snapshot(game).map.nodes;
+        const event = nodes.find((node) => node.row === 1 && node.kind === "event"
+          && nodes.some((parent) => parent.row === 0 && parent.next.includes(node.id)));
+        if (!event) continue;
+        const start = nodes.find((node) => node.row === 0 && node.next.includes(event.id))!;
+        winHillBattle(game, start.id);
+        dispatch(game, { type: "continue_reward" });
+        dispatch(game, { type: "select_node", id: event.id });
+        const before = snapshot(game);
+        if (before.event?.kind === "lucky_day") return { saved: game.save(), before };
+      } finally { game.free(); }
+    }
+    throw new Error("No early lucky-day event found");
+  })();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
   await page.evaluate(value => {

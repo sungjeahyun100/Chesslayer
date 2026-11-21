@@ -32,7 +32,7 @@ fn endless_maps_reuse_graphs_and_every_registered_encounter_in_its_category() {
             let map = ActMap::generate_endless(seed, floor);
             assert_eq!(map, ActMap::generate_endless(seed, floor));
             let base = ActMap::generate(seed ^ floor.wrapping_mul(0x9e37_79b9));
-            assert_eq!(map.rows, 15);
+            assert_eq!(map.rows, 16);
             for (node, original) in map.nodes.iter().zip(&base.nodes) {
                 assert_eq!(
                     (node.row, node.lane, node.kind, &node.next, node.relic),
@@ -69,11 +69,11 @@ fn endless_counts_each_completed_node_once_and_continues_without_unlocks() {
     let mut game = endless();
     let progress = serde_json::to_string(&game.progress).unwrap();
     for floor in 1..=5 {
-        for stage in 1..=15 {
+        for stage in 1..=16 {
             let id = game.available_nodes()[0];
             let kind = game.map.nodes[id].kind;
             game.dispatch(Command::SelectNode { id }).unwrap();
-            let expected = (floor - 1) * 15 + stage;
+            let expected = (floor - 1) * 16 + stage;
             assert_eq!(game.cleared_stages, expected - 1);
             match kind {
                 NodeKind::Combat | NodeKind::Elite | NodeKind::Boss => {
@@ -112,7 +112,7 @@ fn endless_counts_each_completed_node_once_and_continues_without_unlocks() {
                     if game.phase == RunPhase::Combat {
                         win_battle(&mut game);
                         game.dispatch(Command::ContinueReward).unwrap();
-                    } else {
+                    } else if game.phase == RunPhase::Event {
                         game.dispatch(Command::EventChoice {
                             choice: "continue".into(),
                         })
@@ -128,10 +128,10 @@ fn endless_counts_each_completed_node_once_and_continues_without_unlocks() {
         }
         assert!(!game.final_battle);
         assert_eq!(game.floor, if floor == 5 { 256 } else { floor as u32 + 1 });
-        assert_eq!(game.map.rows, 15);
+        assert_eq!(game.map.rows, 16);
         assert!(game.completed.is_empty());
         game.dispatch(Command::AdvanceFloor).unwrap();
-        assert_eq!(game.cleared_stages, floor * 15);
+        assert_eq!(game.cleared_stages, floor * 16);
     }
 }
 

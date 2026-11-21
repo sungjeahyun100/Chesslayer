@@ -55,38 +55,39 @@ fn started(character: &str, seed: u32) -> Game {
 }
 fn start_before(character: &str, kind: NodeKind) -> Game {
     let mut game = Game::new(character, 2026).unwrap();
-    let id = if kind == NodeKind::Rest {
-        game.map.starts()[0]
-    } else {
-        game.map
-            .starts()
-            .into_iter()
-            .find(|&id| {
-                game.map.nodes[id]
-                    .next
-                    .iter()
-                    .any(|&id| game.map.nodes[id].kind == kind)
-            })
-            .unwrap()
-    };
+    let id = game
+        .map
+        .starts()
+        .into_iter()
+        .find(|&id| {
+            game.map.nodes[id]
+                .next
+                .iter()
+                .any(|&next| game.map.nodes[next].kind == kind)
+        })
+        .unwrap_or(game.map.starts()[0]);
     game.dispatch(Command::SelectNode { id }).unwrap();
     game
 }
 fn select_kind(game: &mut Game, kind: NodeKind) {
-    if kind == NodeKind::Rest
-        && !game
-            .available_nodes()
-            .iter()
-            .any(|&id| game.map.nodes[id].kind == kind)
+    if !game
+        .available_nodes()
+        .iter()
+        .any(|&id| game.map.nodes[id].kind == kind)
     {
-        // The rest is now at stage 5; jump over unrelated intermediate nodes
-        // while these tests isolate the reward-to-rest boundary.
-        let rest = game.map.nodes.iter().find(|n| n.row == 4).unwrap().id;
+        // Jump over unrelated nodes while isolating this content boundary.
+        let target = game
+            .map
+            .nodes
+            .iter()
+            .find(|n| n.kind == kind && n.row > 0)
+            .unwrap()
+            .id;
         let before = game
             .map
             .nodes
             .iter()
-            .find(|n| n.row == 3 && n.next.contains(&rest))
+            .find(|n| n.next.contains(&target))
             .unwrap()
             .id;
         game.current_node = Some(before);

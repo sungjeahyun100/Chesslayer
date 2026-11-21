@@ -1,0 +1,39 @@
+.sim-app { max-width: 1800px; margin: 0 auto; padding: 24px; }
+.sim-header { display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 22px; }
+.sim-header h1 { margin: 4px 0; font-size: 32px; }
+.sim-actions, .sim-filters, .sim-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.sim-actions button, .sim-panel button, .sim-launch button, .sim-result button { cursor: pointer; }
+.sim-grid { display: grid; grid-template-columns: minmax(320px, 1.05fr) minmax(340px, 1.2fr) minmax(300px, 1fr); gap: 16px; align-items: start; }
+.sim-panel { min-width: 0; padding: 18px; border: 1px solid #bbc7b3; border-radius: 12px; background: #f6f5ee; }
+.sim-panel h2 { margin: 0 0 15px; font-size: 20px; }
+.sim-panel h3 { margin: 22px 0 9px; font-size: 16px; }
+.sim-panel p { line-height: 1.55; }
+.sim-panel select, .sim-filters input { min-height: 37px; padding: 6px 9px; border: 1px solid #aebcad; border-radius: 6px; background: white; color: #25382a; }
+.sim-filters { margin: 10px 0; }
+.sim-filters input { flex: 1 1 150px; min-width: 0; }
+.sim-piece-list, .sim-catalog, .sim-encounter-list { overflow: auto; max-height: 340px; }
+.sim-piece-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.sim-piece-list button, .sim-encounter-list button { display: flex; align-items: center; gap: 7px; width: 100%; text-align: left; padding: 7px; border: 1px solid #ccd5c7; border-radius: 6px; background: white; color: #263c2d; }
+.sim-piece-list button.selected, .sim-encounter-list button.selected { background: #dbe9d8; border-color: #438456; }
+.sim-piece-list img, .sim-lineup img { width: 32px; height: 32px; object-fit: contain; }
+.sim-piece-list small, .sim-encounter-list small, .sim-catalog small { display: block; color: #637263; }
+.sim-chips { margin: 8px 0 16px; }
+.sim-chips span { background: #e4ecde; border-radius: 5px; padding: 4px 7px; }
+.sim-chips button { margin-left: 5px; border: 0; background: transparent; font-weight: bold; }
+.sim-catalog article { border-bottom: 1px solid #d8dfd3; padding: 10px 2px; }
+.sim-catalog article p { margin: 5px 0; font-size: 13px; }
+.sim-catalog article button { padding: 4px 9px; }
+.sim-relics { max-height: 260px; }
+.sim-encounter-list { display: grid; gap: 4px; }
+.sim-encounter-list button { justify-content: space-between; }
+.sim-enemy-detail { border-top: 1px solid #cfd7ca; margin-top: 18px; }
+.sim-lineup { display: flex; flex-wrap: wrap; gap: 6px; }
+.sim-lineup span { display: flex; align-items: center; gap: 3px; padding: 3px 6px; border: 1px solid #d1d7cc; border-radius: 5px; background: white; font-size: 12px; }
+.sim-launch { position: sticky; bottom: 0; display: flex; justify-content: space-between; align-items: center; gap: 15px; padding: 15px 22px; margin-top: 15px; border: 1px solid #b8c9b5; border-radius: 10px; background: #eef3e9; z-index: 2; }
+.sim-error { padding: 12px; border: 1px solid #aa4545; background: #fff0f0; color: #7c2424; }
+.sim-error button { margin-left: 10px; }
+.sim-result { margin: 12px auto; max-width: 700px; text-align: center; padding: 22px; border: 1px solid #b8c9b5; border-radius: 10px; background: #eef3e9; }
+.sim-app .skill-tree { margin-top: 10px; }
+.sim-app .skill-viewport { height: 340px; }
+@media (max-width: 1150px) { .sim-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sim-grid > :last-child { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .sim-app { padding: 12px; } .sim-grid { display: block; } .sim-panel { margin-bottom: 12px; } .sim-header, .sim-launch { align-items: flex-start; flex-direction: column; } }

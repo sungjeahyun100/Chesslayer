@@ -101,6 +101,11 @@ for (const family of ["tempest", "bouncing"] as const) {
       enemyTurn(continuation);
       finishHillBattle(continuation);
       dispatch(continuation,{type:"continue_reward"});
+      const rest = engineSnapshot(continuation).map.nodes.find(n => n.available && !n.visited && n.kind === "rest");
+      if (rest) {
+        dispatch(continuation,{type:"select_node",id:rest.id});
+        dispatch(continuation,{type:"rest_skip"});
+      }
       const node = engineSnapshot(continuation).map.nodes.find(n => n.available && !n.visited && n.kind === "combat")!;
       dispatch(continuation,{type:"select_node",id:node.id});
       await page.evaluate(({saveKey,value}) => localStorage.setItem(saveKey,value),{saveKey,value:continuation.save()});

@@ -6,25 +6,28 @@ async function startMap(
   page: import("@playwright/test").Page,
   character = "선봉대",
   fixedSeed = true,
+  seed = 2026,
 ) {
   if (fixedSeed)
-    await page.addInitScript(() => {
+    await page.addInitScript((seed: number) => {
       const original = crypto.getRandomValues.bind(crypto);
       crypto.getRandomValues = ((array: Uint32Array) => {
         if (array instanceof Uint32Array && array.length === 1) {
-          array[0] = 2026;
+          array[0] = seed;
           return array;
         }
         return original(array);
       }) as typeof crypto.getRandomValues;
-    });
+    }, seed);
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
   if (character !== "수호자") await page.getByRole("button", { name: "개발자 모드 켜기" }).click();
   await page.locator("button.character").filter({ hasText: character }).click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
-  await expect(page.locator(".map-node:enabled")).toHaveCount(3);
+  const starts = await page.locator('.map-node[data-row="0"]:enabled').count();
+  expect(starts).toBeGreaterThanOrEqual(2);
+  expect(starts).toBeLessThanOrEqual(6);
 }
 async function start(
   page: import("@playwright/test").Page,
@@ -134,7 +137,7 @@ test("새 원정은 ACT I 연출 뒤 지도로 들어가고 저장 재개에는 
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.locator(".floor-transition")).toHaveCount(0);
-  await expect(page.locator(".map-node:enabled")).toHaveCount(3);
+  expect(await page.locator(".map-node:enabled").count()).toBeGreaterThanOrEqual(2);
 
   await page.reload();
   await page.getByRole("button", { name: "새 게임 시작" }).click();
@@ -214,18 +217,18 @@ test("원정 현황 버튼은 우측 상단에 고정되고 실제 덱·진입 �
   await page.getByRole("button", { name: "원정 현황 닫기" }).click();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(before);
-  await expect(page.locator(".map-node:enabled")).toHaveCount(3);
+  expect(await page.locator(".map-node:enabled").count()).toBeGreaterThanOrEqual(2);
 });
 
-test("15단계 지도의 두 휴식 구간과 보스를 스크롤해서 확인한다", async ({ page }) => {
+test("15단계 휴식과 별도 보스를 스크롤해서 확인한다", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await startMap(page);
   const map = page.locator(".map-chart");
-  await expect(page.locator('.map-node[data-row="14"][data-kind="boss"]')).toHaveCount(1);
-  for (const row of [4, 10]) {
+  await expect(page.locator('.map-node[data-row="15"][data-kind="boss"]')).toHaveCount(1);
+  for (const row of [8, 14]) {
     const nodes = page.locator(`.map-node[data-row="${row}"]`);
     expect(await nodes.count()).toBeGreaterThan(0);
-    expect(await nodes.evaluateAll((items) => items.every((node) => node.getAttribute("data-kind") === "rest"))).toBe(true);
+    expect(await nodes.evaluateAll((items) => items.every((node) => node.getAttribute("data-kind") === (node.getAttribute("data-row") === "8" ? "treasure" : "rest")))).toBe(true);
   }
   expect(await map.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(1300);
   await page.locator('.map-node[data-row="0"]').first().scrollIntoViewIfNeeded();
@@ -235,38 +238,89 @@ test("15단계 지도의 두 휴식 구간과 보스를 스크롤해서 확인�
   await expect(page.locator("main")).toHaveAttribute("data-phase", "combat");
 });
 
-test("지도 노드는 연결된 경로에 가까이 배치되고 서로 겹치지 않는다", async ({ page }) => {
-  await startMap(page);
+test("지도 원형 노드는 오차를 두고 가운데 놓이며 DFS 길 점은 간선을 따른다", async ({ page }) => {
+  await startMap(page, "선봉대", true, 12);
   await expect(page.locator(".node-caption")).toHaveCount(0);
+  await expect(page.locator(".map-start, .map-connections path")).toHaveCount(0);
+  const roundIcons = await page.locator(".map-node").evaluateAll((buttons) => buttons.every((button) => {
+    const style = getComputedStyle(button);
+    return style.borderRadius === "50%" && parseFloat(style.borderTopWidth) >= 1
+      && style.backgroundColor !== "rgba(0, 0, 0, 0)";
+  }));
+  expect(roundIcons).toBe(true);
   const rowDistance = await page.locator(".map-chart").evaluate((chart) => {
     const row0 = chart.querySelector<HTMLElement>('.map-node[data-row="0"]')!.parentElement!;
     const row1 = chart.querySelector<HTMLElement>('.map-node[data-row="1"]')!.parentElement!;
     return (parseFloat(row0.style.top) - parseFloat(row1.style.top)) * chart.getBoundingClientRect().height / 100;
   });
-  expect(rowDistance).toBeCloseTo(104.5, 1);
+  expect(rowDistance).toBeGreaterThanOrEqual(80.49);
+  expect(rowDistance).toBeLessThanOrEqual(128.51);
   const nodes = await page.locator(".map-node").evaluateAll((buttons) =>
     buttons.map((button) => ({
       id: Number(button.getAttribute("data-node-id")),
       row: Number(button.getAttribute("data-row")),
       next: (button.getAttribute("data-next") ?? "").split(",").filter(Boolean).map(Number),
       x: parseFloat(button.parentElement!.style.left) * 5,
+      y: parseFloat(button.parentElement!.style.top) * button.closest(".map-chart")!.getBoundingClientRect().height / 100,
+      lane: Number(button.getAttribute("data-lane")),
     })),
   );
   for (const row of new Set(nodes.map((node) => node.row))) {
     const positions = nodes.filter((node) => node.row === row).map((node) => node.x);
-    for (let index = 1; index < positions.length; index++) {
-      expect(positions[index] - positions[index - 1]).toBeGreaterThanOrEqual(55.9);
-    }
+    for (let index = 1; index < positions.length; index++) expect(positions[index] - positions[index - 1]).toBeGreaterThanOrEqual(47.9);
   }
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const horizontalCost = (x: (node: typeof nodes[number]) => number) =>
-    nodes.reduce((cost, node) => cost + node.next.reduce((sum, id) =>
-      sum + (x(node) - x(byId.get(id)!)) ** 2, 0), 0);
-  const fixedX = (node: typeof nodes[number]) => {
-    const peers = nodes.filter((peer) => peer.row === node.row);
-    return 250 + (peers.findIndex((peer) => peer.id === node.id) - (peers.length - 1) / 2) * 110;
-  };
-  expect(horizontalCost((node) => node.x)).toBeLessThan(horizontalCost(fixedX));
+  const gridNodes = nodes.filter((node) => node.row < 15);
+  const minX = Math.min(...gridNodes.map((node) => node.x));
+  const maxX = Math.max(...gridNodes.map((node) => node.x));
+  expect((minX + maxX) / 2).toBeCloseTo(250, 3);
+  const xOffsets = gridNodes.map((node) => node.x - (58 + node.lane * 64));
+  expect(Math.max(...xOffsets) - Math.min(...xOffsets)).toBeGreaterThan(0.01);
+  expect(Math.max(...xOffsets) - Math.min(...xOffsets)).toBeLessThanOrEqual(10.01);
+  const yOffsets = gridNodes.map((node) => node.y - (58 + (15 - node.row) * 104.5));
+  expect(yOffsets.some((offset) => Math.abs(offset) > 0.01)).toBe(true);
+  expect(yOffsets.every((offset) => Math.abs(offset) <= 12.01)).toBe(true);
+  expect(nodes.find((node) => node.row === 15)?.x).toBe(250);
+  expect(nodes.find((node) => node.row === 15)?.y).toBeCloseTo(58, 3);
+  const road = await page.locator(".map-connections g[data-edge]").evaluateAll((groups) => groups.map((group) => ({
+    edge: group.getAttribute("data-edge"),
+    count: Number(group.getAttribute("data-road-points")),
+    points: group.querySelectorAll("rect.road-point").length,
+    rotations: [...group.querySelectorAll("rect.road-point")].map((rect) => rect.getAttribute("transform")),
+  })));
+  expect(road.length).toBe(nodes.reduce((sum, node) => sum + node.next.length, 0));
+  expect(road.every((edge) => edge.count > 0 && edge.points === edge.count && edge.rotations.every((rotation) => rotation?.startsWith("rotate(")))).toBe(true);
+  const geometry = await page.locator(".map-connections").evaluate((svg) => {
+    const chart = svg.parentElement!;
+    const height = chart.getBoundingClientRect().height;
+    const rotationErrors: number[][] = [];
+    const position = (id: string) => {
+      const slot = chart.querySelector<HTMLElement>(`.map-node[data-node-id="${id}"]`)!.parentElement!;
+      return { x: parseFloat(slot.style.left) * 5, y: parseFloat(slot.style.top) / 100 * height };
+    };
+    const valid = [...svg.querySelectorAll<SVGGElement>("g[data-edge]")].every((group) => {
+      const [from, to] = group.dataset.edge!.split("-");
+      const start = position(from);
+      const end = position(to);
+      const x1 = start.x, y1 = start.y, x2 = end.x, y2 = end.y;
+      const count = Math.max(1, Math.round(Math.hypot(x2 - x1, y2 - y1) * 0.12));
+      const angle = Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI;
+      const points = [...group.querySelectorAll<SVGRectElement>("rect.road-point")];
+      const errors: number[] = [];
+      rotationErrors.push(errors);
+      return points.length === count && points.every((point, index) => {
+        const t = (index + 1) / (count + 1);
+        const rotation = Number(point.getAttribute("transform")?.match(/^rotate\(([-\d.]+)/)?.[1]);
+        errors.push(rotation - angle);
+        return Math.abs(Number(point.getAttribute("x")) + 2.5 - (x1 + (x2 - x1) * t)) < 0.01
+          && Math.abs(Number(point.getAttribute("y")) + 1 - (y1 + (y2 - y1) * t)) < 0.01
+          && Math.abs(rotation - angle) <= 12.01;
+      });
+    });
+    return { valid, rotationErrors };
+  });
+  expect(geometry.valid).toBe(true);
+  expect(geometry.rotationErrors.some((errors) => errors.some((error) => Math.abs(error) > 0.01))).toBe(true);
+  expect(geometry.rotationErrors.some((errors) => new Set(errors.map((error) => error.toFixed(3))).size > 1)).toBe(true);
   for (const width of [390, 320]) {
     await page.setViewportSize({ width, height: 844 });
     const overlaps = await page.locator(".map-node").evaluateAll((buttons) => {
@@ -281,6 +335,14 @@ test("지도 노드는 연결된 경로에 가까이 배치되고 서로 겹치�
     });
     expect(overlaps).toBe(false);
   }
+  await page.reload();
+  await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
+  const resumedPositions = await page.locator(".map-node").evaluateAll((buttons) => buttons.map((button) => ({
+    id: Number(button.getAttribute("data-node-id")),
+    x: parseFloat(button.parentElement!.style.left) * 5,
+    y: parseFloat(button.parentElement!.style.top) * button.closest(".map-chart")!.getBoundingClientRect().height / 100,
+  })));
+  expect(resumedPositions).toEqual(nodes.map(({ id, x, y }) => ({ id, x, y })));
 });
 
 test("전투 전 적 정체를 숨기고 전투 중 현황 오버레이가 상태를 보존한다", async ({ page }) => {
@@ -383,34 +445,41 @@ test("모바일 빈 덱 전투 보드가 화면 안에서 조작된다", async (
 
 test("생성된 맵을 유지하며 분기·전투·이벤트·휴식까지 진행", async ({ page }) => {
   test.setTimeout(90000);
-  const game = newRun("guardian", 2026);
+  const scenario = (() => {
+    for (let seed = 0; seed < 500; seed++) {
+      const game = newRun("guardian", seed);
+      const nodes = snapshot(game).map.nodes;
+      const routesTo = (id: number): number[][] => {
+        const node = nodes[id];
+        if (node.row === 0) return [[id]];
+        return nodes.filter((parent) => parent.next.includes(id))
+          .flatMap((parent) => routesTo(parent.id).map((route) => [...route, id]));
+      };
+      for (const event of nodes.filter((node) => node.kind === "event" && node.row <= 4)) {
+        const rest = event.next.find((id) => nodes[id].kind === "rest");
+        const route = routesTo(event.id).find((ids) =>
+          ids.slice(0, -1).every((id) => ["combat", "elite"].includes(nodes[id].kind))
+          && ids.some((id) => nodes[id].kind === "elite"));
+        if (rest !== undefined && route) return { game, route, event, rest };
+      }
+      game.free();
+    }
+    throw new Error("Could not find a short combat, elite, event, rest route");
+  })();
+  const { game, route, event, rest } = scenario;
   let initial: string;
   let commands: Command[];
   try {
     dispatch(game, { type: "developer_set_upgrade", id: 5, target: 94 });
     initial = game.save();
-    const nodes = snapshot(game).map.nodes;
-    const event = nodes.find((node) => node.row === 3 && node.kind === "event")!;
-    const routesTo = (id: number): number[][] => {
-      const node = nodes[id];
-      if (node.row === 0) return [[id]];
-      return nodes.filter((parent) => parent.next.includes(id))
-        .flatMap((parent) => routesTo(parent.id).map((route) => [...route, id]));
-    };
-    const route = routesTo(event.id).find((ids) =>
-      ids.slice(0, -1).every((id) => ["combat", "elite"].includes(nodes[id].kind))
-      && ids.some((id) => nodes[id].kind === "elite"))!;
     for (const id of route.slice(0, -1)) {
       winHillBattle(game, id);
       dispatch(game, { type: "continue_reward" });
     }
     dispatch(game, { type: "select_node", id: event.id });
     resolveEvent(game);
-    dispatch(game, { type: "select_node", id: event.next[0] });
-    const state = snapshot(game);
-    const pawn = state.rest_options.find(p => p.kind === 1 && p.can_upgrade)!;
-    const path = state.upgrade_paths.find(p => p.from === pawn.kind && p.unlocked)!;
-    dispatch(game, { type: "rest_upgrade", id: pawn.id, target: path.to });
+    dispatch(game, { type: "select_node", id: rest });
+    dispatch(game, { type: "rest_skip" });
     commands = JSON.parse(game.save()).commands.slice(JSON.parse(initial).commands.length);
   } finally { game.free(); }
   await page.emulateMedia({ reducedMotion: "reduce" });
@@ -446,14 +515,11 @@ test("생성된 맵을 유지하며 분기·전투·이벤트·휴식까지 진�
     } else if (command.type === "event_choice") {
       const choice = (await currentState()).event!.choices.find(c => c.id === command.choice)!;
       await page.getByRole("button", { name: choice.label, exact: true }).click();
-    } else if (command.type === "rest_upgrade") {
-      const piece = (await currentState()).rest_options.find(p => p.id === command.id)!;
-      await page.locator(".board .square").nth(piece.cell!).click();
-      await page.locator(`.rest-panel button[data-kind="${command.target}"]`).click();
-      await page.getByRole("button", { name: "강화 확정", exact: true }).click();
+    } else if (command.type === "rest_skip") {
+      await page.locator(".rest-depart").click();
     }
   }
-  expect(selections).toBe(5);
+  expect(selections).toBe(route.length + 1);
   expect(visitedKinds.has("rest") && visitedKinds.has("event") && visitedKinds.has("elite")).toBe(true);
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
   expect(await layout(page)).toEqual(generated);

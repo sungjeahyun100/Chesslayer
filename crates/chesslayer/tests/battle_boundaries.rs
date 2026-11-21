@@ -265,13 +265,14 @@ fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
         .any(|p| p.id == 500 || p.owner == ENEMY));
     assert!(g.battle.board.piece_at(at(0, 7)).unwrap().is_none());
     g.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    // Position this boundary test immediately before the guaranteed stage-5 rest.
+    // Position this boundary test immediately before a generated rest.
     let rest = g
         .map
         .nodes
         .iter()
         .find(|n| {
-            n.row == 4
+            n.row > 0
+                && n.kind == NodeKind::Rest
                 && n.next
                     .iter()
                     .any(|&id| matches!(g.map.nodes[id].kind, NodeKind::Combat | NodeKind::Elite))
@@ -282,7 +283,7 @@ fn battle_boundary_rest_revive_and_next_formation_share_permanent_roster() {
         .map
         .nodes
         .iter()
-        .find(|n| n.row == 3 && n.next.contains(&rest))
+        .find(|n| n.next.contains(&rest))
         .unwrap()
         .id;
     g.current_node = Some(predecessor);
@@ -359,16 +360,7 @@ fn each_battle_selects_one_living_ally_including_king_with_seeded_replay() {
     assert!(seen.contains(&5));
     assert_eq!(seen.len(), 15);
     let mut g = Game::new("guardian", 2026).unwrap();
-    let node = g
-        .available_nodes()
-        .into_iter()
-        .find(|&id| {
-            g.map.nodes[id]
-                .next
-                .iter()
-                .any(|&id| g.map.nodes[id].kind == NodeKind::Combat)
-        })
-        .unwrap();
+    let node = g.available_nodes()[0];
     g.dispatch(Command::SelectNode { id: node }).unwrap();
     assert_eq!(
         g.snapshot()

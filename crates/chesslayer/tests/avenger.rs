@@ -300,6 +300,14 @@ fn spawning_requires_real_pattern_and_rejects_occupied_or_last_rank() {
     g.battle
         .avenger_effect(CardKind::MakeBaby, Some(target), None)
         .unwrap();
+    let summoned = g
+        .snapshot()
+        .pieces
+        .iter()
+        .find(|piece| piece.id >= 1_000_000)
+        .unwrap()
+        .id;
+    assert!(g.battle.outcome().iter().any(|piece| piece.id == summoned));
     assert!(!g
         .battle
         .avenger_targets(CardKind::MakeBaby)
@@ -559,6 +567,57 @@ fn summoned_royal_keeps_a_safe_identity_and_home_in_the_next_battle() {
     .unwrap();
     assert_eq!(rebuilt.king_id, id);
     assert_eq!(rebuilt.phase, Phase::Active);
+}
+
+#[test]
+fn summoned_pawn_has_a_unique_home_and_ordinary_pawn_actions() {
+    let mut battle = fixture();
+    let at = Position::new(1, 4);
+    let id = battle.spawn_pawn(at).unwrap();
+    let roster = battle.outcome();
+    let pawn = roster.iter().find(|piece| piece.id == id).unwrap();
+    assert_eq!(pawn.position, Some(at));
+    assert_eq!(pawn.kind, PAWN);
+    assert_eq!(
+        roster
+            .iter()
+            .map(|piece| piece.origin)
+            .collect::<std::collections::HashSet<_>>()
+            .len(),
+        roster.len()
+    );
+
+    battle.grant_move_rights(id, 1).unwrap();
+    let forward = Position::new(1, 3);
+    move_to(&mut battle, at, forward);
+    assert_eq!(battle.piece_position(id).unwrap().0, forward);
+    assert_eq!(
+        battle
+            .outcome()
+            .iter()
+            .find(|piece| piece.id == id)
+            .unwrap()
+            .position,
+        Some(forward)
+    );
+
+    let mut capture = fixture();
+    let id = capture.spawn_pawn(at).unwrap();
+    capture
+        .board
+        .set_piece(
+            Position::new(2, 3),
+            Some(Piece {
+                id: 102,
+                kind: PAWN,
+                owner: ENEMY,
+            }),
+        )
+        .unwrap();
+    capture.grant_move_rights(id, 1).unwrap();
+    move_to(&mut capture, at, Position::new(2, 3));
+    assert!(capture.piece_position(102).is_none());
+    assert_eq!(capture.piece_position(id).unwrap().0, Position::new(2, 3));
 }
 
 #[test]
