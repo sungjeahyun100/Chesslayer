@@ -1,4 +1,4 @@
-use chesslayer::{content::*, game::*, map::*, *};
+use chesslayer::{content::*, map::*};
 use std::collections::HashSet;
 
 #[test]
@@ -146,37 +146,4 @@ fn floor_encounters_use_their_registered_pools() {
         assert!(!normal.is_empty());
         assert!(!elite.is_empty());
     }
-}
-
-#[test]
-fn traversal_only_allows_connected_nodes_and_keeps_the_map() {
-    let mut game = Game::new("guardian", 2026).unwrap();
-    let original = game.map.clone();
-    let invalid = original.nodes.iter().find(|n| n.row == 3).unwrap().id;
-    let before = serde_json::to_string(&game.snapshot()).unwrap();
-    assert!(game.dispatch(Command::SelectNode { id: invalid }).is_err());
-    assert!(game.dispatch(Command::ClaimTreasure).is_err());
-    assert_eq!(before, serde_json::to_string(&game.snapshot()).unwrap());
-    let start = original.starts()[0];
-    game.dispatch(Command::SelectNode { id: start }).unwrap();
-    assert!(game.available_nodes().is_empty());
-    let mut roster = Battle::standard_roster();
-    roster[3].position = Some(Position::new(4, 1));
-    game.battle = Battle::new(BattleStart {
-        players: roster,
-        encounter: encounter(0),
-    })
-    .unwrap();
-    game.dispatch(Command::Move {
-        from: 12,
-        to: 4,
-        promotion: None,
-    })
-    .unwrap();
-    assert_eq!(game.phase, RunPhase::Reward);
-    game.dispatch(Command::ChooseReward { index: 0 }).unwrap();
-    assert_eq!(game.phase, RunPhase::Map);
-    assert_eq!(game.map, original);
-    assert_eq!(game.available_nodes(), original.nodes[start].next);
-    assert!(game.dispatch(Command::SelectNode { id: invalid }).is_err());
 }

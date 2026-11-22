@@ -510,18 +510,4 @@ mod tests {
         sandbox.place(pieces::ROOK, 1, 56).unwrap();
         assert!(!sandbox.snapshot(Some(56)).actions.is_empty());
     }
-
-    #[test]
-    fn card_uses_shared_effect_and_piles() {
-        let mut sandbox = Sandbox::new().unwrap();
-        sandbox.place(pieces::PAWN, 0, 52).unwrap();
-        sandbox.add_to_hand(CardKind::Ward);
-        let id = sandbox.snapshot(None).hand[0].id;
-        sandbox
-            .play_card(id, CardSelection::single(Some(1)))
-            .unwrap();
-        assert!(sandbox.battle.has_ward(1));
-        assert_eq!(sandbox.snapshot(None).discard_count, 1);
-        assert_eq!(sandbox.snapshot(None).mana, 2);
-    }
 }

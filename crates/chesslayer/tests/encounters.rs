@@ -1,6 +1,5 @@
 use chesslayer::{
     content::{encounters::*, pieces::*},
-    game::*,
     *,
 };
 use std::collections::HashSet;
@@ -202,58 +201,6 @@ fn later_elites_keep_their_original_forces() {
 }
 
 #[test]
-fn twins_require_both_captures_and_surviving_god_can_act() {
-    let mut players = Battle::standard_roster();
-    for player in &mut players {
-        if player.kind != KING {
-            player.position = None;
-        }
-    }
-    players[0].position = Some(p("e7"));
-    players[7].position = Some(p("d7"));
-    let mut twins = encounter(TWO_TWINS);
-    twins
-        .enemies
-        .retain(|enemy| ![p("d7"), p("e7")].contains(&enemy.position));
-    let mut battle = Battle::new(BattleStart {
-        players,
-        encounter: twins,
-    })
-    .unwrap();
-    let first = battle
-        .legal_actions(p("e7"))
-        .unwrap()
-        .into_iter()
-        .find(|a| a.first.move_to == p("e8"))
-        .unwrap();
-    battle.apply_piece_action(&first).unwrap();
-    assert_eq!(battle.result, GameResult::Ongoing);
-    assert!(battle.is_enemy_royal(101));
-    assert!(!battle.legal_actions(p("d8")).unwrap().is_empty());
-    let mut game = Game::new("vanguard", 7).unwrap();
-    game.phase = RunPhase::Combat;
-    game.battle = battle.clone();
-    game.battle.grant_ward(game.battle.king_id).unwrap();
-    game.dispatch(Command::EnemyStep).unwrap();
-    assert_eq!(game.phase, RunPhase::Combat);
-    battle.end_turn().unwrap();
-    let second = battle
-        .legal_actions(p("d7"))
-        .unwrap()
-        .into_iter()
-        .find(|a| a.first.move_to == p("d8"))
-        .unwrap();
-    battle.apply_piece_action(&second).unwrap();
-    assert_eq!(
-        battle.result,
-        GameResult::Win {
-            winner: PLAYER,
-            reason: ResultReason::RoyalCaptured
-        }
-    );
-}
-
-#[test]
 fn emperor_absorbs_captured_movement_and_initiative_cancels() {
     let mut players = Battle::standard_roster();
     for player in &mut players {
@@ -387,69 +334,4 @@ fn hook_turns_once_only_on_empty_squares_and_stops_at_blockers() {
             open.clone().apply_piece_action(&action).unwrap();
         }
     }
-}
-
-#[test]
-fn hook_uses_shared_ai_ward_royal_capture_and_counterattack() {
-    let mut g = Game::new("vanguard", 2026).unwrap();
-    g.phase = RunPhase::Combat;
-    g.battle = scene(ENEMY);
-    let king_id = g.battle.king_id;
-    g.battle
-        .board
-        .set_piece(
-            p("e2"),
-            Some(Piece {
-                id: king_id,
-                kind: KING,
-                owner: PLAYER,
-            }),
-        )
-        .unwrap();
-    let action = g
-        .battle
-        .legal_actions(p("d4"))
-        .unwrap()
-        .into_iter()
-        .find(|a| a.first.move_to == p("e2"))
-        .unwrap();
-    let mut guarded = g.battle.clone();
-    guarded.grant_ward(king_id).unwrap();
-    guarded.apply_piece_action(&action).unwrap();
-    assert!(!guarded.has_ward(king_id));
-    assert!(guarded.board.piece_at(p("d4")).unwrap().is_some());
-    assert_eq!(guarded.result, GameResult::Ongoing);
-    g.dispatch(Command::EnemyStep).unwrap();
-    assert_eq!(g.phase, RunPhase::Defeat);
-
-    let mut players = Battle::standard_roster();
-    players[0].position = Some(p("e7"));
-    let mut b = Battle::new(BattleStart {
-        players: players.clone(),
-        encounter: encounter(HOOK_BOSS),
-    })
-    .unwrap();
-    let capture = b
-        .legal_actions(p("e7"))
-        .unwrap()
-        .into_iter()
-        .find(|a| a.first.move_to == p("e8"))
-        .unwrap();
-    b.apply_piece_action(&capture).unwrap();
-    assert_eq!(
-        b.result,
-        GameResult::Win {
-            winner: PLAYER,
-            reason: ResultReason::RoyalCaptured
-        }
-    );
-    players[0].position = Some(p("e8"));
-    let b = Battle::new(BattleStart {
-        players,
-        encounter: encounter(HOOK_BOSS),
-    })
-    .unwrap();
-    assert!(b.outcome()[0].position.is_none());
-    assert_eq!(b.board.piece_at(p("e8")).unwrap().unwrap().kind, HOOK);
-    assert_eq!(b.result, GameResult::Ongoing);
 }

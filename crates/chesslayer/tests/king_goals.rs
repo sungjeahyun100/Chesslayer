@@ -1,6 +1,5 @@
 use chesslayer::content::pieces;
 use chesslayer::content::Rng;
-use chesslayer::game::{Command, Game, RunPhase};
 use chesslayer::*;
 
 fn p(file: i32, rank: i32) -> Position {
@@ -231,22 +230,4 @@ fn enemy_racing_king_can_reach_the_players_back_rank() {
             reason: ResultReason::RacingGoal
         }
     );
-}
-
-#[test]
-fn campaign_finishes_when_jockey_reaches_the_racing_goal() {
-    let mut game = Game::new("guardian", 7).unwrap();
-    game.battle = battle(pieces::JOCKEY, p(3, 1), p(4, 3));
-    game.phase = RunPhase::Combat;
-    game.dispatch(Command::Move {
-        from: 11,
-        to: 3,
-        promotion: None,
-    })
-    .unwrap();
-    assert_eq!(game.phase, RunPhase::Reward);
-    assert!(game
-        .log
-        .iter()
-        .any(|message| message.contains("상대 진영 끝 랭크")));
 }

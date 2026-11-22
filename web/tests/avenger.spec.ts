@@ -53,15 +53,14 @@ test("복수귀는 카드로 행마권을 얻고 수동 턴 종료와 저장 복
   expect(errors).toEqual([]);
 });
 
-test("테스트용 부대는 일반 목록과 분리되어 선택되고 카드·유물은 해금된다", async ({ page }) => {
+test("캐릭터 선택 창에는 복수귀만 표시되고 선택 후 원정이 시작된다", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "새 게임 시작" }).click();
-  await expect(page.locator('.selection-page > .characters [data-squad-id="avenger"]')).toHaveCount(0);
-  const squad = page.getByRole("region", { name: "복수귀 부대" }).locator('[data-squad-id="avenger"]');
-  await expect(squad.getByRole("heading", { name: "복수귀 부대" })).toBeVisible();
-  await expect(squad).toBeEnabled();
-  await squad.click();
-  await expect(page.locator(".launch .muted")).toContainText("복수귀 부대");
+  await expect(page.getByRole("heading", { name: "원정에 나설 부대" })).toBeVisible();
+  await expect(page.locator("button.character")).toHaveCount(1);
+  await expect(page.locator('button.character[data-squad-id="avenger"]')).toBeVisible();
+  await expect(page.getByRole("button", { name: "런 시작" })).toBeDisabled();
+  await page.locator('button.character[data-squad-id="avenger"]').click();
   await page.getByRole("button", { name: "런 시작" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
   const snapshot = await page.evaluate(async () => {
@@ -71,10 +70,39 @@ test("테스트용 부대는 일반 목록과 분리되어 선택되고 카드·
     try { return { state:JSON.parse(game.snapshot()) as Snapshot, catalog:JSON.parse(compendium()) }; }
     finally {game.free();}
   });
+  expect(snapshot.state.squad_id).toBe("avenger");
   expect(snapshot.state.deck_count).toBe(10);
+  expect(snapshot.catalog).toHaveLength(1);
   const catalog = snapshot.catalog.find((c: {id:string}) => c.id === "avenger");
   expect(catalog.cards).toHaveLength(37);
   expect(catalog.cards.every((c: {available: boolean}) => c.available)).toBe(true);
   expect(catalog.relics).toHaveLength(15);
   expect(catalog.relics.some((r: {id:string}) => r.id === "palace_family")).toBe(true);
+  expect(catalog.pieces.some((p: {key:string}) => p.key === "drone")).toBe(true);
+});
+
+test("제거된 부대의 저장 데이터는 보존하고 이어하기만 숨긴다", async ({ page }) => {
+  await page.goto("/");
+  const old = JSON.stringify({ version: 24, character: "guardian", seed: 7, floor: 1,
+    progress: { highest_floor: 1, unlocked_squads: ["guardian"], final_unlocked: false, final_defeated: false }, commands: [] });
+  await page.evaluate((saved) => localStorage.setItem("chesslayer.run.v1", saved), old);
+  await page.reload();
+  await expect(page.getByRole("button", { name: "저장된 원정 이어하기" })).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("저장 데이터는 보존");
+  expect(await page.evaluate(() => localStorage.getItem("chesslayer.run.v1"))).toBe(old);
+  await page.getByRole("button", { name: "새 게임 시작" }).click();
+  await page.locator('button.character[data-squad-id="avenger"]').click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
+});
+
+test("무한 원정도 복수귀 선택 창을 거쳐 시작한다", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "무한 원정 시작" }).click();
+  await expect(page.locator('button.character[data-squad-id="avenger"]')).toHaveCount(1);
+  await page.locator('button.character[data-squad-id="avenger"]').click();
+  await page.getByRole("button", { name: "런 시작" }).click();
+  await expect(page.locator("main")).toHaveAttribute("data-phase", "map");
+  const mode = await page.evaluate(() => JSON.parse(localStorage.getItem("chesslayer.endless.run.v1") ?? "null")?.run);
+  expect(mode).toBeTruthy();
 });

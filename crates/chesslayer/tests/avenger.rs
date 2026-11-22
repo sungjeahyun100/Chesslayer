@@ -120,11 +120,11 @@ fn test_squad_reshuffles_the_entire_discard_pile_during_a_five_card_draw() {
     cards.hand = vec![
         Card {
             id: 8,
-            kind: CardKind::Gun,
+            kind: CardKind::PawnOrder,
         },
         Card {
             id: 9,
-            kind: CardKind::FleetingWard,
+            kind: CardKind::MinorOrder,
         },
     ];
     cards.end_turn();

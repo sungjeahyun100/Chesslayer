@@ -203,7 +203,6 @@ pub struct Battle {
     boss: Option<BossState>,
     pub(crate) boss_id: PieceId,
     players: Vec<PlayerPiece>,
-    dead_at_start: HashSet<PieceId>,
     programs: Arc<BTreeMap<PieceType, Program>>,
     initial_double_step: Arc<Program>,
     moved_ids: HashSet<PieceId>,
@@ -428,11 +427,6 @@ impl Battle {
             .collect::<Result<_, _>>()?;
         let initial_double_step = Program::parse(pieces::movement::INITIAL_DOUBLE_STEP)?;
         let moved_ids = players.iter().filter(|p| p.moved).map(|p| p.id).collect();
-        let dead_at_start = players
-            .iter()
-            .filter(|p| p.position.is_none())
-            .map(|p| p.id)
-            .collect();
         let mut battle = Self {
             combat_stats: BTreeMap::new(),
             card_movement: false,
@@ -484,7 +478,6 @@ impl Battle {
             additional_royal_ids: start.encounter.additional_royal_ids,
             king_id,
             players,
-            dead_at_start,
             programs: Arc::new(programs),
             initial_double_step: Arc::new(initial_double_step),
             moved_ids,

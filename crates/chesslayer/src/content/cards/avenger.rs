@@ -124,7 +124,6 @@ pub fn definition(kind: CardKind) -> CardDefinition {
         CardKind::Interference => ("내정 간섭",4,"상대 로얄을 선택한 다른 적 기물로 변경.",Rarity::Legendary,Some(|b| b.avenger_targets(CardKind::Interference))),
         CardKind::AbsoluteAuthority => ("무소불위의 권력",2,"보드 위의 아무 기물 하나에 행마권 1.",Rarity::Epic,Some(|b| b.avenger_targets(CardKind::AbsoluteAuthority))),
         CardKind::AuthoritarianOrder => ("권위적 행동명령",1,"메이져·로얄을 제외한 아군 기물 하나에 행마권 1.",Rarity::Rare,Some(|b| b.avenger_targets(CardKind::AuthoritarianOrder))),
-        _ => unreachable!("avenger definition"),
     };
     let mut d = CardDefinition::new(kind, name, cost, description, |_, _| {
         Err("복수귀 카드 실행 경로를 사용하세요.".into())

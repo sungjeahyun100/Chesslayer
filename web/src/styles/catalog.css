@@ -1,20 +1,17 @@
-/* Squad expeditions: keep the board, hand and action controls together. */
-.selection-page { max-width: 1280px; padding-top: 24px; }
-.selection-page > .eyebrow { margin-top: 20px; }
-.characters { grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin: 24px 0; }
-.test-squad-section { border-top: 1px solid var(--line); padding-top: 20px; margin-bottom: 24px; }
-.test-squad-section > h2 { font: 700 18px "Noto Serif KR", serif; }
-.test-squad-choices { margin: 12px 0 0; }
-.character, .character.chosen { padding: 20px 16px; }
-.character.chosen { padding: 19px 15px; }
-.character .character-icon { width: 52px; height: 52px; margin-bottom: 10px; }
-.character h2 { font-size: 20px; margin: 10px 0; }
-.character p { font-size: 12px; line-height: 1.7; }
-.character .eyebrow { font-size: 9px; }
-.character.locked { opacity: .55; filter: saturate(.45); cursor: not-allowed; }
-.character.locked:hover { transform: none; }
-.character-radio { margin-top: auto; padding-top: 16px; }
-.squad-tactics { margin: 12px 0; font-size: 10px; line-height: 1.6; color: #617053; }
+.selection-page { max-width: 1050px; margin: 0 auto; padding: 45px 30px 80px; }
+.selection-page > .eyebrow { margin-top: 35px; }
+.selection-page h1 { font: 700 35px "Noto Serif KR", serif; margin: 15px 0; }
+.selection-page > .muted { line-height: 1.7; }
+.characters { display: grid; grid-template-columns: minmax(0, 430px); gap: 18px; margin: 32px 0; }
+.character { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; min-height: 270px; padding: 25px; text-align: left; border: 1px solid var(--line); border-radius: 7px; background: var(--paper); color: var(--green); }
+.character.chosen { border-color: var(--green); box-shadow: inset 0 0 0 1px var(--green); background: #f0f4e9; }
+.character .character-icon { width: 62px; height: 62px; object-fit: contain; }
+.character h2 { margin: 0; font: 700 26px "Noto Serif KR", serif; }
+.character p { margin: 0; font-size: 13px; line-height: 1.8; }
+.squad-tactics { color: #617053; font-size: 11px; }
+.character-radio { margin-top: auto; font-size: 12px; font-weight: 700; }
+.launch { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding-top: 18px; border-top: 1px solid var(--line); }
+@media (max-width: 650px) { .selection-page { padding: 28px 18px 65px; } .selection-page h1 { font-size: 27px; } .characters { grid-template-columns: 1fr; } .launch { flex-direction: column; align-items: stretch; } }
 .developer-access { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 16px; margin-top: 20px; }
 .developer-unlock { padding: 10px 16px; border: 1px solid var(--green); border-radius: 5px; color: var(--green); background: var(--paper); }
 .developer-unlock.active { color: var(--paper); background: var(--green); }
@@ -22,9 +19,9 @@
 .compendium-page { max-width: 1240px; margin: 0 auto; padding: 42px 26px 90px; color: var(--green); }
 .compendium-page > h1 { margin: 12px 0; font: 700 46px "Noto Serif KR", serif; }
 .compendium-page > .muted { max-width: 780px; line-height: 1.7; }
-.compendium-squads, .compendium-categories { display: flex; flex-wrap: wrap; gap: 8px; margin: 25px 0 0; }
-.compendium-squads button, .compendium-categories button { padding: 11px 17px; border: 1px solid var(--line); border-radius: 6px; background: #f7f8ef; color: var(--green); }
-.compendium-squads button.selected, .compendium-categories button.selected { color: #fff; background: var(--green); }
+.compendium-categories { display: flex; flex-wrap: wrap; gap: 8px; margin: 25px 0 0; }
+.compendium-categories button { padding: 11px 17px; border: 1px solid var(--line); border-radius: 6px; background: #f7f8ef; color: var(--green); }
+.compendium-categories button.selected { color: #fff; background: var(--green); }
 .compendium-categories { margin-bottom: 22px; }
 .compendium-categories small { margin-left: 5px; opacity: .7; }
 .compendium-head { margin-top: 22px; padding: 20px 24px; border: 1px solid var(--line); border-radius: 8px; background: #f7f8ef; }

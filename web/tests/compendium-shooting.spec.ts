@@ -6,7 +6,6 @@ test("compendium shows a separate shooting board only for shooting pieces", asyn
   await page.getByRole("navigation", { name: "도감 종류" }).getByRole("button", { name: /기물/ }).click();
   await expect(page.locator(".compendium-shooting-board")).toHaveCount(0);
 
-  await page.getByRole("navigation", { name: "부대 선택" }).getByRole("button", { name: "포병대대" }).click();
   await page.getByRole("navigation", { name: "기물 선택" }).getByRole("button", { name: /소총수/ }).click();
   const shooting = page.locator(".compendium-shooting-board");
   await expect(shooting).toBeVisible();

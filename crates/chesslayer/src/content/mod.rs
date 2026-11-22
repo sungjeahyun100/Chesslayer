@@ -6,7 +6,6 @@ pub mod encounters;
 pub mod endless;
 pub mod pieces;
 pub mod relics;
-pub use cards::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
 pub use characters::{characters, Character};
 pub use encounters::{encounter, ENCOUNTERS};
 pub use relics::{Relic, INITIATIVE_TURNS, RELIC_REWARD_POOL};

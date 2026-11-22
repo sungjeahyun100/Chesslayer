@@ -141,17 +141,6 @@ impl Game {
         }
         if self.final_battle {
             self.progress.final_defeated = true;
-        } else {
-            let unlocked =
-                ["vanguard", "heretic", "artillery", "special"][(self.floor - 1) as usize];
-            if !self
-                .progress
-                .unlocked_squads
-                .iter()
-                .any(|id| id == unlocked)
-            {
-                self.progress.unlocked_squads.push(unlocked.into());
-            }
         }
     }
     pub(super) fn check_finish(&mut self) -> Result<(), String> {

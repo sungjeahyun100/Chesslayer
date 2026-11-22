@@ -149,10 +149,7 @@ impl Game {
             .hand
             .iter()
             .map(|c| {
-                let mut d = self.cards.effective_definition(c);
-                if c.kind == CardKind::Volley {
-                    d.cost = self.battle.volley_shot_count() as u32;
-                }
+                let d = self.cards.effective_definition(c);
                 let targets = if d.targeted {
                     (d.target_candidates)(&self.battle)
                         .into_iter()
@@ -169,32 +166,14 @@ impl Game {
                     Some("내 턴을 기다리세요.")
                 } else if c.kind == CardKind::Bounty && self.gold < 10 {
                     Some("10골드 이상이 필요합니다.")
-                } else if c.kind == CardKind::Volley && d.cost == 0 {
-                    Some("사격할 적이 없습니다.")
                 } else if self.cards.mana < if d.cost_per_target { 1 } else { d.cost } {
                     Some("마나가 부족합니다.")
                 } else if d.targeted && targets.is_empty() {
-                    Some(if c.kind == CardKind::SacredDomain {
-                        "희생할 아군 비숍이 없습니다."
-                    } else {
-                        "선택 가능한 기물이 없습니다."
-                    })
+                    Some("선택 가능한 기물이 없습니다.")
                 } else {
                     None
                 };
-                let upgrade_options = if c.kind == CardKind::TemporaryUpgrade {
-                    targets
-                        .iter()
-                        .flat_map(|&id| {
-                            self.battle
-                                .temporary_upgrade_options(id)
-                                .into_iter()
-                                .map(move |target| CardUpgradeChoice { id, target })
-                        })
-                        .collect()
-                } else {
-                    vec![]
-                };
+                let upgrade_options = vec![];
                 CardView {
                     id: c.id,
                     definition: d,

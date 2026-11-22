@@ -1,5 +1,4 @@
 use chesslayer::content::pieces;
-use chesslayer::game::{Command, Game, RunPhase};
 use chesslayer::*;
 
 fn p(file: i32, rank: i32) -> Position {
@@ -262,32 +261,4 @@ fn typhoon_shuffles_only_selected_enemies_and_changes_formation() {
     let mut sorted = after;
     sorted.sort_unstable();
     assert_eq!(sorted, vec![100, 101, 102]);
-}
-
-#[test]
-fn combat_snapshot_exposes_targets_and_command_applies_selection() {
-    let mut game = Game::new("guardian", 7).unwrap();
-    game.battle = setup_battle(pieces::TYPHOON_KING);
-    game.phase = RunPhase::Combat;
-    let snapshot = game.snapshot();
-    let ability = snapshot
-        .abilities
-        .iter()
-        .find(|ability| ability.kind == "king_reposition")
-        .unwrap();
-    assert_eq!(ability.targets.len(), 3);
-    assert!(ability.targets.iter().any(|target| target.cell == 4));
-    game.dispatch(Command::KingReposition {
-        from: 60,
-        targets: vec![4, 0],
-    })
-    .unwrap();
-    assert_eq!(
-        game.battle.board.piece_at(p(4, 0)).unwrap().unwrap().id,
-        101
-    );
-    assert_eq!(
-        game.battle.board.piece_at(p(0, 0)).unwrap().unwrap().id,
-        100
-    );
 }

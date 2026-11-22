@@ -1,8 +1,4 @@
-use chesslayer::{
-    content::pieces,
-    game::{Command, Game, RunPhase},
-    *,
-};
+use chesslayer::{content::pieces, *};
 use std::collections::HashSet;
 
 fn square(side: PlayerId, x: i32, y: i32) -> Position {
@@ -284,68 +280,4 @@ fn cardinal_all_start_squares_terminate_with_applicable_actions() {
             }
         }
     }
-}
-
-#[test]
-fn cardinal_native_actions_reach_preview_and_enemy_ai() {
-    let from = square(ENEMY, 0, 0);
-    let victim = square(ENEMY, 1, 1);
-    let mut battle = scene(pieces::CARDINAL, ENEMY);
-    put(&mut battle, ENEMY, 1, 1, PAWN, PLAYER);
-    battle.turn = PLAYER;
-    let preview = battle.preview_actions(from).unwrap();
-    assert!(preview.iter().any(|a| a.destination == victim
-        && a.captures == vec![victim]
-        && a.route
-            .as_ref()
-            .is_some_and(|route| route.first() == Some(&from) && route.last() == Some(&victim))));
-
-    let mut game = Game::new("vanguard", 42).unwrap();
-    game.battle = battle;
-    game.battle.turn = ENEMY;
-    game.phase = RunPhase::Combat;
-    let legal: HashSet<_> = game
-        .battle
-        .legal_actions(from)
-        .unwrap()
-        .iter()
-        .map(|a| a.first.move_to)
-        .collect();
-    game.dispatch(Command::EnemyStep).unwrap();
-    let destination = game
-        .battle
-        .board
-        .cells()
-        .iter()
-        .enumerate()
-        .find_map(|(i, piece)| {
-            piece
-                .filter(|p| p.id == 101)
-                .map(|_| Position::new((i % 8) as i32, (i / 8) as i32))
-        })
-        .unwrap();
-    assert!(legal.contains(&destination));
-    assert_ne!(destination, from);
-}
-
-#[test]
-fn upgrade_tree_uses_existing_hook_and_exposes_all_new_paths() {
-    assert_eq!(pieces::HOOK, 17);
-    assert_eq!(pieces::definition(pieces::HOOK).unwrap().key, "hook");
-    let snapshot = Game::new("vanguard", 2026).unwrap().snapshot();
-    for (from, to) in [
-        (KNIGHT, pieces::KNIGHTRIDER),
-        (pieces::KNIGHTRIDER, pieces::UNICORN),
-        (pieces::KNIGHTRIDER, pieces::BOUNCING_KNIGHTRIDER),
-        (pieces::BOUNCING_ROOK, pieces::HOOK),
-        (pieces::BOUNCING_BISHOP, pieces::TENGU),
-        (pieces::BOUNCING_BISHOP, pieces::CARDINAL),
-    ] {
-        assert!(snapshot
-            .upgrade_paths
-            .iter()
-            .any(|p| p.from == from && p.to == to));
-    }
-    let registered_paths: usize = pieces::ALL.iter().map(|piece| piece.upgrades.len()).sum();
-    assert_eq!(snapshot.upgrade_paths.len(), registered_paths);
 }

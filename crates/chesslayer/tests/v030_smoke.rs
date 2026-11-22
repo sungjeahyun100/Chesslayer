@@ -1,7 +1,7 @@
 //! Small end-to-end engine checks for the v0.3 campaign and troop mechanics.
 use chesslayer::{
     content::{self, pieces::*, Relic},
-    game::{Command, Game, Progress, RunPhase},
+    game::{Command, Game, RunPhase},
     map::NodeKind,
     *,
 };
@@ -179,92 +179,4 @@ fn ingredient_capture_stays_then_corpse_capture_grants_agility_and_cures_hunger(
     battle.end_turn().unwrap();
     assert_eq!(battle.status(2).agility, 3);
     assert_eq!(battle.actions_left, 4);
-}
-
-#[test]
-fn each_boss_unlocks_its_troop_and_continues_the_same_expedition() {
-    let mut game = Game::new_run("guardian", 300, 1, Progress::default()).unwrap();
-    for floor in 1..=4 {
-        assert_eq!(game.floor, floor);
-        let node = game
-            .map
-            .nodes
-            .iter()
-            .find(|n| n.kind == NodeKind::Boss)
-            .unwrap()
-            .id;
-        let encounter = content::encounter(game.map.nodes[node].encounter.unwrap());
-        // Keep each boss's actual royal IDs/kinds; isolate the final capture from its army.
-        let royals: Vec<_> = encounter
-            .enemies
-            .into_iter()
-            .filter(|p| {
-                p.id == encounter.royal_id || encounter.additional_royal_ids.contains(&p.id)
-            })
-            .collect();
-        for (index, enemy) in royals.iter().enumerate() {
-            let mut isolated = *enemy;
-            isolated.position = Position::new(0, 3);
-            game.battle = Battle::new(BattleStart {
-                players: vec![piece(1, KING, 4, 7), piece(2, ROOK, 0, 4)],
-                encounter: Encounter {
-                    enemies: vec![isolated],
-                    royal_id: enemy.id,
-                    additional_royal_ids: vec![],
-                },
-            })
-            .unwrap();
-            game.battle.configure_v030(&[]);
-            game.current_node = Some(node);
-            game.phase = RunPhase::Combat;
-            game.dispatch(Command::Move {
-                from: 32,
-                to: 24,
-                promotion: None,
-            })
-            .unwrap();
-            if game.phase == RunPhase::Combat {
-                // Special commander starts with one ward; the first attack removes it.
-                game.battle.end_turn().unwrap();
-                game.dispatch(Command::Move {
-                    from: 32,
-                    to: 24,
-                    promotion: None,
-                })
-                .unwrap();
-            }
-            assert_eq!(game.phase, RunPhase::Reward, "floor {floor}, royal {index}");
-        }
-        assert_eq!(game.progress.highest_floor, 1);
-        assert!(game
-            .progress
-            .unlocked_squads
-            .iter()
-            .any(|id| id == ["vanguard", "heretic", "artillery", "special"][(floor - 1) as usize]));
-        game.dispatch(Command::ContinueReward).unwrap();
-        assert_eq!(game.phase, RunPhase::Map);
-        assert_eq!(game.floor, (floor + 1).min(4));
-    }
-    assert!(game.final_battle);
-    assert_eq!(game.map.nodes.len(), 1);
-    game.dispatch(Command::SelectNode { id: 0 }).unwrap();
-    assert_eq!(game.phase, RunPhase::Combat);
-    assert_eq!(game.snapshot().royal_name, "부족의 독재자");
-}
-
-#[test]
-fn persistent_hunger_confession_and_ammunition_survive_encounter_boundaries() {
-    let mut game = Game::new("artillery", 301).unwrap();
-    game.ammo = Some(37);
-    game.dispatch(Command::SelectNode {
-        id: game.available_nodes()[0],
-    })
-    .unwrap();
-    assert_eq!(game.snapshot().mana, 37);
-    game.dispatch(Command::EndTurn).unwrap();
-    while game.phase == RunPhase::Combat && game.battle.turn == ENEMY {
-        game.dispatch(Command::EnemyStep).unwrap();
-    }
-    assert_eq!(game.snapshot().mana, 37);
-    assert!(Game::new_run("heretic", 1, 1, Progress::default()).is_err());
 }

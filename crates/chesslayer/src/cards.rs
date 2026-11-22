@@ -149,7 +149,7 @@ pub fn resolve_selection(
         }
         _ => {}
     }
-    let mut cost = d.selected_cost(selection)?;
+    let cost = d.selected_cost(selection)?;
     if cards.mana < cost {
         return Err("마나가 부족합니다.".into());
     }
@@ -159,12 +159,6 @@ pub fn resolve_selection(
     } else {
         (d.effect)(&mut next, selection.target)?
     };
-    if d.kind == CardKind::Volley {
-        cost = removed.unwrap_or(0) as u32;
-        if cards.mana < cost {
-            return Err(format!("일제사격에 필요한 탄약이 부족합니다: {cost}"));
-        }
-    }
     if cards.mana < cost.saturating_add(next.pending_ammo_spend()) {
         return Err("카드 비용과 사격 탄약이 부족합니다.".into());
     }

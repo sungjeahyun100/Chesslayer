@@ -1,10 +1,5 @@
 //! Playable troops with independent rosters, card pools and relics.
-mod artillery;
 mod avenger;
-mod guardian;
-mod heretic;
-mod special;
-mod vanguard;
 
 use super::Relic;
 use serde::Serialize;
@@ -19,20 +14,12 @@ pub struct Character {
     /// Defeat this floor's boss to unlock; zero is available from the beginning.
     pub unlock_floor: u8,
 }
-pub const ALL: &[Character] = &[
-    guardian::DEFINITION,
-    avenger::DEFINITION,
-    vanguard::DEFINITION,
-    heretic::DEFINITION,
-    artillery::DEFINITION,
-    special::DEFINITION,
-];
+pub const ALL: &[Character] = &[avenger::DEFINITION];
 
 /// All content and entry rules needed to register an existing or new squad.
 #[derive(Clone, Copy)]
 pub enum ResourceRule {
     Mana,
-    ArtilleryAmmo { initial: u32 },
 }
 #[derive(Clone, Copy)]
 pub struct SquadDefinition {
@@ -45,14 +32,7 @@ pub struct SquadDefinition {
     pub resource: ResourceRule,
     pub card_movement: bool,
 }
-pub const SQUADS: &[SquadDefinition] = &[
-    guardian::SQUAD,
-    avenger::SQUAD,
-    vanguard::SQUAD,
-    heretic::SQUAD,
-    artillery::SQUAD,
-    special::SQUAD,
-];
+pub const SQUADS: &[SquadDefinition] = &[avenger::SQUAD];
 pub fn definition(id: &str) -> Option<&'static SquadDefinition> {
     SQUADS.iter().find(|squad| squad.character.id == id)
 }

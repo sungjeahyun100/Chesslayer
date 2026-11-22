@@ -5,6 +5,13 @@ import { ENDLESS_SAVE_KEY, emptyEndlessRecord, parseEndlessRecord, readEndlessBe
 
 // Keep the original slot and the engine's serialized command history unchanged.
 const SAVE_KEY = "chesslayer.run.v1";
+function playableSave(value: string | null): boolean {
+  if (!value) return false;
+  try {
+    const save: { character?: unknown; version?: unknown } = JSON.parse(value);
+    return save.character === "avenger" && (save.version === 23 || save.version === 24);
+  } catch { return false; }
+}
 
 export function readSavedRun(mode: RunMode = "campaign") {
   if (mode === "endless") {
@@ -32,8 +39,15 @@ export function useRunStorage() {
     bestRef.current = readEndlessBest();
     setEndlessBest(bestRef.current);
     try {
-      setHasSave(!!localStorage.getItem(SAVE_KEY));
-      setHasEndlessSave(!!localStorage.getItem(ENDLESS_SAVE_KEY));
+      const campaign = localStorage.getItem(SAVE_KEY);
+      const endless = localStorage.getItem(ENDLESS_SAVE_KEY);
+      setHasSave(playableSave(campaign));
+      let endlessRun: string | null = null;
+      try { endlessRun = endless ? JSON.parse(endless)?.run ?? null : null; } catch { /* Keep unreadable data untouched. */ }
+      setHasEndlessSave(playableSave(endlessRun));
+      if ((campaign && !playableSave(campaign)) || (endless && !playableSave(endlessRun))) {
+        setSaveNotice("이전 부대 또는 규칙의 원정은 이어할 수 없습니다. 저장 데이터는 보존되며 새 복수귀 원정을 시작할 수 있습니다.");
+      }
       setProgress(readProgress());
       setDeveloperMode(localStorage.getItem(DEVELOPER_MODE_KEY) === "true");
     } catch {

@@ -23,15 +23,6 @@ impl Game {
         let d = self.cards.effective_definition(&self.cards.hand[index]);
         self.resolve_selection(index, &selection, d)
     }
-    #[cfg(test)]
-    pub(super) fn resolve_card(
-        &mut self,
-        index: usize,
-        target: Option<u32>,
-        d: CardDefinition,
-    ) -> Result<(), String> {
-        self.resolve_selection(index, &content::cards::CardSelection::single(target), d)
-    }
     pub(super) fn resolve_selection(
         &mut self,
         index: usize,
@@ -59,11 +50,7 @@ impl Game {
             },
             cost,
             removed
-                .map(|n| if d.kind == CardKind::Volley {
-                    format!(" · {n}회 사격")
-                } else {
-                    format!(" · {n}기 처리")
-                })
+                .map(|n| format!(" · {n}기 처리"))
                 .unwrap_or_default()
         ));
         self.events();

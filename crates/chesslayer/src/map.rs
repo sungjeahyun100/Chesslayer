@@ -186,8 +186,8 @@ impl ActMap {
             }
         }
         let boss_id = nodes.len();
-        for lane in 0..MAP_LANES {
-            if let Some(id) = ids[MAP_ROWS - 1][lane] {
+        for &lane_node in &ids[MAP_ROWS - 1] {
+            if let Some(id) = lane_node {
                 nodes[id].next.push(boss_id);
             }
         }

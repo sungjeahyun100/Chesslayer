@@ -121,55 +121,6 @@ fn summoned_rank_stays_registered_through_cards_and_turns() {
     );
 }
 
-#[test]
-fn infantry_support_keeps_its_battle_only_piece_after_card_resolution() {
-    use chesslayer::content::cards::CardKind;
-    use chesslayer::game::Command;
-    let mut config = setup("vanguard", 0);
-    config.deck = vec![CardKind::InfantrySupport];
-    let mut game = Game::new_simulator(&config).unwrap();
-    let cleared = game
-        .battle
-        .board
-        .cells()
-        .iter()
-        .enumerate()
-        .find_map(|(cell, piece)| {
-            piece
-                .filter(|piece| {
-                    cell / 8 >= 6 && piece.owner == 0 && piece.id != game.battle.king_id
-                })
-                .map(|piece| piece.id)
-        })
-        .unwrap();
-    game.battle.force_remove(&[cleared]).unwrap();
-    let before = game.snapshot();
-    let target = game.battle.v030_card_targets(CardKind::InfantrySupport)[0];
-    let card = game.cards.hand[0].id;
-    game.dispatch(Command::PlayCard {
-        id: card,
-        target: Some(target),
-    })
-    .unwrap();
-    let summoned = game
-        .snapshot()
-        .pieces
-        .iter()
-        .find(|piece| !before.pieces.iter().any(|old| old.id == piece.id))
-        .unwrap()
-        .id;
-    assert!(game.battle.piece_position(summoned).is_some());
-    assert!(!game
-        .battle
-        .player_pieces()
-        .iter()
-        .any(|piece| piece.id == summoned));
-    assert_snapshot_board_sync(&game);
-    game.dispatch(Command::EndTurn).unwrap();
-    assert!(game.battle.piece_position(summoned).is_some());
-    assert_snapshot_board_sync(&game);
-}
-
 fn setup(squad: &str, encounter: usize) -> SimulatorConfig {
     SimulatorConfig {
         squad: squad.into(),
@@ -186,10 +137,10 @@ fn setup(squad: &str, encounter: usize) -> SimulatorConfig {
 
 #[test]
 fn every_registered_encounter_and_squad_can_enter_real_combat() {
-    for index in 0..ENCOUNTERS.len() {
-        let game = Game::new_simulator(&setup("guardian", index))
+    for (index, encounter) in ENCOUNTERS.iter().enumerate() {
+        let game = Game::new_simulator(&setup("avenger", index))
             .unwrap_or_else(|error| panic!("encounter {index}: {error}"));
-        assert_eq!(game.snapshot().encounter, ENCOUNTERS[index].name);
+        assert_eq!(game.snapshot().encounter, encounter.name);
     }
     for squad in characters::ALL {
         let game = Game::new_simulator(&setup(squad.id, 0))
@@ -200,12 +151,12 @@ fn every_registered_encounter_and_squad_can_enter_real_combat() {
 
 #[test]
 fn same_kind_starters_keep_independent_permanent_lineage() {
-    let root = characters::roster("guardian")
+    let root = characters::roster("avenger")
         .into_iter()
         .find(|piece| piece.id == 9)
         .unwrap();
     let target = pieces::definition(root.kind).unwrap().upgrades[0].target;
-    let mut config = setup("guardian", 0);
+    let mut config = setup("avenger", 0);
     config.upgrades = vec![CardUpgradeChoice { id: 9, target }];
     let game = Game::new_simulator(&config).unwrap();
     let roster = game.battle.player_pieces();
@@ -221,32 +172,4 @@ fn same_kind_starters_keep_independent_permanent_lineage() {
         roster.iter().find(|piece| piece.id == 9).unwrap(),
         root.kind
     ));
-}
-
-#[test]
-fn simulator_rejects_content_outside_the_selected_squad_pool() {
-    let guardian = characters::definition("guardian").unwrap();
-    let vanguard = characters::definition("vanguard").unwrap();
-    let foreign_card = vanguard
-        .card_pool
-        .iter()
-        .copied()
-        .find(|kind| !guardian.card_pool.contains(kind) && !guardian.starting_deck.contains(kind))
-        .unwrap();
-    let foreign_relic = vanguard
-        .relic_pool
-        .iter()
-        .copied()
-        .find(|relic| !guardian.relic_pool.contains(relic) && *relic != guardian.character.relic)
-        .unwrap();
-
-    let mut config = setup("guardian", 0);
-    config.deck.push(foreign_card);
-    assert!(Game::new_simulator(&config).is_err());
-    config.deck.pop();
-    config.deck.push(cards::CATALOG_ONLY[0]);
-    assert!(Game::new_simulator(&config).is_err());
-    config.deck.pop();
-    config.relics.push(foreign_relic);
-    assert!(Game::new_simulator(&config).is_err());
 }

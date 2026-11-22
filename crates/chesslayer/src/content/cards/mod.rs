@@ -1,61 +1,7 @@
-//! Card IDs, explicit registration and shared acquisition lists.
+//! Card IDs and definitions for the playable Avenger squad.
 pub mod avenger;
-mod fleeting_ward;
-mod gun;
-mod jeans;
-mod limiter_release;
-mod pawn_storm;
-mod reverse_jeans;
-mod sacred_domain;
-mod temporary_upgrade;
-pub mod ward;
-
-mod aim_correction;
-mod aimed_shot;
-mod assault_order;
-mod backstage_sacrifice;
-mod bloody_invitation;
-mod body_slam;
-mod clear_tablecloth;
-mod comrade_revenge;
-mod cracked_conscience;
-mod delivered_supper;
-mod dining_etiquette;
-mod emergency_conscription;
-mod endless_ecstasy;
-mod entrenched_defense;
-mod excited_steps;
-mod expendables;
-mod extra_propellant;
-mod extraction;
-mod fire_data_sharing;
-mod focus_fire;
-mod frontline;
-mod general_mobilization;
-mod human_wave;
-mod infantry_support;
-mod infiltration;
-mod intermission_waltz;
-mod last_defense;
-mod last_stand;
-mod last_supper;
-mod late_dinner;
-mod masquerade;
-mod meal_time;
-mod rapid_reload;
-mod reckless_charge;
-mod relief_force;
-mod sacrifice;
-mod smoke_screen;
-mod stimpack;
-mod suppression_fire;
-mod torn_mask;
-mod volley;
-
 use crate::{cards::Card, Battle, PieceId, PieceType};
 use serde::{Deserialize, Serialize};
-
-pub use gun::{GUN_ADJACENT_FORMATION, GUN_HALF_WIDTH, GUN_HITS_ALLIES};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -97,157 +43,10 @@ pub enum CardKind {
     Interference,
     AbsoluteAuthority,
     AuthoritarianOrder,
-
-    Jeans,
-    Ward,
-    Gun,
-    FleetingWard,
-    PawnStorm,
-    ReverseJeans,
-    LimiterRelease,
-    TemporaryUpgrade,
-    SacredDomain,
-    Stimpack,
-    BodySlam,
-    InfantrySupport,
-    Sacrifice,
-    LastStand,
-    ExcitedSteps,
-    BloodyInvitation,
-    DiningEtiquette,
-    Masquerade,
-    ClearTablecloth,
-    IntermissionWaltz,
-    LateDinner,
-    MealTime,
-    DeliveredSupper,
-    BackstageSacrifice,
-    TornMask,
-    CrackedConscience,
-    LastSupper,
-    EndlessEcstasy,
-    Volley,
-    Frontline,
-    AimedShot,
-    SmokeScreen,
-    Infiltration,
-    Extraction,
-    AssaultOrder,
-    ComradeRevenge,
-    EmergencyConscription,
-    Expendables,
-    GeneralMobilization,
-    HumanWave,
-    RecklessCharge,
-    ReliefForce,
-    AimCorrection,
-    RapidReload,
-    ExtraPropellant,
-    FireDataSharing,
-    EntrenchedDefense,
-    SuppressionFire,
-    FocusFire,
-    LastDefense,
 }
 impl CardKind {
     pub fn definition(self) -> CardDefinition {
-        let mut d = match self {
-            Self::PawnOrder
-            | Self::MinorOrder
-            | Self::MajorOrder
-            | Self::Castling
-            | Self::EnPassant
-            | Self::MindControl
-            | Self::Exile
-            | Self::Revolution
-            | Self::RoyalRevolution
-            | Self::Aerobics
-            | Self::Anaerobics
-            | Self::SwapStats
-            | Self::BadHand
-            | Self::PotOfGreed
-            | Self::Optimize
-            | Self::Overestimate
-            | Self::Steroids
-            | Self::FullArmor
-            | Self::AlekhineGun
-            | Self::MakeBaby
-            | Self::BloodOffering
-            | Self::WealthOffering
-            | Self::Bounty
-            | Self::TacticalMove
-            | Self::Rename
-            | Self::AvengerLimiter
-            | Self::Divinity
-            | Self::Scp500
-            | Self::ClaudeOptimize
-            | Self::AllCharge
-            | Self::DisarmAll
-            | Self::BabyRank
-            | Self::GunBarrage
-            | Self::ComeHere
-            | Self::Interference => avenger::definition(self),
-            Self::AbsoluteAuthority | Self::AuthoritarianOrder => avenger::definition(self),
-            Self::Jeans => jeans::definition(),
-            Self::Ward => ward::definition(),
-            Self::Gun => gun::definition(),
-            Self::FleetingWard => fleeting_ward::definition(),
-            Self::PawnStorm => pawn_storm::definition(),
-            Self::ReverseJeans => reverse_jeans::definition(),
-            Self::LimiterRelease => limiter_release::definition(),
-            Self::TemporaryUpgrade => temporary_upgrade::definition(),
-            Self::SacredDomain => sacred_domain::definition(),
-            Self::Stimpack => stimpack::definition(),
-            Self::BodySlam => body_slam::definition(),
-            Self::InfantrySupport => infantry_support::definition(),
-            Self::Sacrifice => sacrifice::definition(),
-            Self::LastStand => last_stand::definition(),
-            Self::ExcitedSteps => excited_steps::definition(),
-            Self::BloodyInvitation => bloody_invitation::definition(),
-            Self::DiningEtiquette => dining_etiquette::definition(),
-            Self::Masquerade => masquerade::definition(),
-            Self::ClearTablecloth => clear_tablecloth::definition(),
-            Self::IntermissionWaltz => intermission_waltz::definition(),
-            Self::LateDinner => late_dinner::definition(),
-            Self::MealTime => meal_time::definition(),
-            Self::DeliveredSupper => delivered_supper::definition(),
-            Self::BackstageSacrifice => backstage_sacrifice::definition(),
-            Self::TornMask => torn_mask::definition(),
-            Self::CrackedConscience => cracked_conscience::definition(),
-            Self::LastSupper => last_supper::definition(),
-            Self::EndlessEcstasy => endless_ecstasy::definition(),
-            Self::Volley => volley::definition(),
-            Self::Frontline => frontline::definition(),
-            Self::AimedShot => aimed_shot::definition(),
-            Self::SmokeScreen => smoke_screen::definition(),
-            Self::Infiltration => infiltration::definition(),
-            Self::Extraction => extraction::definition(),
-            Self::AssaultOrder => assault_order::definition(),
-            Self::ComradeRevenge => comrade_revenge::definition(),
-            Self::EmergencyConscription => emergency_conscription::definition(),
-            Self::Expendables => expendables::definition(),
-            Self::GeneralMobilization => general_mobilization::definition(),
-            Self::HumanWave => human_wave::definition(),
-            Self::RecklessCharge => reckless_charge::definition(),
-            Self::ReliefForce => relief_force::definition(),
-            Self::AimCorrection => aim_correction::definition(),
-            Self::RapidReload => rapid_reload::definition(),
-            Self::ExtraPropellant => extra_propellant::definition(),
-            Self::FireDataSharing => fire_data_sharing::definition(),
-            Self::EntrenchedDefense => entrenched_defense::definition(),
-            Self::SuppressionFire => suppression_fire::definition(),
-            Self::FocusFire => focus_fire::definition(),
-            Self::LastDefense => last_defense::definition(),
-        };
-        if !avenger::is_avenger(self) {
-            d.rarity = match d.cost {
-                0 | 1 => avenger::Rarity::Common,
-                2 => avenger::Rarity::Rare,
-                3 => avenger::Rarity::Epic,
-                _ => avenger::Rarity::Legendary,
-            };
-        }
-        d
+        avenger::definition(self)
     }
 }
 
@@ -363,28 +162,16 @@ impl CardDefinition {
     }
 }
 
-/// Card candidates for the seeded, mixed combat reward selection.
-pub const REWARD_POOL: &[CardKind] = &[
-    CardKind::Ward,
-    CardKind::Jeans,
-    CardKind::Gun,
-    CardKind::PawnStorm,
-    CardKind::ReverseJeans,
-    CardKind::LimiterRelease,
-    CardKind::TemporaryUpgrade,
-    CardKind::SacredDomain,
-];
-
-/// Implemented definitions without a current starter, reward or shop route.
-pub const CATALOG_ONLY: &[CardKind] = &[CardKind::FleetingWard];
-
 pub fn starter_deck() -> Vec<Card> {
     vec![]
 }
 
-/// Separate troop pools: the Guardian keeps its existing card definitions.
 pub fn reward_pool(character: &str) -> &'static [CardKind] {
-    crate::content::characters::definition(character).map_or(REWARD_POOL, |squad| squad.card_pool)
+    if character == "avenger" {
+        avenger::REWARD_POOL
+    } else {
+        &[]
+    }
 }
 
 pub fn starting_deck(character: &str) -> Vec<Card> {

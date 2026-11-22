@@ -373,7 +373,6 @@ impl Battle {
             // Resource effects and permanent upgrades are resolved in Game.
             BadHand | PotOfGreed | Optimize | ClaudeOptimize | BloodOffering | WealthOffering
             | Bounty | Divinity => {}
-            _ => return Err(Error::IllegalAction),
         }
         Ok(())
     }

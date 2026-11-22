@@ -62,7 +62,7 @@ function ShootingBoard({ piece }: { piece: CompendiumPiece }) {
 }
 
 export function Compendium({ choices, entries, onBack }: { choices: Character[]; entries: CompendiumSquad[]; onBack: () => void }) {
-  const [squadId, setSquadId] = useState("guardian");
+  const squadId = "avenger";
   const [category, setCategory] = useState<Category>("cards");
   const [pieceKind, setPieceKind] = useState<number | null>(null);
   const squad = entries.find((entry) => entry.id === squadId);
@@ -85,14 +85,8 @@ export function Compendium({ choices, entries, onBack }: { choices: Character[];
     <button className="text-button" onClick={onBack}>← 처음으로</button>
     <p className="eyebrow">CHESSLAYER / FIELD GUIDE</p>
     <h1>도감</h1>
-    <p className="muted">모든 부대의 구현된 전술과 기물을 열람할 수 있습니다. 도감 열람은 해금 기록이나 원정에 영향을 주지 않습니다.</p>
-    <nav className="compendium-squads" aria-label="부대 선택">
-      {choices.map((choice) => <button key={choice.id} type="button" className={squadId === choice.id ? "selected" : ""}
-        aria-pressed={squadId === choice.id} onClick={() => { setSquadId(choice.id); setPieceKind(null); }}>
-        {choice.name}
-      </button>)}
-    </nav>
-    <section className="compendium-head"><p className="eyebrow">{character?.title}</p><h2>{character?.name}</h2><p>{character?.description}</p></section>
+    <p className="muted">복수귀 카드와 유물, 모든 기물의 정의와 강화 경로를 열람할 수 있습니다.</p>
+    <section className="compendium-head">{category === "pieces" ? <><p className="eyebrow">공용 게임 데이터</p><h2>전체 기물</h2><p>플레이 가능 부대와 관계없이 모든 기물의 정의와 강화 경로를 열람할 수 있습니다.</p></> : <><p className="eyebrow">{character?.title}</p><h2>{character?.name}</h2><p>{character?.description}</p></>}</section>
     <nav className="compendium-categories" aria-label="도감 종류">
       {(Object.keys(categoryNames) as Category[]).map((key) => <button key={key} type="button" className={category === key ? "selected" : ""}
         aria-pressed={category === key} onClick={() => setCategory(key)}>{categoryNames[key]} <small>{squad?.[key].length ?? 0}</small></button>)}
@@ -118,11 +112,11 @@ export function Compendium({ choices, entries, onBack }: { choices: Character[];
       <nav className="compendium-piece-list" aria-label="기물 선택">
         {squad.pieces.map((piece) => <button key={piece.kind} type="button" className={selectedPiece?.kind === piece.kind ? "selected" : ""}
           aria-pressed={selectedPiece?.kind === piece.kind} onClick={() => setPieceKind(piece.kind)}>
-          <PieceImage pieceKey={piece.key} name={piece.name} /><span><strong>{piece.name}</strong><small>{piece.starting ? "시작 기물" : "강화·승격 기물"}</small></span>
+          <PieceImage pieceKey={piece.key} name={piece.name} /><span><strong>{piece.name}</strong><small>{piece.starting ? "복수귀 시작 기물" : "기물 정의"}</small></span>
         </button>)}
       </nav>
       {selectedPiece && restPiece && <article className="compendium-piece-detail" key={selectedPiece.kind}>
-        <div className="compendium-piece-intro"><PieceImage pieceKey={selectedPiece.key} name={selectedPiece.name} /><div><p className="eyebrow">{selectedPiece.starting ? "시작 기물" : "강화·승격 기물"}</p><h3>{selectedPiece.name}</h3><p>{selectedPiece.description}</p></div></div>
+        <div className="compendium-piece-intro"><PieceImage pieceKey={selectedPiece.key} name={selectedPiece.name} /><div><p className="eyebrow">{selectedPiece.starting ? "복수귀 시작 기물" : "기물 정의"}</p><h3>{selectedPiece.name}</h3><p>{selectedPiece.description}</p></div></div>
         <h4>이동과 포획</h4><MovementBoard piece={selectedPiece} />
         {selectedPiece.shots.length > 0 && <><h4>사격 범위</h4><ShootingBoard piece={selectedPiece} /></>}
         {allPaths.some((path) => path.from === selectedPiece.kind || path.to === selectedPiece.kind) ?

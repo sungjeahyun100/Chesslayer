@@ -758,33 +758,6 @@ mod tests {
     }
 
     #[test]
-    fn pending_reaction_rejects_forfeit_without_spending_remaining_boss_slot() {
-        let mut battle = battle(vec![player(2, pieces::PAWN, p(3, 4))], vec![]);
-        battle
-            .v030_card_effect(
-                crate::content::cards::CardKind::ReliefForce,
-                &crate::content::cards::CardSelection::single(None),
-            )
-            .unwrap();
-        battle.end_turn().unwrap();
-        let capture = action_to(&battle, p(4, 4), p(3, 4));
-        battle.apply_piece_action(&capture).unwrap();
-        let reaction = battle.pending_choice().unwrap();
-        let shot = battle.boss_special_actions(p(3, 4)).remove(0);
-        let hash = battle.search_hash();
-        assert!(battle.forfeit_boss_action(&shot).is_err());
-        assert_eq!(battle.search_hash(), hash);
-        assert_eq!(battle.actions_left, 1);
-        assert_eq!(battle.normal_actions_used, 1);
-        assert!(battle.boss().unwrap().movement_used);
-        assert!(!battle.boss().unwrap().special_used);
-        battle.resolve_choice(reaction.targets[0]).unwrap();
-        assert_eq!(battle.turn, ENEMY);
-        battle.apply_piece_action(&shot).unwrap();
-        assert_eq!(battle.turn, PLAYER);
-    }
-
-    #[test]
     fn ordinary_enemy_shooting_still_ends_a_multi_action_turn() {
         let mut battle = battle(vec![player(2, pieces::PAWN, p(4, 6))], vec![]);
         battle.boss = None;

@@ -1,4 +1,4 @@
-use chesslayer::{cards::*, content, game::Game, *};
+use chesslayer::{content, game::Game, *};
 use std::collections::HashSet;
 
 /// Registration mistakes can otherwise hide behind battles that never spawn the new content.
@@ -72,11 +72,7 @@ fn catalog_entries_are_unique_and_connected() {
         }
     }
 
-    for kind in content::cards::REWARD_POOL
-        .iter()
-        .copied()
-        .chain([CardKind::FleetingWard])
-    {
+    for &kind in content::cards::avenger::ALL {
         assert_eq!(kind.definition().kind, kind, "miswired card registration");
     }
     let mut ids = HashSet::new();

@@ -182,13 +182,6 @@ pub fn catalog() -> Vec<SquadEntry> {
                 .iter()
                 .copied()
                 .chain(cards::reward_pool(character.id).iter().copied())
-                .chain(
-                    (character.id == "guardian")
-                        .then_some(cards::CATALOG_ONLY)
-                        .into_iter()
-                        .flatten()
-                        .copied(),
-                )
                 .collect();
             let cards = card_kinds
                 .into_iter()
@@ -216,19 +209,11 @@ pub fn catalog() -> Vec<SquadEntry> {
                 .iter()
                 .map(|p| p.kind)
                 .collect();
-            let mut kinds = initial.clone();
-            loop {
-                let before = kinds.len();
-                for definition in pieces::ALL {
-                    if kinds.contains(&definition.kind) {
-                        kinds.extend(definition.upgrades.iter().map(|upgrade| upgrade.target));
-                        kinds.extend(definition.promotions.iter().copied());
-                    }
-                }
-                if kinds.len() == before {
-                    break;
-                }
-            }
+            // Pieces are shared content, independent of the playable squad.
+            let kinds: BTreeSet<_> = pieces::ALL
+                .iter()
+                .map(|definition| definition.kind)
+                .collect();
             let upgrades: Vec<_> = pieces::ALL
                 .iter()
                 .filter(|d| kinds.contains(&d.kind))

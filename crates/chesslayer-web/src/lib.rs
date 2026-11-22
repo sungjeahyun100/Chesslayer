@@ -209,6 +209,9 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
     if !matches!(version, Some(23) | Some(24)) {
         return Err("이전 게임 규칙으로 저장된 원정입니다. 이어갈 수 없어 새 원정을 시작해야 합니다. 기존 기록은 새 원정을 시작하기 전까지 보존됩니다.".into());
     }
+    if header.get("character").and_then(|value| value.as_str()) != Some("avenger") {
+        return Err("이 저장 데이터의 부대는 v1.0.0에서 플레이할 수 없습니다. 새 복수귀 원정을 시작하세요. 기존 저장 데이터는 보존됩니다.".into());
+    }
     let mut save: SavedRun =
         serde_json::from_str(saved).map_err(|_| "저장된 원정을 읽을 수 없습니다.")?;
     if version == Some(23) {
@@ -408,168 +411,29 @@ fn parse_card_kind(kind: &str) -> Result<chesslayer::content::cards::CardKind, J
 #[cfg(test)]
 mod save_tests {
     use super::*;
-    use chesslayer::{ENEMY, PLAYER};
-
-    // Captured from the version-19 WASM build after two real dictator turns.
-    const LEGACY_BOSS_RUN: &str = r#"{
-        "version":19,"character":"guardian","seed":19,"floor":0,
-        "mode":"campaign",
-        "progress":{"highest_floor":1,"unlocked_squads":["guardian"],
-            "final_unlocked":false,"final_defeated":false},
-        "commands":[{"type":"select_node","id":0},{"type":"end_turn"},
-            {"type":"enemy_step_selected","from":4,"index":3},
-            {"type":"end_turn"},
-            {"type":"enemy_step_selected","from":11,"index":4}]
-    }"#;
 
     #[test]
-    fn current_boss_history_with_legacy_boundary_restores_two_action_turns() {
-        assert!(restore_saved_run(LEGACY_BOSS_RUN).is_err());
-        let mut fixture: serde_json::Value = serde_json::from_str(LEGACY_BOSS_RUN).unwrap();
-        fixture["version"] = SAVE_VERSION.into();
-        fixture["legacy_boss_commands"] = 5.into();
-        let (mut game, mut save) = restore_saved_run(&fixture.to_string()).unwrap();
-        let snapshot = game.snapshot();
-        assert_eq!(snapshot.round, 3);
-        assert_eq!(snapshot.turn, PLAYER);
-        assert_eq!(snapshot.boss.as_ref().unwrap().hp, 5);
-        assert_eq!(snapshot.boss.as_ref().unwrap().ammo, 2);
-        assert_eq!(
-            snapshot.pieces.iter().find(|p| p.id == 100).unwrap().cell,
-            18
-        );
-        assert_eq!(save.version, SAVE_VERSION);
-        assert_eq!(save.legacy_boss_commands, 5);
-
-        let command = Command::EndTurn;
-        game.dispatch(command.clone()).unwrap();
-        save.commands.push(command);
-        for action in 0..2 {
-            let selected = game.enemy_recommendation().unwrap();
-            let command = Command::EnemyStepSelected {
-                from: selected.map(|(from, _)| from),
-                index: selected.map(|(_, index)| index),
-            };
-            game.dispatch(command.clone()).unwrap();
-            save.commands.push(command);
-            assert_eq!(game.battle.turn, if action == 0 { ENEMY } else { PLAYER });
-            // In particular, a save between the movement and shot must resume
-            // the remaining action instead of replaying a third boss action.
-            let encoded = serde_json::to_string(&save).unwrap();
-            let (restored, restored_save) = restore_saved_run(&encoded).unwrap();
-            assert_eq!(restored_save.legacy_boss_commands, 5);
-            assert_eq!(
-                serde_json::to_value(restored.snapshot()).unwrap(),
-                serde_json::to_value(game.snapshot()).unwrap()
-            );
-        }
-    }
-
-    #[test]
-    fn legacy_boss_save_during_target_choices_resumes_planning_after_resolution() {
-        // Frontline opens a sequence of target selections without using the
-        // player's move. These commands have identical behavior in version 19.
-        let saved = r#"{
-            "version":19,"character":"artillery","seed":19,"floor":0,
-            "progress":{"unlocked_squads":["artillery"]},
-            "commands":[{"type":"select_node","id":0},
-                {"type":"play_card_selection","id":5,"targets":[1,10040]}]
-        }"#;
-        let mut fixture: serde_json::Value = serde_json::from_str(saved).unwrap();
-        fixture["version"] = SAVE_VERSION.into();
-        fixture["legacy_boss_commands"] = 2.into();
-        let (mut game, mut save) = restore_saved_run(&fixture.to_string()).unwrap();
-        assert_eq!(game.battle.turn, PLAYER);
-        assert!(game.battle.pending_choice().is_some());
-        assert_eq!(save.legacy_boss_commands, 2);
-
-        // Select the mortar, move it again, then finish Frontline. Repeated
-        // saves must retain the deferred migration until the final selection.
-        for target in [1, 10032, 0] {
-            let command = Command::ResolveEffect { target };
-            game.dispatch(command.clone()).unwrap();
-            save.commands.push(command);
-            assert_eq!(game.battle.pending_choice().is_some(), target != 0);
-            let (restored, _) = restore_saved_run(&serde_json::to_string(&save).unwrap()).unwrap();
-            assert_eq!(
-                serde_json::to_value(restored.snapshot()).unwrap(),
-                serde_json::to_value(game.snapshot()).unwrap()
-            );
-            game = restored;
-        }
-        assert!(game.snapshot().boss.unwrap().plan.is_some());
-        game.dispatch(Command::EndTurn).unwrap();
-        save.commands.push(Command::EndTurn);
-        let mut actions = 0;
-        while game.battle.turn == ENEMY {
-            assert!(actions < 2);
-            let (from, index) = game.enemy_recommendation().unwrap().unwrap();
-            let command = Command::EnemyStepSelected {
-                from: Some(from),
-                index: Some(index),
-            };
-            game.dispatch(command.clone()).unwrap();
-            save.commands.push(command);
-            actions += 1;
-        }
-        assert!(actions > 0);
-        let (restored, _) = restore_saved_run(&serde_json::to_string(&save).unwrap()).unwrap();
-        assert_eq!(
-            serde_json::to_value(restored.snapshot()).unwrap(),
-            serde_json::to_value(game.snapshot()).unwrap()
-        );
-    }
-
-    #[test]
-    fn legacy_regular_run_keeps_its_state_and_invalid_boundaries_are_rejected() {
-        let mut game = WebGame::new("guardian", 19).unwrap();
-        let id = game
-            .game
-            .snapshot()
-            .map
-            .nodes
-            .iter()
-            .find(|node| node.available)
+    fn current_avenger_save_replays_and_removed_squad_is_rejected() {
+        let progress = Progress::default();
+        let save = SavedRun {
+            version: SAVE_VERSION,
+            character: "avenger".into(),
+            seed: 19,
+            floor: 1,
+            mode: RunMode::Campaign,
+            progress,
+            commands: vec![],
+            legacy_boss_commands: 0,
+            legacy_content_commands: 0,
+            simulator: None,
+        };
+        let encoded = serde_json::to_string(&save).unwrap();
+        let (restored, _) = restore_saved_run(&encoded).unwrap();
+        assert_eq!(restored.snapshot().squad_id, "avenger");
+        let removed = encoded.replace("\"avenger\"", "\"artillery\"");
+        assert!(restore_saved_run(&removed)
+            .err()
             .unwrap()
-            .id;
-        game.dispatch(&serde_json::to_string(&Command::SelectNode { id }).unwrap())
-            .unwrap();
-        let mut saved: serde_json::Value = serde_json::from_str(&game.save()).unwrap();
-        saved["version"] = serde_json::json!(19);
-        saved
-            .as_object_mut()
-            .unwrap()
-            .remove("legacy_boss_commands");
-        assert!(restore_saved_run(&saved.to_string()).is_err());
-        saved["version"] = SAVE_VERSION.into();
-        let (restored, _) = restore_saved_run(&saved.to_string()).unwrap();
-        assert_eq!(
-            serde_json::to_value(restored.snapshot()).unwrap(),
-            serde_json::to_value(game.game.snapshot()).unwrap()
-        );
-        saved["version"] = serde_json::json!(23);
-        saved
-            .as_object_mut()
-            .unwrap()
-            .remove("legacy_content_commands");
-        let (restored_legacy, migrated) = restore_saved_run(&saved.to_string()).unwrap();
-        assert_eq!(migrated.version, SAVE_VERSION);
-        assert_eq!(migrated.legacy_content_commands, migrated.commands.len());
-        assert_eq!(
-            serde_json::to_value(restored_legacy.snapshot()).unwrap(),
-            serde_json::to_value(game.game.snapshot()).unwrap()
-        );
-        let (restored_again, _) =
-            restore_saved_run(&serde_json::to_string(&migrated).unwrap()).unwrap();
-        assert_eq!(
-            serde_json::to_value(restored_again.snapshot()).unwrap(),
-            serde_json::to_value(restored_legacy.snapshot()).unwrap()
-        );
-
-        saved["version"] = serde_json::json!(SAVE_VERSION);
-        saved["legacy_boss_commands"] = serde_json::json!(2);
-        assert!(restore_saved_run(&saved.to_string()).is_err());
-        saved["version"] = serde_json::json!(18);
-        assert!(restore_saved_run(&saved.to_string()).is_err());
+            .contains("플레이할 수 없습니다"));
     }
 }

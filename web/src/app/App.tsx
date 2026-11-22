@@ -12,7 +12,7 @@ import type { RunMode } from "../types";
 
 export function App() {
   const [screen, setScreen] = useState<AppScreen>("home");
-  const [character, setCharacter] = useState("guardian");
+  const [character, setCharacter] = useState<string | null>(null);
   const [startFloor, setStartFloor] = useState(1);
   const [mode, setMode] = useState<RunMode>("campaign");
   const enterGame = useCallback(() => setScreen("game"), []);
@@ -20,12 +20,11 @@ export function App() {
   const { ready, choices, entries, snapshot, error, setError, storage, presentation } = session;
   const { progress, developerMode, hasSave, saveNotice } = storage;
   const { displayState, floorTransition, skipFloorTransition } = presentation;
-  function toggleDeveloperMode() {
-    if (developerMode) {
-      if (!progress.unlocked_squads.includes(character)) setCharacter("guardian");
-      setStartFloor(1);
-    }
-    storage.toggleDeveloperMode();
+  function choose(nextMode: RunMode) {
+    setMode(nextMode);
+    setCharacter(null);
+    setStartFloor(1);
+    setScreen("choose");
   }
   return <>
     <FloorOverlay floorTransition={floorTransition} skipFloorTransition={skipFloorTransition} />
@@ -34,13 +33,14 @@ export function App() {
     {saveNotice && <p className="save-notice" role="status">{saveNotice}</p>}
     {screen === "home" && <HomeScreen ready={ready} hasSave={hasSave} hasEndlessSave={storage.hasEndlessSave}
       endlessBest={storage.endlessBest} resume={session.resume} onNavigate={setScreen}
-      onStart={(nextMode) => { setMode(nextMode); setStartFloor(1); setScreen("choose"); }} />}
+      onStart={choose} />}
     {screen === "choose" && <SquadSelection choices={choices} character={character} onCharacter={setCharacter}
-      floor={startFloor} onFloor={setStartFloor} progress={developerMode ? developerProgress(progress, choices.map((choice) => choice.id)) : progress}
-      mode={mode} developerMode={developerMode} onBack={() => setScreen("home")} onStart={() => session.start(character, startFloor, mode)}
-      onToggleDeveloperMode={toggleDeveloperMode} ready={ready} />}
+      floor={startFloor} onFloor={setStartFloor} progress={developerMode ? developerProgress(progress, ["avenger"]) : progress}
+      mode={mode} developerMode={developerMode} onBack={() => setScreen("home")}
+      onStart={() => { if (character === "avenger") session.start(character, startFloor, mode); }}
+      onToggleDeveloperMode={() => { if (developerMode) setStartFloor(1); storage.toggleDeveloperMode(); }} ready={ready} />}
     {screen === "compendium" && <Compendium choices={choices} entries={entries} onBack={() => setScreen("home")} />}
-    {screen === "sandbox" && <PieceSandbox choices={choices} entries={entries} onBack={() => setScreen("home")} />}
+    {screen === "sandbox" && <PieceSandbox entries={entries} onBack={() => setScreen("home")} />}
     {screen === "game" && snapshot && displayState && <GameScreen key={session.runId} snapshot={snapshot} displayState={displayState}
       cardMovement={session.cardMovement}
       send={session.send} inspectEnemy={session.inspectEnemy} setError={setError} developerMode={developerMode}
@@ -49,7 +49,7 @@ export function App() {
       presentationBusy={presentation.presentationBusy} lastEnemyMove={presentation.lastEnemyMove} boardRevision={presentation.boardRevision}
       animation={presentation.animation}
       statusEffects={presentation.statusEffects}
-      onRestart={() => { setMode(snapshot.mode); setScreen("choose"); setError(""); }} />}
-    <footer>CHESSLAYER <span>원정과 부대 해금은 이 브라우저에 저장됩니다.</span></footer>
+      onRestart={() => { setError(""); choose(snapshot.mode); }} />}
+    <footer>CHESSLAYER <span>원정 진행은 이 브라우저에 저장됩니다.</span></footer>
   </>;
 }

@@ -6,7 +6,7 @@ import { formatEndlessRecord, type EndlessRecord } from "../endless";
 export function HomeScreen({ ready, hasSave, hasEndlessSave, endlessBest, resume, onStart, onNavigate }: {
   ready: boolean; hasSave: boolean; hasEndlessSave: boolean; endlessBest: EndlessRecord;
   resume: (mode: RunMode) => void; onStart: (mode: RunMode) => void;
-  onNavigate: (screen: "choose" | "compendium" | "sandbox") => void;
+  onNavigate: (screen: "compendium" | "sandbox") => void;
 }) {
   return (
     <main className="home">
@@ -17,7 +17,7 @@ export function HomeScreen({ ready, hasSave, hasEndlessSave, endlessBest, resume
         <p className="intro">
           길을 선택하고, 카드로 판을 바꾸세요.
           <br />
-          다섯 부대가 펼치는 네 층의 원정.
+          복수귀 부대가 펼치는 네 층의 원정.
         </p>
         <div className="expedition-modes">
           <section className="expedition-mode" aria-label="일반 원정">

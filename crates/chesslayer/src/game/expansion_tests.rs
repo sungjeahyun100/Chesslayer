@@ -252,7 +252,6 @@ fn upgrade_lineage_matches_only_traversed_branches_and_gun_formation() {
     assert!(battle
         .avenger_targets(CardKind::AlekhineGun)
         .contains(&front));
-    assert!((CardKind::Gun.definition().target_candidates)(&battle).contains(&front));
 }
 
 #[test]

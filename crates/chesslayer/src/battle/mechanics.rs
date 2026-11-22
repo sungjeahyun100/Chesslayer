@@ -1,19 +1,11 @@
 //! v0.3 battle rules. Movement programs remain independently defined by each piece.
-mod artillery_cards;
-mod cards;
 mod choices;
 mod combat;
-mod heretic_cards;
 mod relics;
 mod shooting;
-mod special_cards;
 mod statuses;
-mod vanguard_cards;
 use super::*;
-use crate::content::{
-    cards::{CardKind, CardSelection},
-    Relic,
-};
+use crate::content::Relic;
 use crate::{ActionStep, Effect};
 use serde::Serialize;
 use std::collections::VecDeque;
@@ -634,96 +626,6 @@ impl Battle {
 #[cfg(test)]
 mod smoke {
     use super::*;
-    #[test]
-    fn volley_counts_infantry_shots_and_updates_with_board_positions() {
-        let mut b = Battle::sandbox().unwrap();
-        b.sandbox_place(1, pieces::RIFLEMAN, PLAYER, Position::new(2, 6))
-            .unwrap();
-        b.sandbox_place(2, pieces::PISTOL_INFANTRY, PLAYER, Position::new(4, 6))
-            .unwrap();
-        b.sandbox_place(3, pieces::TANK, PLAYER, Position::new(7, 6))
-            .unwrap();
-        b.sandbox_place(101, PAWN, ENEMY, Position::new(3, 5))
-            .unwrap();
-        b.sandbox_place(102, PAWN, ENEMY, Position::new(2, 5))
-            .unwrap();
-        b.sandbox_place(103, PAWN, ENEMY, Position::new(7, 5))
-            .unwrap();
-        assert_eq!(b.volley_shot_count(), 3);
-        let chances: Vec<_> = b
-            .volley_shots()
-            .into_iter()
-            .filter(|(_, _, _, target, _)| target.id == 101)
-            .map(|(_, shooter, _, _, chance)| (shooter.kind, chance))
-            .collect();
-        assert_eq!(
-            chances,
-            vec![(pieces::RIFLEMAN, 95), (pieces::PISTOL_INFANTRY, 100)]
-        );
-        let mut firing = b.clone();
-        let kind = CardKind::Volley;
-        let mut cards = crate::cards::CardCombat {
-            hand: vec![crate::cards::Card { id: 1, kind }],
-            mana: 3,
-            ..Default::default()
-        };
-        let (cost, shots) = crate::cards::resolve_selection(
-            &mut firing,
-            &mut cards,
-            0,
-            &CardSelection::default(),
-            kind.definition(),
-        )
-        .unwrap();
-        assert_eq!((cost, shots, cards.mana), (3, Some(3), 0));
-        assert_eq!(
-            firing
-                .events
-                .iter()
-                .filter(|event| event.contains("일제사격"))
-                .count(),
-            3
-        );
-        b.sandbox_remove(Position::new(3, 5)).unwrap();
-        assert_eq!(b.volley_shot_count(), 1);
-    }
-
-    #[test]
-    fn volley_pays_for_each_shot_even_when_it_misses() {
-        let mut b = Battle::sandbox().unwrap();
-        b.sandbox_place(1, pieces::RIFLEMAN, PLAYER, Position::new(3, 6))
-            .unwrap();
-        b.sandbox_place(101, PAWN, ENEMY, Position::new(3, 5))
-            .unwrap();
-        b.set_ammunition(0);
-        assert_eq!(b.volley_shot_count(), 1);
-        b.force_search_shot(false);
-        let kind = CardKind::Volley;
-        let mut cards = crate::cards::CardCombat {
-            hand: vec![crate::cards::Card { id: 1, kind }],
-            mana: 0,
-            ..Default::default()
-        };
-        let selection = CardSelection::default();
-        assert!(crate::cards::resolve_selection(
-            &mut b,
-            &mut cards,
-            0,
-            &selection,
-            kind.definition()
-        )
-        .is_err());
-        assert_eq!(cards.hand.len(), 1);
-        cards.mana = 1;
-        let (cost, shots) =
-            crate::cards::resolve_selection(&mut b, &mut cards, 0, &selection, kind.definition())
-                .unwrap();
-        assert_eq!((cost, shots), (1, Some(1)));
-        assert_eq!(cards.mana, 0);
-        assert_eq!(b.piece_position(101).unwrap().1.kind, PAWN);
-        assert_eq!(b.turn, PLAYER);
-    }
-
     fn fixture(kind: PieceType) -> Battle {
         let mut roster = Battle::standard_roster();
         roster.retain(|p| p.id == 1 || p.id == 5);
@@ -917,37 +819,6 @@ mod smoke {
         corpse.apply_resolved_card_effect(&action).unwrap();
         corpse.finish_forced_turn().unwrap();
         assert_eq!(corpse.turn, ENEMY);
-    }
-    #[test]
-    fn delivered_supper_ends_turn_after_card_resolution() {
-        let mut b = fixture(ROOK);
-        let to = Position::new(3, 3);
-        b.board
-            .set_piece(
-                to,
-                Some(Piece {
-                    id: 101,
-                    kind: pieces::CORPSE,
-                    owner: 2,
-                }),
-            )
-            .unwrap();
-        let kind = CardKind::DeliveredSupper;
-        let mut cards = crate::cards::CardCombat {
-            hand: vec![crate::cards::Card { id: 1, kind }],
-            mana: 10,
-            ..Default::default()
-        };
-        let selection = CardSelection {
-            target: None,
-            targets: vec![1, 101],
-            upgrades: vec![],
-        };
-        crate::cards::resolve_selection(&mut b, &mut cards, 0, &selection, kind.definition())
-            .unwrap();
-        assert_eq!(b.turn, ENEMY);
-        assert!(b.board.piece_at(to).unwrap().is_none());
-        assert_eq!(b.mechanics.corpse_eaten[0], 1);
     }
     #[test]
     fn death_threshold_persists_then_triggers_once_before_next_action() {

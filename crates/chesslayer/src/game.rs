@@ -56,7 +56,7 @@ impl Default for Progress {
     fn default() -> Self {
         Self {
             highest_floor: 1,
-            unlocked_squads: vec!["guardian".into(), "avenger".into()],
+            unlocked_squads: vec!["avenger".into()],
             final_unlocked: false,
             final_defeated: false,
         }
@@ -291,7 +291,6 @@ impl Game {
             cards_burned: 0,
             ammo: match squad.resource {
                 content::characters::ResourceRule::Mana => None,
-                content::characters::ResourceRule::ArtilleryAmmo { initial } => Some(initial),
             },
             reinforcement_used: false,
             hunger_protection_used: false,
@@ -394,8 +393,8 @@ impl Game {
         progress: Progress,
         mode: RunMode,
     ) -> Result<Self, String> {
-        if character != "avenger" && !progress.unlocked_squads.iter().any(|id| id == character) {
-            return Err("아직 해금되지 않은 부대입니다.".into());
+        if character != "avenger" {
+            return Err("이 버전에서는 복수귀 부대만 플레이할 수 있습니다.".into());
         }
         if floor > 4 {
             return Err("존재하지 않는 층입니다.".into());
@@ -933,225 +932,31 @@ impl Game {
     }
 }
 #[cfg(test)]
-mod shop_burn_tests {
+mod v1_content_tests {
     use super::*;
 
     #[test]
-    fn burn_removes_only_selected_copy_from_deck_and_all_piles() {
-        let mut game = Game::new("vanguard", 7).unwrap();
-        game.phase = RunPhase::Shop;
-        game.gold = 600;
-        let card = game.deck[0].clone();
-        game.add_card(card.kind);
-        let same_kind = game.deck.last().unwrap().id;
-        game.cards.hand.push(card.clone());
-        game.cards.draw.push(card.clone());
-        game.cards.discard.push(card.clone());
-        game.cards.exhausted.push(card.clone());
-
-        game.dispatch(Command::ShopBurn { id: card.id }).unwrap();
-
-        assert_eq!(game.gold, 500);
-        assert_eq!(game.cards_burned, 1);
-        assert_eq!(game.next_burn_cost(), 200);
-        assert!(!game.deck.iter().any(|other| other.id == card.id));
-        for pile in [
-            &game.cards.hand,
-            &game.cards.draw,
-            &game.cards.discard,
-            &game.cards.exhausted,
-        ] {
-            assert!(!pile.iter().any(|other| other.id == card.id));
-        }
-        assert!(game.deck.iter().any(|other| other.id == same_kind));
-        assert_eq!(game.snapshot().deck_count, game.deck.len());
-    }
-
-    #[test]
-    fn burn_cost_persists_across_shops_and_rejects_invalid_requests() {
-        let mut game = Game::new("vanguard", 8).unwrap();
-        let first = game.deck[0].id;
-        let second = game.deck[1].id;
-        game.gold = 199;
-        assert!(game.dispatch(Command::ShopBurn { id: first }).is_err());
-        game.phase = RunPhase::Shop;
-        assert!(game.dispatch(Command::ShopBurn { id: u32::MAX }).is_err());
-        game.dispatch(Command::ShopBurn { id: first }).unwrap();
-        assert_eq!(game.gold, 99);
-        assert!(game.dispatch(Command::ShopBurn { id: second }).is_err());
-        assert_eq!(game.gold, 99);
-        assert!(game.deck.iter().any(|card| card.id == second));
-        game.phase = RunPhase::Map;
-        game.phase = RunPhase::Shop;
-        game.gold = 300;
-        game.dispatch(Command::ShopBurn { id: second }).unwrap();
-        assert_eq!(game.gold, 100);
-        assert_eq!(game.next_burn_cost(), 300);
-        game.shop_offers = vec![CardKind::Stimpack];
-        let deck_size = game.deck.len();
-        game.dispatch(Command::ShopBuy { index: 0 }).unwrap();
-        assert_eq!(game.gold, 80);
-        assert_eq!(game.deck.len(), deck_size + 1);
-        assert_eq!(game.next_burn_cost(), 300);
-        assert_eq!(Game::new("vanguard", 8).unwrap().next_burn_cost(), 100);
-    }
-}
-
-#[cfg(test)]
-mod card_pile_view_tests {
-    use super::*;
-
-    #[test]
-    fn combat_snapshot_lists_piles_without_draw_order() {
-        let mut game = Game::new("vanguard", 2026).unwrap();
-        game.dispatch(Command::SelectNode { id: 0 }).unwrap();
-        let state = game.snapshot();
-        let ids: Vec<_> = state.draw_pile.iter().map(|card| card.id).collect();
-        let mut sorted = ids.clone();
-        sorted.sort_unstable();
-        assert_eq!(ids, sorted);
-        assert_eq!(state.draw_pile.len(), state.draw_count);
-        assert_eq!(state.discard_pile.len(), state.discard_count);
-        assert_eq!(state.exhausted_pile.len(), state.exhausted_count);
-        assert_eq!(
-            state.hand.len() + state.draw_count + state.discard_count + state.exhausted_count,
-            state.deck_count
-        );
-    }
-}
-
-#[cfg(test)]
-mod developer_upgrade_tests {
-    use super::*;
-
-    #[test]
-    fn changes_branches_and_resets_the_permanent_king_without_moving_it() {
-        let mut game = Game::new("guardian", 2026).unwrap();
-        let king = game
-            .battle
-            .player_pieces()
-            .iter()
-            .find(|p| p.kind == content::pieces::KING)
-            .unwrap()
-            .clone();
-        game.phase = RunPhase::Combat;
-        game.battle.configure_v030(&[]);
-        for target in [
-            content::pieces::JOCKEY,
-            content::pieces::HILL_KING,
-            content::pieces::KING,
-        ] {
-            game.dispatch(Command::DeveloperSetUpgrade {
-                id: king.id,
-                target,
-            })
-            .unwrap();
-            let current = game
-                .battle
-                .player_pieces()
+    fn generated_shop_and_rewards_use_only_avenger_cards() {
+        let mut game = Game::new("avenger", 19).unwrap();
+        let allowed = content::cards::avenger::ALL;
+        for _ in 0..32 {
+            game.generate_shop_offers();
+            assert!(game.shop_offers.iter().all(|card| allowed.contains(card)));
+            game.generate_rewards();
+            assert!(game
+                .rewards
                 .iter()
-                .find(|p| p.id == king.id)
-                .unwrap();
-            assert_eq!(current.kind, target);
-            assert_eq!(current.position, king.position);
-            assert_eq!(
-                game.battle
-                    .board
-                    .piece_at(king.position.unwrap())
-                    .unwrap()
-                    .unwrap()
-                    .kind,
-                target
-            );
-            if target == content::pieces::HILL_KING {
-                assert!(!game.battle.has_ward(king.id));
-                assert!(!game
-                    .battle
-                    .status_labels(king.id)
-                    .iter()
-                    .any(|label| label.contains("민첩")));
-            }
+                .all(|reward| matches!(reward, Reward::Card(card) if allowed.contains(card))));
         }
-        assert!(game
-            .battle
-            .player_pieces()
-            .iter()
-            .find(|p| p.id == king.id)
-            .unwrap()
-            .upgrades
-            .is_empty());
-        assert!(game
-            .dispatch(Command::DeveloperSetUpgrade {
-                id: king.id,
-                target: content::pieces::PAWN
-            })
-            .is_err());
     }
 }
-
-#[cfg(test)]
-mod relic_resource_tests {
-    use super::*;
-
-    #[test]
-    fn volley_hand_cost_tracks_the_current_board() {
-        let mut game = Game::new("artillery", 2026).unwrap();
-        game.phase = RunPhase::Combat;
-        game.battle = Battle::sandbox().unwrap();
-        game.cards.hand = vec![Card {
-            id: 1,
-            kind: CardKind::Volley,
-        }];
-        game.cards.mana = 2;
-        let empty = &game.snapshot().hand[0];
-        assert_eq!(empty.definition.cost, 0);
-        assert!(empty.disabled_reason.is_some());
-        game.battle
-            .sandbox_place(1, content::pieces::RIFLEMAN, PLAYER, Position::new(3, 6))
-            .unwrap();
-        game.battle
-            .sandbox_place(101, content::pieces::PAWN, ENEMY, Position::new(3, 5))
-            .unwrap();
-        let ready = &game.snapshot().hand[0];
-        assert_eq!(ready.definition.cost, 1);
-        assert!(ready.disabled_reason.is_none());
-        game.battle.sandbox_remove(Position::new(3, 5)).unwrap();
-        assert_eq!(game.snapshot().hand[0].definition.cost, 0);
-    }
-
-    #[test]
-    fn six_cost_card_uses_the_same_resolution_and_payment_path() {
-        let mut game = Game::new("vanguard", 2026).unwrap();
-        game.dispatch(Command::SelectNode {
-            id: game.available_nodes()[0],
-        })
-        .unwrap();
-        game.cards.hand.clear();
-        game.cards.hand.push(Card {
-            id: 1,
-            kind: CardKind::Ward,
-        });
-        let mut definition = CardKind::Ward.definition();
-        definition.cost = 6;
-        game.cards.mana = 5;
-        assert!(game.resolve_card(0, Some(5), definition.clone()).is_err());
-        assert!(!game.battle.has_ward(5));
-        assert_eq!(game.cards.hand.len(), 1);
-        game.cards.mana = 6;
-        game.resolve_card(0, Some(5), definition).unwrap();
-        assert!(game.battle.has_ward(5));
-        assert_eq!(game.cards.mana, 0);
-        assert!(game.cards.hand.is_empty());
-    }
-}
-
 #[cfg(test)]
 mod combat_event_tests {
     use super::*;
 
     #[test]
     fn snapshot_serializes_resolved_events_and_next_command_clears_them() {
-        let mut game = Game::new("guardian", 1).unwrap();
+        let mut game = Game::new("avenger", 1).unwrap();
         game.battle.combat_events.push(CombatEvent::Shotgun {
             actor_id: 100,
             from: Position::new(4, 4),
@@ -1188,7 +993,7 @@ mod final_boss_tests {
 
     #[test]
     fn recorded_boss_selection_replays_without_changing_live_plan_enforcement() {
-        let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
+        let mut game = Game::new_run("avenger", 19, 0, Progress::default()).unwrap();
         game.dispatch(Command::SelectNode { id: 0 }).unwrap();
         game.dispatch(Command::EndTurn).unwrap();
         let announced = game.boss_plans.first().unwrap().action.clone();
@@ -1225,7 +1030,7 @@ mod final_boss_tests {
 
     #[test]
     fn final_battle_publishes_and_keeps_the_planned_action_during_player_turn() {
-        let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
+        let mut game = Game::new_run("avenger", 19, 0, Progress::default()).unwrap();
         game.dispatch(Command::SelectNode { id: 0 }).unwrap();
         let announced = game.boss_plans.first().unwrap().action.clone();
         let announced_turn: Vec<_> = game
@@ -1248,6 +1053,7 @@ mod final_boss_tests {
                 .count(),
             1
         );
+        game.battle.grant_move_rights(9, 1).unwrap();
         let move_view = game.snapshot().moves.into_iter().next().unwrap();
         game.dispatch(Command::Move {
             from: move_view.from,
@@ -1286,7 +1092,7 @@ mod final_boss_tests {
 
     #[test]
     fn boss_move_and_shot_are_separate_steps_of_the_same_turn() {
-        let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
+        let mut game = Game::new_run("avenger", 19, 0, Progress::default()).unwrap();
         game.dispatch(Command::SelectNode { id: 0 }).unwrap();
         let mut projected = game.battle.clone();
         projected.end_turn().unwrap();
@@ -1330,96 +1136,5 @@ mod final_boss_tests {
             .combat_events
             .iter()
             .any(|event| matches!(event, CombatEvent::Shotgun { from, .. } if *from == at)));
-    }
-
-    #[test]
-    fn legacy_enemy_choice_keeps_sequence_and_finishes_old_turn_after_resolution() {
-        let mut game = Game::new_run("guardian", 19, 0, Progress::default()).unwrap();
-        game.dispatch(Command::SelectNode { id: 0 }).unwrap();
-        game.battle = Battle::new(BattleStart {
-            players: vec![
-                PlayerPiece {
-                    id: 1,
-                    kind: pieces::KING,
-                    origin: Position::new(7, 7),
-                    position: Some(Position::new(7, 7)),
-                    moved: false,
-                    upgrades: vec![],
-                    persistent: Default::default(),
-                },
-                PlayerPiece {
-                    id: 2,
-                    kind: pieces::PAWN,
-                    origin: Position::new(3, 4),
-                    position: Some(Position::new(3, 4)),
-                    moved: false,
-                    upgrades: vec![],
-                    persistent: Default::default(),
-                },
-            ],
-            encounter: Encounter {
-                enemies: vec![EnemyPiece {
-                    id: 100,
-                    kind: pieces::TRIBAL_DICTATOR,
-                    position: Position::new(4, 4),
-                }],
-                royal_id: 100,
-                additional_royal_ids: vec![],
-            },
-        })
-        .unwrap();
-        game.battle
-            .v030_card_effect(
-                crate::content::cards::CardKind::ReliefForce,
-                &crate::content::cards::CardSelection::single(None),
-            )
-            .unwrap();
-        game.dispatch(Command::EndTurn).unwrap();
-        let from = Position::new(4, 4);
-        let (index, capture) = game
-            .battle
-            .legal_actions(from)
-            .unwrap()
-            .into_iter()
-            .enumerate()
-            .find(|(_, action)| action.first.move_to == Position::new(3, 4))
-            .unwrap();
-        game.boss_plans = vec![Game::describe_boss_action(&game.battle, capture.clone())];
-        game.boss_sequence_step = 0;
-        let round = game.round;
-        game.replay_legacy_command(Command::EnemyStepSelected {
-            from: Some(cell(from)),
-            index: Some(index),
-        })
-        .unwrap();
-        let reaction = game.battle.pending_choice().unwrap();
-        assert_eq!(game.battle.turn, ENEMY);
-        assert_eq!(game.boss_sequence_step, 1);
-        game.finish_legacy_replay();
-        assert!(game.legacy_boss_choice);
-        assert_eq!(game.boss_sequence_step, 1);
-        assert_eq!(game.boss_plans[0].action, capture);
-
-        let hash = game.battle.search_hash();
-        assert!(game
-            .dispatch(Command::EnemyStepSelected {
-                from: None,
-                index: None,
-            })
-            .is_err());
-        assert_eq!(game.battle.search_hash(), hash);
-        assert_eq!(game.boss_sequence_step, 1);
-        assert!(game.legacy_boss_choice);
-        game.dispatch(Command::ResolveEffect {
-            target: reaction.targets[0],
-        })
-        .unwrap();
-        assert_eq!(game.battle.turn, PLAYER);
-        assert_eq!(game.round, round + 1);
-        assert_eq!(game.battle.boss().unwrap().ammo, 2);
-        assert!(game.battle.pending_choice().is_none());
-        assert!(!game.legacy_boss_choice);
-        assert_eq!(game.boss_sequence_step, 0);
-        assert!(!game.boss_plans.is_empty());
     }
 }
