@@ -5,7 +5,7 @@ pub const BUTCHER_CART: PieceType = 51;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 50,
-    description: "룩 행마. 전투당 1회, 자신이 시체를 포획하면 카드 1장을 뽑습니다.",
+    description: "룩 행마. 시체 포획 시 카드 1장을 뽑고 마나 1을 얻습니다.",
     upgrades: &[super::UpgradeDefinition {
         target: super::FUNERAL_CART,
         key: "funeral_cart",

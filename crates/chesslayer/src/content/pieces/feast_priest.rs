@@ -6,7 +6,7 @@ pub const FEAST_PRIEST: PieceType = 56;
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 45,
     description:
-        "비숍 행마. 전투당 1회, 시체 포획 시 두 칸 이내 다른 아군 하나에 민첩 1을 부여합니다.",
+        "도취의 사제 능력 계승. 시체 포획 시 직접 선택한 아군 하나에 행마권 1을 부여합니다.",
     upgrades: &[
         super::UpgradeDefinition {
             target: super::LOCUST_HIGH_PRIEST,

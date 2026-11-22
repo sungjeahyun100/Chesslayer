@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import type { Snapshot } from "../types";
 import type { GameInput } from "../game/useGameInput";
 import type { BoardMove } from "../game/useGamePresentation";
@@ -14,6 +14,8 @@ import { CombatEffects } from "./CombatEffects";
 import { StatusEffects } from "./StatusEffects";
 import type { StatusChange } from "../game/statusVisuals";
 import { statusVisuals } from "../game/statusVisuals";
+import { movementInfo } from "../components/pieceInfo";
+import { PieceStatuses } from "../PieceStatuses";
 
 export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, boardRevision, boardRef, animation, statusEffects }: {
   state: Snapshot; input: GameInput; rewardUpgradeOpen: boolean; lastEnemyMove: BoardMove | null;
@@ -23,6 +25,8 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
   const turn = state.turn === 0;
   const restView = state.phase === "rest" || rewardUpgradeOpen;
   const boardPieces = rewardUpgradeOpen ? state.next_battle_pieces : state.pieces;
+  const [detailId, setDetailId] = useState<number | null>(null);
+  const detailPiece = boardPieces.find((piece) => piece.id === detailId);
   const restPiece = state.rest_options.find((piece) => piece.id === restChoice?.id);
   const previewKey = state.upgrade_paths.find((path) => path.from === restPiece?.kind && path.to === restChoice?.target)?.to_key;
   const inspectedEnemy = state.phase === "combat" ? state.pieces.find((piece) => piece.id === enemyInspection?.piece_id && piece.cell === enemyInspection?.cell) : undefined;
@@ -32,7 +36,8 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
   const enemyCaptures = new Set(enemyInspection?.moves.flatMap((move) => move.captures) ?? []);
   const enemyMoves = new Set(enemyInspection?.moves.map((move) => move.to) ?? []);
   const enemyRoutes = [...new Map((enemyInspection?.moves ?? []).filter((move) => move.route).map((move) => [move.route!.join(","), move.route!])).values()];
-  const annotations = useBoardAnnotations(state.phase === "combat", input.policy.board, boardRevision);
+  const annotations = useBoardAnnotations(state.phase === "combat", input.policy.board, boardRevision,
+    (cell) => boardPieces.some((piece) => piece.cell === cell));
   const { boardAnnotations, annotationPreview } = annotations;
   return (
     <div className="board-frame" ref={boardRef}>
@@ -42,6 +47,15 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
         ))}
       </div>
       <ChessBoard role="group" aria-label="체스 보드" {...annotations.handlers}
+        onContextMenu={(event) => {
+          annotations.handlers.onContextMenu(event);
+          if (annotations.consumeContextDrag()) return;
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const file = Math.floor((event.clientX - bounds.left) / bounds.width * 8);
+          const rank = Math.floor((event.clientY - bounds.top) / bounds.height * 8);
+          const piece = boardPieces.find((candidate) => candidate.cell === rank * 8 + file);
+          if (piece) { event.preventDefault(); setDetailId(piece.id); }
+        }}
         renderSquare={(i) => {
           const piece = boardPieces.find((p) => p.cell === i);
           const legal =
@@ -55,6 +69,7 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
           const abilityTarget = activeAbility?.targets.find((target) => target.cell === i);
           const preview = activeAbility?.targets.find((target) => target.cell === hoveredAbilityTarget) ?? (activeAbility?.targets.length === 1 ? activeAbility.targets[0] : undefined);
           const fallout = state.fallout.find((effect) => effect.cell === i);
+          const plague = state.plague?.find((effect) => effect.cell === i);
           const pathIndex = preview?.paths.findIndex((path) => path.includes(i)) ?? -1;
           const targetId = piece?.id ?? 10000 + i;
           const effectTarget = state.effect_choice?.targets.includes(targetId);
@@ -69,8 +84,8 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
               data-enemy-move={enemyMove || undefined}
               data-enemy-capture={enemyCapture || undefined}
               data-last-enemy-move={state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) || undefined}
-              className={`${state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) ? "last-enemy-move" : ""} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${fallout ? "fallout-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
-              title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : fallout ? `방사성 낙진 · 남은 ${fallout.remaining}라운드 · 턴 종료 시 제거` : piece ? statusVisuals(piece).map((status) => `${status.label}: ${status.description}`).join("\n") || (piece.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined) : undefined}
+              className={`${state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) ? "last-enemy-move" : ""} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${fallout ? "fallout-cell" : ""} ${plague ? "plague-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
+              title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : plague ? `역병 · 남은 ${plague.remaining}라운드 · 진입 시 식재료와 페스트 3` : fallout ? `방사성 낙진 · 남은 ${fallout.remaining}라운드 · 턴 종료 시 제거` : piece ? statusVisuals(piece).map((status) => `${status.label}: ${status.description}`).join("\n") || (piece.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined) : undefined}
               onMouseEnter={() => { if (abilityTarget) input.hoverAbility(i); }}
               onMouseLeave={() => { if (hoveredAbilityTarget === i) input.hoverAbility(null); }}
               onClick={() => input.clickSquare(i)}
@@ -137,6 +152,17 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
           </svg>}
         effects={<><CombatEffects key={animation?.sequence ?? "idle"} plan={animation} /><StatusEffects effects={statusEffects} /></>}
       />
+      {detailPiece && <div className="piece-detail-backdrop" role="presentation" onClick={() => setDetailId(null)}>
+        <section className="piece-detail-popup" role="dialog" aria-modal="true" aria-label={`${detailPiece.name} 상세정보`} onClick={(event) => event.stopPropagation()} onKeyDown={(event) => { if (event.key === "Escape") setDetailId(null); }}>
+          <button type="button" className="text-button piece-detail-close" autoFocus onClick={() => setDetailId(null)}>닫기 ×</button>
+          <header><PieceImage pieceKey={detailPiece.key} owner={detailPiece.owner} /><div><h2>{detailPiece.name}</h2><p>{detailPiece.royal ? "★ 로얄 · " : ""}{detailPiece.owner === 0 ? "아군" : detailPiece.owner === 1 ? "적군" : "중립"}</p></div></header>
+          <h3>행마법</h3><p>{movementInfo(detailPiece).movement}</p>
+          <h3>특수능력</h3><p>{movementInfo(detailPiece).special || detailPiece.description || "없음"}</p>
+          {detailPiece.description && <p>{detailPiece.description}</p>}
+          {state.abilities?.filter((ability) => ability.piece_id === detailPiece.id).map((ability) => <p key={ability.kind}><b>{ability.name}</b> · {ability.description}</p>)}
+          <h3>상태이상</h3><PieceStatuses statuses={detailPiece.statuses} details />
+        </section>
+      </div>}
       {promotion && (
         <PromotionPicker
           options={promotion.options}

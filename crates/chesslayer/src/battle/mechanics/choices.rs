@@ -23,36 +23,6 @@ impl Battle {
             });
         }
     }
-    pub(in crate::battle) fn corpse_targets(&self, at: Position, range: i32) -> Vec<PieceId> {
-        self.board
-            .cells()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, p)| {
-                p.filter(|p| {
-                    p.kind == pieces::CORPSE
-                        && distance(at, Position::new(i as i32 % 8, i as i32 / 8)) <= range
-                })
-            })
-            .filter(|p| {
-                self.piece_position(p.id)
-                    .is_some_and(|(pos, _)| !self.empty_adjacent(pos).is_empty())
-            })
-            .map(|p| p.id)
-            .collect()
-    }
-    pub(in crate::battle) fn empty_adjacent(&self, pos: Position) -> Vec<PieceId> {
-        [(1, 0), (-1, 0), (0, 1), (0, -1)]
-            .into_iter()
-            .filter_map(|(dx, dy)| {
-                let to = Position::new(pos.file + dx, pos.rank + dy);
-                self.board
-                    .index(to)
-                    .filter(|_| self.board.piece_at(to).ok().flatten().is_none())
-                    .map(|i| 10000 + i as u32)
-            })
-            .collect()
-    }
     pub(in crate::battle) fn choose_ally(
         &mut self,
         at: Position,
@@ -99,18 +69,27 @@ impl Battle {
             self.mechanics.choices.pop_front();
             match choice.effect {
                 ChoiceEffect::Agility(n) => self.grant_agility(target, n),
-                ChoiceEffect::Hunger => self.worsen_hunger(target),
-                ChoiceEffect::Corpse => {
-                    let (pos, _) = self.piece_position(target).ok_or("시체가 없습니다.")?;
-                    let cells = self.empty_adjacent(pos);
-                    self.enqueue(
-                        "연회의 수레: 인접한 빈 칸 선택",
-                        cells,
-                        ChoiceEffect::Slide(target),
-                        false,
-                    );
+                ChoiceEffect::MoveRights(n) => {
+                    self.grant_move_rights(target, n)
+                        .map_err(|e| format!("{e:?}"))?;
                 }
-                ChoiceEffect::Slide(id) | ChoiceEffect::Relocate(id) => {
+                ChoiceEffect::Hunger => self.worsen_hunger(target),
+                ChoiceEffect::RelieveHunger => {
+                    let s = self.mechanics.statuses.entry(target).or_default();
+                    s.hunger = s.hunger.saturating_sub(1);
+                }
+                ChoiceEffect::Madness(n) => {
+                    let s = self.mechanics.statuses.entry(target).or_default();
+                    s.madness = s.madness.saturating_add(n);
+                    self.resolve_conscience(target)
+                        .map_err(|e| format!("{e:?}"))?;
+                }
+                ChoiceEffect::Remove => {
+                    if let Some((at, _)) = self.piece_position(target) {
+                        self.kill_at(at, false).map_err(|e| format!("{e:?}"))?;
+                    }
+                }
+                ChoiceEffect::Relocate(id) => {
                     let (from, p) = self.piece_position(id).ok_or("기물이 없습니다.")?;
                     let cell = target.checked_sub(10000).ok_or("빈 칸을 선택하세요.")?;
                     let to = Position::new((cell % 8) as i32, (cell / 8) as i32);
@@ -123,6 +102,7 @@ impl Battle {
                     self.board
                         .set_piece(to, Some(p))
                         .map_err(|e| format!("{e:?}"))?;
+                    self.apply_plague_on_entry(p.id);
                     if matches!(choice.effect, ChoiceEffect::Relocate(_)) {
                         self.queue_formation();
                     }

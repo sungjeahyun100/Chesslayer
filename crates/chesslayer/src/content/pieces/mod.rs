@@ -240,6 +240,25 @@ pub fn upgrade_lineage(kind: PieceType, upgrades: &[String]) -> Vec<PieceType> {
 pub fn owned_matches_kind(piece: &crate::battle::PlayerPiece, kind: PieceType) -> bool {
     upgrade_lineage(piece.kind, &piece.upgrades).contains(&kind)
 }
+/// Pieces outside the player roster stay available to encounters and the compendium.
+pub fn is_monster_only(kind: PieceType) -> bool {
+    matches!(
+        kind,
+        VANGUARD_COMMANDER
+            | MOUNTED_COMMANDER
+            | VANGUARD_OFFICER
+            | MOUNTED_OFFICER
+            | SCOUT
+            | PHANTOM_SCOUT
+            | WAREHOUSE
+            | AMAZON
+            | EMPEROR
+            | CENTAUR
+            | LOBSTER
+            | TRIBAL_DICTATOR
+            | CORPSE
+    )
+}
 impl PieceDefinition {
     pub const fn new(
         kind: PieceType,
@@ -413,8 +432,6 @@ pub fn is_royal(kind: PieceType) -> bool {
             | TOAST_LORD
             | ECSTATIC_LORD
             | ETERNAL_GUEST
-            | SPECIAL_COMMANDER
-            | SHADOW_COMMANDER
             | TRIBAL_DICTATOR
     )
 }
@@ -446,8 +463,14 @@ pub fn previous_upgrade(kind: PieceType) -> Option<PieceType> {
 
 pub fn is_infantry(kind: PieceType) -> bool {
     let mut current = kind;
-    while let Some(parent) = previous_upgrade(current) {
+    loop {
+        if matches!(current, AXE_INFANTRY | RIFLEMAN) {
+            return true;
+        }
+        let Some(parent) = previous_upgrade(current) else {
+            break;
+        };
         current = parent;
     }
-    matches!(current, AXE_INFANTRY | RIFLEMAN)
+    false
 }

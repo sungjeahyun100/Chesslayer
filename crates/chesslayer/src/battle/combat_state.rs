@@ -270,7 +270,14 @@ impl Battle {
         let mut dead = vec![];
         for (&id, s) in &mut self.combat_stats {
             if self.turn == PLAYER {
-                s.move_rights = 0;
+                if !self
+                    .mechanics
+                    .statuses
+                    .get(&id)
+                    .is_some_and(|status| status.spirit_bomb)
+                {
+                    s.move_rights = 0;
+                }
                 s.name = None;
                 s.max_health -= s.temporary_health;
                 if id == self.boss_id {

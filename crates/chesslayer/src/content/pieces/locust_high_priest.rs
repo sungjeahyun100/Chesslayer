@@ -5,7 +5,7 @@ pub const LOCUST_HIGH_PRIEST: PieceType = 57;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 55,
-    description: "향연의 사제 능력의 민첩 부여량이 2가 됩니다.",
+    description: "향연의 사제 능력 계승. 시체 포획 시 선택한 아군에 행마권 2를 부여합니다.",
     family: super::PieceFamily::Bishop,
     ..PieceDefinition::new(
         LOCUST_HIGH_PRIEST,

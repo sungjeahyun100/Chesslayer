@@ -6,7 +6,7 @@ pub const RED_LADY: PieceType = 48;
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 100,
     description:
-        "퀸 행마. 전투당 1회, 인접한 아군 비로얄을 제자리에서 시체로 만듭니다. 행동 1회 소모.",
+        "퀸 행마. 턴당 1회 묻지마 살해로 주변 8칸의 양측 비로얄 하나를 제자리에서 시체로 만듭니다.",
     upgrades: &[
         super::UpgradeDefinition {
             target: super::BANQUET_LADY,

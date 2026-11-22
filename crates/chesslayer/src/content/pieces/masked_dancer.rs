@@ -5,7 +5,7 @@ pub const MASKED_DANCER: PieceType = 60;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 45,
-    description: "나이트 행마. 추가 시체 포획 범위가 대각선을 포함한 인접 여덟 칸으로 늘어납니다.",
+    description: "나이트 행마와 주변 8칸 시체 포획. 시체 섭취의 부정적 효과를 받지 않고 포획 시 행마권 1을 얻습니다.",
     upgrades: &[
         super::UpgradeDefinition {
             target: super::ECSTATIC_DANCER,

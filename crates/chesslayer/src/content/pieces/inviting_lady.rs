@@ -5,7 +5,7 @@ pub const INVITING_LADY: PieceType = 50;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 110,
-    description: "붉은 귀부인 능력에 제물 능력 사용 시 두 칸 이내 적 비로얄 하나의 허기 한 단계 악화를 더합니다.",
+    description: "붉은 귀부인 능력 계승. 묻지마 살해 사용 시 임의의 적 비로얄 하나의 허기를 한 단계 악화합니다.",
     ..PieceDefinition::new(INVITING_LADY, "inviting_lady", "초대의 귀부인", movement)
 };
 

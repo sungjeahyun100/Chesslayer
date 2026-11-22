@@ -393,6 +393,26 @@ impl Battle {
         Ok(())
     }
     pub(in crate::battle) fn sync_players(&mut self) {
+        if self.board.cells().iter().flatten().any(|p| {
+            matches!(
+                crate::content::pieces::definition(p.kind).map(|d| d.key),
+                Some("smiling_king" | "toast_lord" | "ecstatic_lord" | "eternal_guest")
+            )
+        }) {
+            for piece in self
+                .board
+                .cells()
+                .iter()
+                .flatten()
+                .filter(|p| p.kind != pieces::CORPSE)
+            {
+                self.mechanics
+                    .statuses
+                    .entry(piece.id)
+                    .or_default()
+                    .ingredient = true;
+            }
+        }
         if self.boss.is_some()
             && !self
                 .board

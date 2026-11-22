@@ -5,8 +5,7 @@ pub const ECSTATIC_DANCER: PieceType = 61;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 55,
-    description:
-        "가면의 무희 행마 유지. 전투당 첫 시체 포획 시 황충의 축복에 더해 민첩 1을 추가합니다.",
+    description: "나이트 행마와 주변 8칸 시체 포획. 시체 섭취의 부정적 효과를 받지 않고 포획 시 행마권 2를 얻습니다.",
     family: super::PieceFamily::Knight,
     ..PieceDefinition::new(ECSTATIC_DANCER, "ecstatic_dancer", "환희의 무희", movement)
 };

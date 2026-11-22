@@ -85,9 +85,14 @@ export function movementInfo(piece: Piece): { movement: string; special?: string
   const movement = diceMovement
     ? `${piece.key === "jockey" ? "킹 + " : ""}🎲 ${piece.dice_roll} · ${diceMovement}`
     : simpleMovement[piece.key] ?? (piece.description.split(".")[0] || piece.name);
-  const special = specialMovement[piece.key] ?? (piece.description.split(/(?<=\.)\s+/).slice(1)
+  const revised = new Set(["procession_follower", "hungry_follower", "glutton_follower", "inviting_follower",
+    "frenzied_dancer", "masked_dancer", "ecstatic_dancer", "tempting_dancer",
+    "intoxicated_priest", "feast_priest", "locust_high_priest", "hunger_priest",
+    "butcher_cart", "funeral_cart", "slaughter_cart", "feast_cart",
+    "masked_lady", "red_lady", "banquet_lady", "inviting_lady",
+    "smiling_king", "toast_lord", "ecstatic_lord", "eternal_guest"]);
+  const special = (revised.has(piece.key) ? piece.description : specialMovement[piece.key]) ?? (piece.description.split(/(?<=\.)\s+/).slice(1)
     .filter((sentence) => /전투당|사격|자폭|탄약|허기|민첩|카드|가호|낙진|포격|폭발|흡수|축복|제물|폭사|패배/.test(sentence))
     .join(" ") || undefined);
   return { movement, special };
 }
-

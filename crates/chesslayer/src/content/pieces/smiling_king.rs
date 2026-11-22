@@ -5,7 +5,7 @@ pub const SMILING_KING: PieceType = 44;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 80,
-    description: "로얄. 전투당 1회, 두 칸 이내 아군의 시체 포획 시 카드 1장을 뽑습니다.",
+    description: "로얄. 양 진영의 모든 기물에 식재료를 부여합니다. 전투당 1회 두 칸 이내 아군의 시체 포획 시 카드 1장을 뽑습니다.",
     upgrades: &[super::UpgradeDefinition {
         target: super::TOAST_LORD,
         key: "toast_lord",

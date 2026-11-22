@@ -85,6 +85,7 @@ impl Battle {
         }
         for (&position, piece) in targets.iter().zip(shuffled) {
             self.board.set_piece(position, Some(piece))?;
+            self.apply_plague_on_entry(piece.id);
         }
         self.events.push(format!(
             "{}: 적 기물 {}기의 위치를 바꾸었습니다.",
@@ -229,6 +230,11 @@ impl Battle {
             ][usize::from(die - 1)]
         });
         let mut actions = self.piece_actions(rolled_kind.unwrap_or(piece.kind), from)?;
+        if self.card_movement && self.turn == PLAYER && self.stats(piece.id).move_rights > 0 {
+            if let Some(action) = self.en_passant_action(piece.id) {
+                actions.push(action);
+            }
+        }
         if piece.kind == pieces::JOCKEY && rolled_kind.is_some_and(|kind| kind != pieces::KING) {
             actions.extend(self.piece_actions(pieces::KING, from)?);
         }

@@ -26,6 +26,7 @@
 .sandbox-v2-center { display: flex; flex-direction: column; align-items: stretch; }
 .sandbox-v2-toolbar { display: flex; flex-wrap: wrap; justify-content: center; gap: 5px; margin-bottom: 8px; }
 .sandbox-v2-toolbar > div { display: flex; gap: 4px; }
+.sandbox-resources { align-self: center; white-space: nowrap; color: #52674d; font-size: 11px; padding: 4px 6px; }
 .sandbox-v2-board { width: min(100%, 49svh, 510px); margin: 0 auto; }
 .sandbox-v2-board .square .piece-image { width: 92%; height: 92%; object-fit: contain; z-index: 2; }
 .sandbox-v2-board .square .capture-dot { z-index: 3; pointer-events: none; }

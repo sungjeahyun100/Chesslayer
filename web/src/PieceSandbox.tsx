@@ -12,7 +12,7 @@ type BoardAction = { index: number; target: number; destination: number; capture
 type BoardSnapshot = {
   pieces: BoardPiece[]; actions: BoardAction[]; choice: { name: string; targets: number[]; can_finish: boolean } | null;
   self_destruct: { name: string; blast: number[] } | null; fallout: { cell: number; remaining: number }[];
-  events: string[]; relics: string[];
+  events: string[]; relics: string[]; mana: number; ammo: number;
 };
 
 function rootsFor(entries: CompendiumSquad[], kind: number, preferred: string) {
@@ -136,6 +136,7 @@ export function PieceSandbox({ entries, onBack }: { entries: CompendiumSquad[]; 
       </aside>
       <section className="sandbox-v2-center">
         <div className="sandbox-v2-toolbar"><div role="group" aria-label="배치 진영"><button className={owner === 0 ? "selected" : ""} onClick={() => { setOwner(0); setPlacing(true); setSelected(null); }}>백 배치</button><button className={owner === 1 ? "selected" : ""} onClick={() => { setOwner(1); setPlacing(true); setSelected(null); }}>흑 배치</button></div>
+          <span className="sandbox-resources">마나 {snapshot.mana} · 포탄량 {snapshot.ammo} / 10</span>
           <button className={placing ? "selected" : ""} onClick={() => { setPlacing(true); setSelected(null); }}>기물 배치</button>
           <button onClick={() => run(() => engine.current!.progress_effects(), true)}>효과 진행</button>
           <button onClick={() => { if (run(() => engine.current!.clear())) origins.current.clear(); }}>보드 초기화</button></div>

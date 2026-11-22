@@ -5,7 +5,7 @@ pub const BANQUET_LADY: PieceType = 49;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 110,
-    description: "붉은 귀부인 능력에 제물 능력 사용 시 카드 1장 드로우를 더합니다.",
+    description: "붉은 귀부인 능력 계승. 묻지마 살해 사용 시 카드 1장을 뽑습니다.",
     ..PieceDefinition::new(BANQUET_LADY, "banquet_lady", "만찬의 귀부인", movement)
 };
 

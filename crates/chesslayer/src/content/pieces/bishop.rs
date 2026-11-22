@@ -20,6 +20,18 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
             effect: super::bouncing_bishop::DEFINITION.description,
             requirement: "살아 있는 일반 비숍 · 쉼터 행동 1회 · 추가 비용 없음",
         },
+        super::UpgradeDefinition {
+            target: super::RIFLEMAN,
+            key: "rifleman",
+            effect: super::rifleman::DEFINITION.description,
+            requirement: "살아 있는 비숍 · 쉼터 행동 1회",
+        },
+        super::UpgradeDefinition {
+            target: super::INTOXICATED_PRIEST,
+            key: "intoxicated_priest",
+            effect: super::intoxicated_priest::DEFINITION.description,
+            requirement: "살아 있는 비숍 · 쉼터 행동 1회",
+        },
     ],
     ..PieceDefinition::new(BISHOP, "bishop", "비숍", movement)
 };

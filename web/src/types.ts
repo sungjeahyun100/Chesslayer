@@ -174,6 +174,7 @@ export interface Snapshot {
   ammo_capacity: number | null;
   abilities: Ability[];
   fallout: { cell: number; remaining: number }[];
+  plague: { cell: number; remaining: number }[];
   effect_choice: { name: string; targets: number[]; can_finish: boolean } | null;
 }
 export type Command =

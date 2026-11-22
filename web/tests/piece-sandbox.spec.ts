@@ -27,3 +27,22 @@ test("sandbox relic controls remain available for the Avenger", async ({ page })
   await relic.locator("input").check();
   await expect(relic.locator("input")).toBeChecked();
 });
+
+test("sandbox rifle fire spends shells without spending mana", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "기물 테스트장" }).click();
+  const board = page.locator(".sandbox-v2-board");
+  const pieces = page.locator(".sandbox-v2-starters button");
+  await expect(page.locator(".sandbox-resources")).toContainText("포탄량 10 / 10");
+  await pieces.filter({ hasText: /^소총수$/ }).click();
+  await board.locator('[data-square="d4"]').click();
+  await page.getByRole("button", { name: "흑 배치" }).click();
+  await pieces.filter({ hasText: /^폰$/ }).click();
+  await board.locator('[data-square="d6"]').click();
+  await board.locator('[data-square="d4"]').click();
+  const mana = await page.locator(".sandbox-resources").textContent();
+  await page.getByRole("button", { name: /특수 능력 · 사격/ }).click();
+  await board.locator('[data-square="d6"]').click();
+  await expect(page.locator(".sandbox-resources")).toContainText("포탄량 9 / 10");
+  expect(await page.locator(".sandbox-resources").textContent()).toContain(mana!.split(" · ")[0]);
+});

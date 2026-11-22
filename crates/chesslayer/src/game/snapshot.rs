@@ -164,8 +164,8 @@ impl Game {
                     Some("발동 효과의 대상을 먼저 선택하세요.")
                 } else if self.phase != RunPhase::Combat || self.battle.turn != PLAYER {
                     Some("내 턴을 기다리세요.")
-                } else if c.kind == CardKind::Bounty && self.gold < 10 {
-                    Some("10골드 이상이 필요합니다.")
+                } else if c.kind == CardKind::Bounty && self.gold < 50 {
+                    Some("50골드 이상이 필요합니다.")
                 } else if self.cards.mana < if d.cost_per_target { 1 } else { d.cost } {
                     Some("마나가 부족합니다.")
                 } else if d.targeted && targets.is_empty() {
@@ -259,7 +259,7 @@ impl Game {
                     can_revive: self.phase == RunPhase::Rest
                         && origin.is_some()
                         && p.position.is_none()
-                        && (self.ammo.is_some() || p.id != self.battle.king_id)
+                        && p.id != self.battle.king_id
                         && !roster
                             .iter()
                             .any(|other| other.position.is_some() && other.position == origin),
@@ -318,7 +318,10 @@ impl Game {
                     AbilityTarget { cell: cell(a.first.take), chance: self.battle.hit_chance(from, a.first.take), blast: blast.into_iter().map(cell).collect(), paths: paths.into_iter().map(|path| path.into_iter().map(cell).collect()).collect() }
                 }).collect();
                 let mut views = vec![];
-                if !targets.is_empty() { views.push(AbilityView { piece_id: p.id, kind: "special", name: match p.kind { content::pieces::MACHINE_GUN_DRONE => "기관총 사격", content::pieces::GRENADE_LAUNCHER_DRONE => "유탄 발사", _ => "특수 능력" }, description: match p.kind { content::pieces::MACHINE_GUN_DRONE => "직교 4칸 이내 적 한 기물을 사격합니다. 탄약 1과 행동 1회를 소모합니다.", content::pieces::GRENADE_LAUNCHER_DRONE => "직교 4칸 이내 적을 사격합니다. 명중하면 탄착 칸과 직교 인접 칸을 폭발시킵니다. 탄약 1과 행동 1회를 소모합니다.", _ => "대상을 선택해 사격 또는 제물 능력을 사용합니다. 기물 행동 1회를 소모합니다." }, targets }); }
+                if !targets.is_empty() { views.push(AbilityView { piece_id: p.id, kind: "special", name: match p.kind { content::pieces::MACHINE_GUN_DRONE => "기관총 사격", content::pieces::GRENADE_LAUNCHER_DRONE => "유탄 발사", content::pieces::SLAUGHTER_CART => "시체 투척", content::pieces::MASKED_LADY => "약자 살해", content::pieces::RED_LADY | content::pieces::BANQUET_LADY | content::pieces::INVITING_LADY => "묻지마 살해", _ => "특수 능력" }, description: match p.kind { content::pieces::MACHINE_GUN_DRONE => "직교 4칸 이내 적 한 기물을 사격합니다. 탄약 1과 행동 1회를 소모합니다.", content::pieces::GRENADE_LAUNCHER_DRONE => "직교 4칸 이내 적을 사격합니다. 명중하면 탄착 칸과 직교 인접 칸을 폭발시킵니다. 탄약 1과 행동 1회를 소모합니다.", content::pieces::SLAUGHTER_CART => "시체자루 1을 소모해 직선 경로의 한 칸에 2라운드 역병을 생성합니다.", content::pieces::MASKED_LADY => "턴당 1회 주변 8칸의 양측 폰 하나를 시체로 만듭니다.", content::pieces::RED_LADY | content::pieces::BANQUET_LADY | content::pieces::INVITING_LADY => "턴당 1회 주변 8칸의 양측 비로얄 하나를 시체로 만듭니다.", _ => "대상을 선택해 사격 또는 제물 능력을 사용합니다. 기물 행동 1회를 소모합니다." }, targets }); }
+                if has_self_destruct && p.kind == content::pieces::FEAST_CART {
+                    views.push(AbilityView { piece_id: p.id, kind: "feast_cart", name: "고기다!", description: "시체자루 1을 소모해 주변 8칸의 황충의 축복 아군 모두에 행마권 1을 부여합니다.", targets: vec![AbilityTarget { cell: p.cell, chance: None, blast: vec![], paths: vec![] }] });
+                }
                 if has_self_destruct && matches!(p.kind, content::pieces::DRONE | content::pieces::C4_DRONE | content::pieces::MACHINE_GUN_DRONE | content::pieces::TACTICAL_NUKE_DRONE | content::pieces::GRENADE_LAUNCHER_DRONE) {
                     views.push(AbilityView { piece_id: p.id, kind: "self_destruct", name: if p.kind == content::pieces::TACTICAL_NUKE_DRONE { "전술핵 자폭" } else if p.kind == content::pieces::C4_DRONE { "광역 자폭" } else { "십자포화 자폭" }, description: "자신을 포함한 폭발 범위의 모든 기물을 확정 제거합니다. 아군도 피해를 받습니다.", targets: vec![AbilityTarget { cell: p.cell, chance: None, blast: self.battle.blast_preview(p.kind, from).into_iter().map(cell).collect(), paths: vec![] }] });
                 }
@@ -404,6 +407,15 @@ impl Game {
                     remaining,
                 })
                 .collect(),
+            plague: self
+                .battle
+                .plague_cells()
+                .into_iter()
+                .map(|(pos, remaining)| FalloutView {
+                    cell: cell(pos),
+                    remaining,
+                })
+                .collect(),
             phase: self.phase,
             map: self.map_view(),
             encounter: self
@@ -429,9 +441,7 @@ impl Game {
             round: self.round,
             actions_left: self.battle.actions_left,
             mana: self.cards.mana,
-            mana_rule: if self.ammo.is_some() {
-                "탄약은 턴이나 전투가 끝나도 회복되지 않습니다. 보스 격파 시 전량 보급됩니다."
-            } else if self.relics.contains(&Relic::IceCream) {
+            mana_rule: if self.relics.contains(&Relic::IceCream) {
                 "아이스크림: 내 턴 시작마다 남은 코스트에 3을 더합니다."
             } else {
                 "내 턴 시작 시 코스트가 3으로 회복됩니다."
@@ -513,35 +523,39 @@ impl Game {
             rest_options,
             upgrade_paths: content::pieces::ALL
                 .iter()
+                .filter(|d| !content::pieces::is_monster_only(d.kind))
                 .flat_map(|d| {
-                    d.upgrades.iter().map(|u| UpgradeView {
-                        key: u.key,
-                        from: d.kind,
-                        from_key: d.key,
-                        from_name: d.name,
-                        to: u.target,
-                        to_key: content::pieces::definition(u.target).unwrap().key,
-                        to_name: piece_name(u.target),
-                        effect: u.effect,
-                        requirement: u.requirement,
-                        required_pieces: content::pieces::required_owned(u.target)
-                            .iter()
-                            .map(|&kind| RequiredPieceView {
-                                kind,
-                                name: piece_name(kind),
-                                owned: roster
-                                    .iter()
-                                    .any(|p| content::pieces::owned_matches_kind(p, kind)),
-                            })
-                            .collect(),
-                        unlocked: content::pieces::required_owned(u.target)
-                            .iter()
-                            .all(|&kind| {
-                                roster
-                                    .iter()
-                                    .any(|p| content::pieces::owned_matches_kind(p, kind))
-                            }),
-                    })
+                    d.upgrades
+                        .iter()
+                        .filter(|u| !content::pieces::is_monster_only(u.target))
+                        .map(|u| UpgradeView {
+                            key: u.key,
+                            from: d.kind,
+                            from_key: d.key,
+                            from_name: d.name,
+                            to: u.target,
+                            to_key: content::pieces::definition(u.target).unwrap().key,
+                            to_name: piece_name(u.target),
+                            effect: u.effect,
+                            requirement: u.requirement,
+                            required_pieces: content::pieces::required_owned(u.target)
+                                .iter()
+                                .map(|&kind| RequiredPieceView {
+                                    kind,
+                                    name: piece_name(kind),
+                                    owned: roster
+                                        .iter()
+                                        .any(|p| content::pieces::owned_matches_kind(p, kind)),
+                                })
+                                .collect(),
+                            unlocked: content::pieces::required_owned(u.target).iter().all(
+                                |&kind| {
+                                    roster
+                                        .iter()
+                                        .any(|p| content::pieces::owned_matches_kind(p, kind))
+                                },
+                            ),
+                        })
                 })
                 .collect(),
             royal_name: self
@@ -811,6 +825,7 @@ pub struct Snapshot {
     pub hunger_protection_options: Vec<RestOption>,
     pub abilities: Vec<AbilityView>,
     pub fallout: Vec<FalloutView>,
+    pub plague: Vec<FalloutView>,
     pub phase: RunPhase,
     pub map: MapView,
     pub node_kind: Option<NodeKind>,

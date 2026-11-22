@@ -26,6 +26,8 @@ test("복수귀는 카드로 행마권을 얻고 수동 턴 종료와 저장 복
   await page.reload();
   await page.getByRole("button", { name: "저장된 원정 이어하기" }).click();
   await expect(page.locator("main")).toHaveAttribute("data-phase", "combat");
+  await expect(page.locator(".combat-resources")).toContainText("마나 3 / 3");
+  await expect(page.locator(".combat-resources")).toContainText("포탄량 10 / 10");
   await page.locator(".square").nth(prepared.pawn).click();
   await expect(page.locator(".square[data-legal=true]")).toHaveCount(0);
   await page.locator(`[data-card-id="${prepared.card}"]`).click();
@@ -47,6 +49,9 @@ test("복수귀는 카드로 행마권을 얻고 수동 턴 종료와 저장 복
   await expect(page.getByTestId("turn")).toContainText("나의 턴");
   await expect(page.locator('.piece[data-piece-id="9"]')).toHaveAttribute("data-cell", String(prepared.pawn - 8));
   await page.setViewportSize({ width: 390, height: 844 });
+  const mana = await page.locator(".combat-resource").nth(0).boundingBox();
+  const shells = await page.locator(".combat-resource").nth(1).boundingBox();
+  expect(mana && shells && mana.y + mana.height <= shells.y).toBe(true);
   await expect(page.getByRole("button", { name: "턴 종료", exact: true })).toBeInViewport();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   await page.screenshot({ path: "test-results/avenger-mobile.png", fullPage: true });

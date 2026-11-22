@@ -80,6 +80,7 @@ pub struct SandboxSnapshot {
     pub discard_count: usize,
     pub exhausted_count: usize,
     pub mana: u32,
+    pub ammo: u32,
     pub relics: Vec<crate::content::Relic>,
     pub dead_pawns: Vec<SandboxDeadPawn>,
 }
@@ -111,6 +112,7 @@ pub struct Sandbox {
     next_id: u32,
     deck: Vec<Card>,
     cards: CardCombat,
+    ammo: u32,
     rng: Rng,
     next_card_id: u32,
 }
@@ -119,19 +121,21 @@ impl Sandbox {
         let mut rng = Rng::new(0);
         let cards = CardCombat::start(&[], &mut rng);
         let mut battle = Battle::sandbox().map_err(battle_error)?;
-        battle.set_ammunition(cards.mana);
+        battle.set_ammunition(10);
         Ok(Self {
             battle,
             next_id: 1,
             deck: vec![],
             cards,
+            ammo: 10,
             rng,
             next_card_id: 1,
         })
     }
     pub fn clear(&mut self) -> Result<(), String> {
         self.battle = Battle::sandbox().map_err(battle_error)?;
-        self.battle.set_ammunition(self.cards.mana);
+        self.ammo = 10;
+        self.battle.set_ammunition(self.ammo);
         Ok(())
     }
     pub fn set_relic(&mut self, relic: crate::content::Relic, enabled: bool) -> Result<(), String> {
@@ -190,11 +194,9 @@ impl Sandbox {
     fn resource_effects(&mut self) {
         let (draw, mana, ammo) = self.battle.take_resource_effects();
         self.cards.draw_cards(draw as usize, &mut self.rng);
-        self.cards.mana = self
-            .cards
-            .mana
-            .saturating_add_signed(mana.saturating_add(ammo));
-        self.battle.set_ammunition(self.cards.mana);
+        self.cards.mana = self.cards.mana.saturating_add_signed(mana);
+        self.ammo = self.ammo.saturating_add_signed(ammo).min(10);
+        self.battle.set_ammunition(self.ammo);
     }
     pub fn add_card(&mut self, kind: CardKind) {
         let card = Card {
@@ -225,11 +227,9 @@ impl Sandbox {
     pub fn clear_deck(&mut self) {
         self.deck.clear();
         self.cards = CardCombat::start(&[], &mut self.rng);
-        self.battle.set_ammunition(self.cards.mana);
     }
     pub fn reset_cards(&mut self) {
         self.cards = CardCombat::start(&self.deck, &mut self.rng);
-        self.battle.set_ammunition(self.cards.mana);
     }
     pub fn draw_card(&mut self) -> Result<(), String> {
         let before = self.cards.hand.len();
@@ -258,7 +258,6 @@ impl Sandbox {
     }
     pub fn set_mana(&mut self, amount: u32) {
         self.cards.mana = amount;
-        self.battle.set_ammunition(amount);
     }
     pub fn play_card(&mut self, id: u32, selection: CardSelection) -> Result<(), String> {
         if self.battle.pending_choice().is_some() {
@@ -474,6 +473,7 @@ impl Sandbox {
             discard_count: self.cards.discard.len(),
             exhausted_count: self.cards.exhausted.len(),
             mana: self.cards.mana,
+            ammo: self.ammo,
             relics: self.battle.sandbox_relics().to_vec(),
             dead_pawns: self
                 .battle

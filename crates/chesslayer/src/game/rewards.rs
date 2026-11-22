@@ -48,21 +48,11 @@ impl Game {
             .position(|p| p.id == id && p.position.is_some())
             .ok_or("살아 있는 아군 기물을 선택하세요.")?;
         let previous_kind = roster[index].kind;
-        if previous_kind == content::pieces::WAREHOUSE
-            && target == previous_kind
-            && self.ammo.is_some()
+        if content::pieces::is_monster_only(previous_kind)
+            || content::pieces::is_monster_only(target)
         {
-            let capacity = self.ammo_capacity().unwrap();
-            let current = self.ammo.unwrap();
-            self.ammo = Some(current.saturating_add(current / 10).min(capacity));
-            self.log(format!(
-                "{source}: 창고 강화 · 탄약 {} → {}",
-                current,
-                self.ammo.unwrap()
-            ));
-            return Ok(());
+            return Err("몬스터 전용 기물은 영구 강화할 수 없습니다.".into());
         }
-
         let upgrade = content::pieces::definition(previous_kind)
             .and_then(|d| d.upgrades.iter().find(|u| u.target == target))
             .ok_or("이 기물에 정의된 강화 경로가 없습니다.")?;
@@ -105,6 +95,11 @@ impl Game {
             .find(|p| p.id == id)
             .ok_or("아군 기물을 선택하세요.")?;
         let previous_kind = piece.kind;
+        if content::pieces::is_monster_only(previous_kind)
+            || content::pieces::is_monster_only(target)
+        {
+            return Err("몬스터 전용 기물은 영구 강화할 수 없습니다.".into());
+        }
         // Upgrade keys are shared by families. Resolve each recorded edge from
         // its destination, then search only this piece's actual family tree.
         let mut root = previous_kind;

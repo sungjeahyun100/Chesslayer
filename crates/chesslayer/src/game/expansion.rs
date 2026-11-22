@@ -144,8 +144,8 @@ impl Game {
         if !d.targeted && target.is_some() {
             return Err("이 카드는 대상을 선택하지 않습니다.".into());
         }
-        if card.kind == Bounty && self.gold < 10 {
-            return Err("10골드 이상이 필요합니다.".into());
+        if card.kind == Bounty && self.gold < 50 {
+            return Err("50골드 이상이 필요합니다.".into());
         }
         // Validate and apply to a staged run, including RNG, resources and royal changes.
         let mut next = self.clone();
@@ -217,7 +217,7 @@ impl Game {
             }
             Bounty => {
                 next.battle
-                    .grant_move_rights(id, next.gold / 10)
+                    .grant_move_rights(id, next.gold / 50)
                     .map_err(engine_error)?;
                 next.gold = 0;
             }

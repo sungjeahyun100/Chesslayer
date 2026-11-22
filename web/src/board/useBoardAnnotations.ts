@@ -10,10 +10,11 @@ function boardCellAt(board: HTMLDivElement, clientX: number, clientY: number): n
   return Math.floor(y * 8) * 8 + Math.floor(x * 8);
 }
 
-export function useBoardAnnotations(combat: boolean, enabled: boolean, revision: number) {
+export function useBoardAnnotations(combat: boolean, enabled: boolean, revision: number, isInspectable?: (cell: number) => boolean) {
   const [boardAnnotations, setBoardAnnotations] = useState<BoardAnnotation[]>([]);
   const [annotationPreview, setAnnotationPreview] = useState<BoardAnnotation | null>(null);
   const annotationDrag = useRef<{ pointerId: number; from: number } | null>(null);
+  const suppressContext = useRef(false);
   useEffect(() => {
     setBoardAnnotations([]);
     setAnnotationPreview(null);
@@ -41,7 +42,8 @@ export function useBoardAnnotations(combat: boolean, enabled: boolean, revision:
     const drag = annotationDrag.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     const to = boardCellAt(event.currentTarget, event.clientX, event.clientY);
-    if (to !== null) {
+    suppressContext.current = to !== null && to !== drag.from;
+    if (to !== null && (to !== drag.from || !isInspectable?.(to))) {
       setBoardAnnotations((current) => current.some((mark) => mark.from === drag.from && mark.to === to)
         ? current.filter((mark) => mark.from !== drag.from || mark.to !== to)
         : [...current, { from: drag.from, to }]);
@@ -59,5 +61,5 @@ export function useBoardAnnotations(combat: boolean, enabled: boolean, revision:
     onContextMenu: (event: MouseEvent<HTMLDivElement>) => { if (combat) event.preventDefault(); },
     onPointerDown: startBoardAnnotation, onPointerMove: moveBoardAnnotation,
     onPointerUp: endBoardAnnotation, onPointerCancel: cancelBoardAnnotation,
-  } };
+  }, consumeContextDrag: () => { const value = suppressContext.current; suppressContext.current = false; return value; } };
 }

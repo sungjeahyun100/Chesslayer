@@ -43,6 +43,8 @@ pub enum CardKind {
     Interference,
     AbsoluteAuthority,
     AuthoritarianOrder,
+    SpiritBomb,
+    AllArmed,
 }
 impl CardKind {
     pub fn definition(self) -> CardDefinition {

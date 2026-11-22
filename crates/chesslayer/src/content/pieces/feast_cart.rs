@@ -5,7 +5,7 @@ pub const FEAST_CART: PieceType = 54;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 70,
-    description: "운구 수레 능력 유지. 전투당 1회, 시체 포획 후 두 칸 이내의 다른 시체를 상하좌우 빈 칸으로 한 칸 옮깁니다.",
+    description: "운구 수레 능력 계승. 시체 포획 시 시체자루 1을 얻습니다. 고기다!: 시체자루 1을 소모해 주변 8칸의 황충의 축복 아군 모두에 행마권 1을 부여합니다.",
     ..PieceDefinition::new(FEAST_CART, "feast_cart", "연회의 수레", movement)
 };
 

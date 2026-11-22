@@ -19,9 +19,11 @@ pub struct EffectChoice {
 #[derive(Clone)]
 pub(in crate::battle) enum ChoiceEffect {
     Agility(u8),
+    MoveRights(u32),
     Hunger,
-    Corpse,
-    Slide(PieceId),
+    RelieveHunger,
+    Madness(u8),
+    Remove,
     Formation,
     Relocate(PieceId),
     ReservePawn,
@@ -43,7 +45,11 @@ pub struct PieceStatus {
     pub hunger: u8,
     pub madness: u8,
     pub guilt: u8,
-    pub incapacitated: bool,
+    pub incapacitated: u8,
+    pub incapacitated_fresh: bool,
+    pub pest: u8,
+    pub spirit_bomb: bool,
+    pub corpse_bags: u8,
     pub agility: u8,
     pub weakness: u8,
     pub dining: bool,
@@ -66,7 +72,8 @@ pub(super) struct Mechanics {
     pub(super) enemy_actions: u8,
     rounds: u32,
     fallout: [u32; 64],
-    bell_target: Option<PieceId>,
+    plague: [u32; 64],
+    bell_targets: [Option<PieceId>; 2],
     finished: bool,
     initial_allies: usize,
     last_stand: bool,
@@ -107,7 +114,8 @@ impl Mechanics {
         self.enemy_actions.hash(h);
         self.rounds.hash(h);
         self.fallout.hash(h);
-        self.bell_target.hash(h);
+        self.plague.hash(h);
+        self.bell_targets.hash(h);
         self.player_artillery.hash(h);
         self.corpse_eaten.hash(h);
         self.pending_draw.hash(h);
@@ -212,7 +220,8 @@ impl Mechanics {
             enemy_actions: 1,
             rounds: 0,
             fallout: [0; 64],
-            bell_target: None,
+            plague: [0; 64],
+            bell_targets: [None; 2],
             finished: false,
             initial_allies: 0,
             last_stand: false,
@@ -404,6 +413,7 @@ impl Battle {
     }
     pub(super) fn clear_fallout(&mut self) {
         self.mechanics.fallout = [0; 64];
+        self.mechanics.plague = [0; 64];
     }
     pub(super) fn apply_kind_passive(&mut self, piece: Piece) {
         let mut passive = KindPassive::default();
@@ -430,9 +440,6 @@ impl Battle {
     pub fn set_ammunition(&mut self, amount: u32) {
         self.mechanics.ammo = amount;
     }
-    pub(crate) fn pending_ammo_spend(&self) -> u32 {
-        self.mechanics.pending_ammo.min(0).unsigned_abs()
-    }
     pub fn take_resource_effects(&mut self) -> (u32, i32, i32) {
         (
             std::mem::take(&mut self.mechanics.pending_draw),
@@ -448,9 +455,9 @@ impl Battle {
         }
         id == self.king_id
             || self.is_enemy_royal(id)
-            || self
-                .piece_position(id)
-                .is_some_and(|(_, p)| key(p.kind) == "warehouse")
+            || self.piece_position(id).is_some_and(|(_, p)| {
+                key(p.kind) == "warehouse" || (p.owner == PLAYER && pieces::is_royal(p.kind))
+            })
     }
     pub fn piece_position(&self, id: PieceId) -> Option<(Position, Piece)> {
         self.board.cells().iter().enumerate().find_map(|(i, p)| {
@@ -508,6 +515,7 @@ impl Battle {
             )
             .map_err(|e| format!("{e:?}"))?;
         self.mechanics.temporary_pieces.insert(id);
+        self.apply_plague_on_entry(id);
         self.events.push(format!("예비 폰 배치: {}.", square(at)));
         Ok(())
     }
@@ -523,7 +531,9 @@ impl Battle {
         }
     }
     pub(super) fn can_act(&self, p: Piece) -> bool {
-        p.kind != pieces::CORPSE && key(p.kind) != "warehouse" && !self.status(p.id).incapacitated
+        p.kind != pieces::CORPSE
+            && key(p.kind) != "warehouse"
+            && self.status(p.id).incapacitated == 0
     }
     /// Special captures share the legal action pipeline; shooting stays on the origin square.
     pub fn special_actions(&self, from: Position) -> Vec<DefaultAction> {
@@ -541,6 +551,32 @@ impl Battle {
         let k = key(p.kind);
         let s = self.status(p.id);
         let mut out = vec![];
+        if s.corpse_bags > 0 && k == "slaughter_cart" {
+            for (dx, dy) in [(1, 0), (-1, 0), (0, 1), (0, -1)] {
+                let mut to = Position::new(from.file + dx, from.rank + dy);
+                while self.board.contains(to) {
+                    let occupied = self.board.piece_at(to).ok().flatten();
+                    out.push(DefaultAction::one(ActionStep::new(
+                        from,
+                        to,
+                        from,
+                        Effect::Catch,
+                    )));
+                    if occupied.is_some_and(|q| q.kind != pieces::CORPSE) {
+                        break;
+                    }
+                    to = Position::new(to.file + dx, to.rank + dy);
+                }
+            }
+        }
+        if s.corpse_bags > 0 && k == "feast_cart" {
+            out.push(DefaultAction::one(ActionStep::new(
+                from,
+                from,
+                from,
+                Effect::Catch,
+            )));
+        }
         if matches!(
             p.kind,
             pieces::DRONE
@@ -573,12 +609,12 @@ impl Battle {
                     )));
                 }
             } else {
-                let sacrifice = q.owner == p.owner
+                let sacrifice = q.owner < 2
                     && is_lady(k)
                     && d == 1
                     && !self.is_royal_piece(q.id)
                     && (k != "masked_lady" || pieces::is_pawn(q.kind))
-                    && !self.mechanics.used.contains(&format!("lady:{}", p.id));
+                    && !self.mechanics.turn_used.contains(&format!("lady:{}", p.id));
                 let shooting = q.owner != p.owner
                     && q.owner < 2
                     && self.hit_chance(from, to).is_some()
@@ -653,6 +689,159 @@ mod smoke {
         .unwrap()
     }
     #[test]
+    fn hungry_follower_leaps_only_named_families_with_existing_chesssembly() {
+        let from = Position::new(3, 4);
+        let beyond = Position::new(3, 2);
+        let mut b = fixture(pieces::HUNGRY_FOLLOWER);
+        assert!(!b
+            .legal_actions(from)
+            .unwrap()
+            .iter()
+            .any(|a| a.first.move_to == beyond));
+        b.board
+            .set_piece(
+                Position::new(3, 3),
+                Some(Piece {
+                    id: 101,
+                    kind: pieces::TOAST_LORD,
+                    owner: ENEMY,
+                }),
+            )
+            .unwrap();
+        assert!(b
+            .legal_actions(from)
+            .unwrap()
+            .iter()
+            .any(|a| a.first.move_to == beyond));
+    }
+    #[test]
+    fn glutton_receives_one_move_right_per_corpse_without_negative_effects() {
+        let mut b = fixture(pieces::GLUTTON_FOLLOWER);
+        b.eat_corpse(1).unwrap();
+        b.eat_corpse(1).unwrap();
+        assert_eq!(b.stats(1).move_rights, 2);
+        let mut dancer = fixture(pieces::ECSTATIC_DANCER);
+        dancer.eat_corpse(1).unwrap();
+        assert_eq!(dancer.stats(1).move_rights, 2);
+        assert_eq!(dancer.status(1).madness + dancer.status(1).guilt, 0);
+    }
+    #[test]
+    fn lady_can_make_enemy_pawn_a_corpse() {
+        let mut b = fixture(pieces::MASKED_LADY);
+        let from = Position::new(3, 4);
+        let to = Position::new(3, 3);
+        let action = b
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.first.effect == Effect::Catch && a.first.take == to)
+            .unwrap();
+        b.apply_piece_action(&action).unwrap();
+        assert_eq!(b.board.piece_at(to).unwrap().unwrap().kind, pieces::CORPSE);
+    }
+    #[test]
+    fn spirit_bomb_carries_move_rights_across_turns() {
+        let mut b = fixture(pieces::ROOK);
+        b.enable_card_movement();
+        b.grant_move_rights(1, 2).unwrap();
+        b.avenger_effect(crate::content::cards::CardKind::SpiritBomb, None, None)
+            .unwrap();
+        b.end_turn().unwrap();
+        b.end_turn().unwrap();
+        assert_eq!(b.stats(1).move_rights, 2);
+    }
+    #[test]
+    fn follower_last_rank_chooses_a_nonroyal_enemy_to_remove() {
+        let mut b = fixture(pieces::PROCESSION_FOLLOWER);
+        let from = Position::new(3, 1);
+        let actor = b.board.piece_at(Position::new(3, 4)).unwrap().unwrap();
+        b.board.set_piece(Position::new(3, 4), None).unwrap();
+        b.board.set_piece(from, Some(actor)).unwrap();
+        let action = b
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.first.move_to == Position::new(3, 0))
+            .unwrap();
+        b.apply_piece_action(&action).unwrap();
+        let choice = b.pending_choice().unwrap();
+        assert_eq!(choice.targets, vec![101]);
+        b.resolve_choice(101).unwrap();
+        assert!(b.piece_position(101).is_none());
+        assert_eq!(
+            b.piece_position(1).unwrap().1.kind,
+            pieces::PROCESSION_FOLLOWER
+        );
+    }
+    #[test]
+    fn corpse_throw_creates_plague_and_entry_applies_both_statuses() {
+        let mut b = fixture(pieces::SLAUGHTER_CART);
+        b.mechanics.statuses.entry(1).or_default().corpse_bags = 1;
+        let from = Position::new(3, 4);
+        let to = Position::new(4, 4);
+        let action = b
+            .legal_actions(from)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.first.effect == Effect::Catch && a.first.take == to)
+            .unwrap();
+        b.apply_piece_action(&action).unwrap();
+        assert_eq!(b.status(1).corpse_bags, 0);
+        assert_eq!(
+            b.plague_cells()
+                .iter()
+                .find(|(at, _)| *at == to)
+                .map(|(_, n)| *n),
+            Some(2)
+        );
+        let enemy = b.board.piece_at(Position::new(3, 3)).unwrap().unwrap();
+        b.board.set_piece(Position::new(3, 3), None).unwrap();
+        b.board.set_piece(to, Some(enemy)).unwrap();
+        b.apply_plague_on_entry(enemy.id);
+        assert!(b.status(enemy.id).ingredient);
+        assert_eq!(b.status(enemy.id).pest, 3);
+    }
+    #[test]
+    fn pest_expiry_on_enemy_royal_finishes_battle_immediately() {
+        let mut b = fixture(pieces::ROOK);
+        b.mechanics.statuses.entry(100).or_default().pest = 1;
+        b.end_turn().unwrap();
+        assert!(b.piece_position(100).is_none());
+        assert_eq!(b.phase, Phase::Finished);
+        assert!(matches!(b.result, GameResult::Win { winner: PLAYER, .. }));
+    }
+    #[test]
+    fn ordinary_lord_marks_both_sides_as_ingredients_without_blessing() {
+        let mut b = fixture(pieces::ROOK);
+        b.board
+            .set_piece(
+                Position::new(3, 3),
+                Some(Piece {
+                    id: 101,
+                    kind: pieces::TOAST_LORD,
+                    owner: ENEMY,
+                }),
+            )
+            .unwrap();
+        b.configure_v030(&[]);
+        assert!(b.status(1).ingredient);
+        assert!(b.status(101).ingredient);
+        assert!(!b.status(1).blessing);
+        assert!(!b.status(101).blessing);
+    }
+    #[test]
+    fn incapacitation_keeps_its_full_stack_on_the_application_turn() {
+        let mut b = fixture(pieces::ROOK);
+        let status = b.mechanics.statuses.entry(1).or_default();
+        status.incapacitated = 3;
+        status.incapacitated_fresh = true;
+        b.end_turn().unwrap();
+        assert_eq!(b.status(1).incapacitated, 3);
+        b.end_turn().unwrap();
+        b.end_turn().unwrap();
+        assert_eq!(b.status(1).incapacitated, 2);
+    }
+    #[test]
     fn ingredient_capture_stays_then_corpse_capture_ends_turn_after_effects() {
         let mut b = fixture(ROOK);
         b.configure_v030(&[Relic::CarnivalFlare]);
@@ -716,7 +905,7 @@ mod smoke {
         let mut b = fixture(ROOK);
         b.mechanics.statuses.entry(1).or_default().guilt = 2;
         b.resolve_conscience(1).unwrap();
-        assert!(b.status(1).incapacitated);
+        assert!(b.status(1).incapacitated > 0);
         assert!(b.legal_actions(Position::new(3, 4)).unwrap().is_empty());
         b.mechanics.statuses.entry(1).or_default().hunger = 1;
         b.finish_persistent_statuses();
@@ -758,6 +947,60 @@ mod smoke {
             b.board.piece_at(Position::new(3, 3)).unwrap().unwrap().kind,
             PAWN
         );
+    }
+    #[test]
+    fn weakness_follows_the_recorded_cross_squad_upgrade_path() {
+        let mut battle = fixture(pieces::SNIPER);
+        battle
+            .players
+            .iter_mut()
+            .find(|p| p.id == 1)
+            .unwrap()
+            .upgrades = vec!["rifleman".into(), "sniper".into()];
+        battle.mechanics.statuses.entry(1).or_default().weakness = 2;
+        battle.start_mechanics_turn().unwrap();
+        assert_eq!(battle.piece_position(1).unwrap().1.kind, BISHOP);
+        let owned = battle.players.iter().find(|p| p.id == 1).unwrap();
+        assert!(owned.upgrades.is_empty());
+        assert!(pieces::is_infantry(pieces::SNIPER));
+        assert!(!pieces::is_infantry(BISHOP));
+    }
+    #[test]
+    fn eternal_guest_grants_the_first_three_corpse_bonuses_on_either_side() {
+        for owner in [PLAYER, ENEMY] {
+            let mut players = Battle::standard_roster();
+            for p in &mut players {
+                if p.id != 5 {
+                    p.position = None;
+                }
+            }
+            if owner == PLAYER {
+                players[4].kind = pieces::ETERNAL_GUEST;
+            }
+            let mut battle = Battle::new(BattleStart {
+                players,
+                encounter: Encounter {
+                    enemies: vec![EnemyPiece {
+                        id: 100,
+                        kind: if owner == ENEMY {
+                            pieces::ETERNAL_GUEST
+                        } else {
+                            KING
+                        },
+                        position: Position::new(4, 0),
+                    }],
+                    royal_id: 100,
+                    additional_royal_ids: vec![],
+                },
+            })
+            .unwrap();
+            let guest = if owner == PLAYER { 5 } else { 100 };
+            battle.turn = owner;
+            for n in 1..=4 {
+                battle.eat_corpse(guest).unwrap();
+                assert_eq!(battle.status(guest).agility, n.min(3));
+            }
+        }
     }
     #[test]
     fn missed_shot_ends_turn_despite_remaining_actions() {

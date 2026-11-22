@@ -4,6 +4,16 @@ import { PieceImage } from "./PieceImage";
 import { buildUpgradeTree } from "./upgradeTree";
 import type { RestOption, UpgradePath } from "./types";
 
+type Bounds = { left: number; top: number; right: number; bottom: number };
+type ViewMode = "default" | "overview" | "custom";
+const MAP_PADDING = 12;
+const DEFAULT_SCALE = 0.56;
+
+function unionBounds(boxes: Bounds[]): Bounds {
+  return { left: Math.min(...boxes.map((box) => box.left)), top: Math.min(...boxes.map((box) => box.top)),
+    right: Math.max(...boxes.map((box) => box.right)), bottom: Math.max(...boxes.map((box) => box.bottom)) };
+}
+
 export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, completed, selectionOnly = false, inlineConfirm = false, readOnly = false, instant = false, selectedKind }: {
   piece: RestOption;
   paths: UpgradePath[];
@@ -25,9 +35,54 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
   const dragged = useRef(false);
   const active = tree.nodes.find((n) => n.kind === openKind) ?? tree.nodes.find((n) => n.kind === piece.kind)!;
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const [zoom, setZoom] = useState<number | null>(null);
-  const [fit, setFit] = useState(1);
-  const scale = zoom ?? fit;
+  const focusKinds = useMemo(() => {
+    const kinds = [piece.kind];
+    const nearest = (from: number) => tree.edges.filter((edge) => edge.from === from)
+      .sort((a, b) => Math.abs(tree.nodes.find((node) => node.kind === a.to)!.y - tree.nodes.find((node) => node.kind === from)!.y)
+        - Math.abs(tree.nodes.find((node) => node.kind === b.to)!.y - tree.nodes.find((node) => node.kind === from)!.y) || a.to - b.to)[0];
+    const parent = tree.edges.find((edge) => edge.to === piece.kind);
+    if (parent) kinds.push(parent.from);
+    const child = nearest(piece.kind);
+    if (child) { kinds.push(child.to); const grandchild = nearest(child.to); if (grandchild) kinds.push(grandchild.to); }
+    return new Set(kinds);
+  }, [tree, piece.kind]);
+  const initial = useMemo(() => {
+    const nodeBox = (node: typeof tree.nodes[number]): Bounds => ({ left: node.x - 88, top: node.y - 34, right: node.x + 88, bottom: node.y + 100 });
+    return { content: unionBounds(tree.nodes.map(nodeBox)),
+      focus: unionBounds(tree.nodes.filter((node) => focusKinds.has(node.kind)).map(nodeBox)) };
+  }, [tree, focusKinds]);
+  const [display, setDisplay] = useState(initial);
+  const [viewSize, setViewSize] = useState({ width: 0, height: 0 });
+  const [viewMode, setViewMode] = useState<ViewMode>("default");
+  const [customZoom, setCustomZoom] = useState(1);
+  const pendingCenter = useRef<{ x: number; y: number } | null>(null);
+  const { content, focus } = display;
+  const contentWidth = content.right - content.left;
+  const contentHeight = content.bottom - content.top;
+  const overviewScale = viewSize.width ? Math.min(1.35, (viewSize.width - MAP_PADDING * 2) / contentWidth,
+    (viewSize.height - MAP_PADDING * 2) / contentHeight) : 1;
+  const scale = viewMode === "overview" ? overviewScale : viewMode === "default" ? DEFAULT_SCALE : customZoom;
+  const canvasWidth = contentWidth * scale + MAP_PADDING * 2;
+  const canvasHeight = contentHeight * scale + MAP_PADDING * 2;
+  const centerAt = (point: { x: number; y: number }, nextScale = scale) => {
+    const el = viewport.current;
+    if (!el) return;
+    const offsetX = Math.max(0, (el.clientWidth - (contentWidth * nextScale + MAP_PADDING * 2)) / 2);
+    const offsetY = Math.max(0, (el.clientHeight - (contentHeight * nextScale + MAP_PADDING * 2)) / 2);
+    el.scrollTo({ left: (point.x - content.left) * nextScale + MAP_PADDING + offsetX - el.clientWidth / 2,
+      top: (point.y - content.top) * nextScale + MAP_PADDING + offsetY - el.clientHeight / 2 });
+  };
+  const changeZoom = (next: number) => {
+    const el = viewport.current;
+    if (el) {
+      const offsetX = Math.max(0, (el.clientWidth - canvasWidth) / 2);
+      const offsetY = Math.max(0, (el.clientHeight - canvasHeight) / 2);
+      pendingCenter.current = { x: content.left + (el.scrollLeft + el.clientWidth / 2 - offsetX - MAP_PADDING) / scale,
+        y: content.top + (el.scrollTop + el.clientHeight / 2 - offsetY - MAP_PADDING) / scale };
+    }
+    setCustomZoom(next);
+    setViewMode("custom");
+  };
   useEffect(() => { if (completed) { setOpenKind(null); confirming.current = false; } }, [completed]);
   useLayoutEffect(() => {
     if (openKind === null || !popup.current || !viewport.current) return;
@@ -95,14 +150,45 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
     onConfirm(kind);
     window.setTimeout(() => { confirming.current = false; }, 500);
   };
-  useEffect(() => {
+  useLayoutEffect(() => {
     const el = viewport.current!;
-    const resize = () => setFit(Math.min(1, el.clientWidth / tree.width, el.clientHeight / tree.height));
-    resize();
-    const observer = new ResizeObserver(resize);
+    const stage = el.querySelector<HTMLElement>(".skill-map-stage")!;
+    let mounted = true;
+    const measure = () => {
+      if (!mounted) return;
+      setViewSize((previous) => previous.width === el.clientWidth && previous.height === el.clientHeight
+        ? previous : { width: el.clientWidth, height: el.clientHeight });
+      const origin = stage.getBoundingClientRect();
+      const box = (element: Element): Bounds => {
+        const rect = element.getBoundingClientRect();
+        const round = (value: number) => Math.round(value * 10) / 10;
+        return { left: round((rect.left - origin.left) / scale), top: round((rect.top - origin.top) / scale),
+          right: round((rect.right - origin.left) / scale), bottom: round((rect.bottom - origin.top) / scale) };
+      };
+      const nodes = [...stage.querySelectorAll<HTMLElement>(".skill-node")];
+      const next = { content: unionBounds([...nodes.map(box), ...[...stage.querySelectorAll(".skill-line-bed")].map(box)]),
+        focus: unionBounds(nodes.filter((node) => focusKinds.has(Number(node.dataset.kind))).map(box)) };
+      setDisplay((previous) => {
+        const close = (a: Bounds, b: Bounds) => (Object.keys(a) as (keyof Bounds)[]).every((key) => Math.abs(a[key] - b[key]) < 0.5);
+        return close(previous.content, next.content) && close(previous.focus, next.focus) ? previous : next;
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [tree.width, tree.height]);
+    for (const node of stage.querySelectorAll(".skill-node")) observer.observe(node);
+    void document.fonts.ready.then(measure);
+    return () => { mounted = false; observer.disconnect(); };
+  }, [tree, focusKinds, scale]);
+  useLayoutEffect(() => {
+    if (viewMode === "overview") { viewport.current?.scrollTo(0, 0); return; }
+    if (pendingCenter.current) {
+      centerAt(pendingCenter.current);
+      pendingCenter.current = null;
+    } else if (viewMode === "default") centerAt({ x: (focus.left + focus.right) / 2, y: (focus.top + focus.bottom) / 2 });
+  // Measurements and the current piece define the viewport target.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [piece.kind, viewMode, scale, content, focus, viewSize]);
 
   // A target with several incoming edges is one node; only its actual entry
   // path is lit. The existing engine treats those edges as alternative routes.
@@ -156,8 +242,9 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
           onPointerUp={(e) => { if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId); }}
         >
           <div className="skill-map-center">
-            <div className="skill-map-size" style={{ width: tree.width * scale, height: tree.height * scale }}>
-              <div className="skill-map-stage" style={{ width: tree.width, height: tree.height, transform: `scale(${scale})` }}>
+            <div className="skill-map-size" style={{ width: canvasWidth, height: canvasHeight }}>
+              <div className="skill-map-stage" style={{ width: tree.width, height: tree.height,
+                transform: `translate(${MAP_PADDING - content.left * scale}px, ${MAP_PADDING - content.top * scale}px) scale(${scale})` }}>
                 <svg className="skill-connections" width={tree.width} height={tree.height} aria-hidden="true">
                   {tree.edges.map((edge) => {
                     // Only actual rest commands activate a path. A promoted piece
@@ -182,8 +269,8 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
                     onFocus={(e) => e.currentTarget.scrollIntoView({ block: "nearest", inline: "nearest" })}
                   >
                     <span className="skill-node-orb"><PieceImage pieceKey={node.key} /><span className="skill-node-mark">{readOnly ? "·" : status(node.kind) === "acquired" ? "◆" : !node.incoming.length ? "·" : status(node.kind) === "available" ? "+" : "◈"}</span></span>
-                    <strong style={{ fontSize: 13 / Math.max(0.6, Math.min(1, scale)) }}>{node.name}</strong>
-                    <small style={{ fontSize: 10 / Math.max(0.6, Math.min(1, scale)) }}>{statusText(node.kind)}</small>
+                    <strong>{node.name}</strong>
+                    <small>{statusText(node.kind)}</small>
                   </button>
                 ))}
               </div>
@@ -192,10 +279,12 @@ export function UpgradeTree({ piece, paths, acquired, onSelect, onConfirm, compl
         </div>
         <div className="skill-map-toolbar">
           <div role="group" aria-label="트리 확대 및 축소">
-            <button aria-label="트리 축소" disabled={scale <= 0.35} onClick={() => setZoom(Math.max(0.35, scale - 0.2))}>−</button>
+            <button aria-label="트리 축소" disabled={scale <= 0.35} onClick={() => changeZoom(Math.max(0.35, scale - 0.15))}>−</button>
             <output aria-live="polite">{Math.round(scale * 100)}%</output>
-            <button aria-label="트리 확대" disabled={scale >= 1.8} onClick={() => setZoom(Math.min(1.8, scale + 0.2))}>+</button>
-            <button onClick={() => { setZoom(null); viewport.current?.scrollTo(0, 0); }}>전체 보기</button>
+            <button aria-label="트리 확대" disabled={scale >= 1.8} onClick={() => changeZoom(Math.min(1.8, scale + 0.15))}>+</button>
+            <button aria-pressed={viewMode === "overview"} onClick={() => setViewMode("overview")}>전체 보기</button>
+            <button aria-pressed={viewMode === "default"} onClick={() => { setViewMode("default");
+              centerAt({ x: (focus.left + focus.right) / 2, y: (focus.top + focus.bottom) / 2 }, DEFAULT_SCALE); }}>기본 보기</button>
           </div>
         </div>
       </div>

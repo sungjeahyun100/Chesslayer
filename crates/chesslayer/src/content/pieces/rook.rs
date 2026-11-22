@@ -19,6 +19,18 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
             effect: super::bouncing_rook::DEFINITION.description,
             requirement: "살아 있는 일반 룩 · 쉼터 행동 1회 · 추가 비용 없음",
         },
+        super::UpgradeDefinition {
+            target: super::TANK,
+            key: "tank",
+            effect: super::tank::DEFINITION.description,
+            requirement: "살아 있는 룩 · 쉼터 행동 1회",
+        },
+        super::UpgradeDefinition {
+            target: super::BUTCHER_CART,
+            key: "butcher_cart",
+            effect: super::butcher_cart::DEFINITION.description,
+            requirement: "살아 있는 룩 · 쉼터 행동 1회",
+        },
     ],
     ..PieceDefinition::new(ROOK, "rook", "룩", movement)
 };

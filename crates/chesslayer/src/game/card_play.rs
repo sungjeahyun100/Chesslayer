@@ -37,17 +37,9 @@ impl Game {
             selection,
             d.clone(),
         )?;
-        if self.ammo.is_some() {
-            self.ammo = Some(self.cards.mana);
-        }
         self.log(format!(
-            "{} 사용 · {} −{}{}",
+            "{} 사용 · 마나 −{}{}",
             d.name,
-            if self.ammo.is_some() {
-                "탄약"
-            } else {
-                "마나"
-            },
             cost,
             removed
                 .map(|n| format!(" · {n}기 처리"))

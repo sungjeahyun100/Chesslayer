@@ -5,7 +5,7 @@ pub const FRENZIED_DANCER: PieceType = 59;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 35,
-    description: "나이트 행마. 추가로 상하좌우 인접한 시체만 포획할 수 있습니다.",
+    description: "나이트 행마와 직교 인접 시체 포획. 시체 섭취의 부정적 효과를 받지 않습니다.",
     upgrades: &[super::UpgradeDefinition {
         target: super::MASKED_DANCER,
         key: "masked_dancer",
@@ -17,6 +17,6 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
 };
 
 // Each piece keeps its complete movement script here. Coordinates are owner-relative.
-fn movement() -> String {
+pub(super) fn movement() -> String {
     "take-move(1,2);\ntake-move(2,1);\ntake-move(2,-1);\ntake-move(1,-2);\ntake-move(-1,-2);\ntake-move(-2,-1);\ntake-move(-2,1);\ntake-move(-1,2);\npiece-on(corpse,1,0) take(1,0);\npiece-on(corpse,-1,0) take(-1,0);\npiece-on(corpse,0,-1) take(0,-1);\npiece-on(corpse,0,1) take(0,1)".into()
 }

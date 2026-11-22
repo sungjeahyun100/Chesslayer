@@ -18,6 +18,8 @@ mod snapshot;
 pub use snapshot::*;
 #[cfg(test)]
 mod expansion_tests;
+#[cfg(test)]
+mod v1_integration_tests;
 pub use events::{EventKind, EventView};
 use std::collections::{HashSet, VecDeque};
 
@@ -254,6 +256,25 @@ fn cell(p: Position) -> usize {
     (p.rank * 8 + p.file) as usize
 }
 impl Game {
+    /// Retain legacy command decoding while retiring cards from the live run.
+    pub fn remove_retired_cards(&mut self) {
+        let retired = |kind| matches!(kind, CardKind::Rename | CardKind::EnPassant);
+        let removed_ids: HashSet<_> = self
+            .deck
+            .iter()
+            .filter(|card| retired(card.kind))
+            .map(|card| card.id)
+            .collect();
+        self.deck.retain(|card| !retired(card.kind));
+        self.cards.hand.retain(|card| !retired(card.kind));
+        self.cards.draw.retain(|card| !retired(card.kind));
+        self.cards.discard.retain(|card| !retired(card.kind));
+        self.cards.exhausted.retain(|card| !retired(card.kind));
+        self.cards
+            .cost_overrides
+            .retain(|id, _| !removed_ids.contains(id));
+        self.shop_offers.retain(|kind| !retired(*kind));
+    }
     pub fn new(character: &str, seed: u32) -> Result<Self, String> {
         let squad = content::characters::definition(character).ok_or("캐릭터를 선택하세요.")?;
         let choice = squad.character;
@@ -289,9 +310,7 @@ impl Game {
             final_battle: false,
             gold: 0,
             cards_burned: 0,
-            ammo: match squad.resource {
-                content::characters::ResourceRule::Mana => None,
-            },
+            ammo: Some(10),
             reinforcement_used: false,
             hunger_protection_used: false,
             shop_offers: vec![],
@@ -430,7 +449,8 @@ impl Game {
     }
     fn ammo_capacity(&self) -> Option<u32> {
         self.ammo.map(|_| {
-            self.battle
+            10 + self
+                .battle
                 .outcome()
                 .iter()
                 .filter(|p| p.kind == content::pieces::WAREHOUSE && p.position.is_some())
@@ -441,11 +461,12 @@ impl Game {
     fn resource_effects(&mut self) {
         let (draw, mana, ammo) = self.battle.take_resource_effects();
         self.cards.draw_cards(draw as usize, &mut self.rng);
+        self.cards.mana = self.cards.mana.saturating_add_signed(mana);
         if let Some(current) = &mut self.ammo {
             *current = current.saturating_add_signed(ammo);
-            self.cards.mana = *current;
-        } else {
-            self.cards.mana = self.cards.mana.saturating_add_signed(mana);
+        }
+        if let Some(capacity) = self.ammo_capacity() {
+            self.ammo = self.ammo.map(|current| current.min(capacity));
         }
         self.battle.set_ammunition(self.ammo.unwrap_or(0));
     }
@@ -655,19 +676,28 @@ impl Game {
                     .find(|p| {
                         p.id == id && p.persistent.get("incapacitated").copied().unwrap_or(0) > 0
                     })
-                    .ok_or("영구 전투불능인 기물을 선택하세요.")?;
+                    .ok_or("전투불능인 기물을 선택하세요.")?;
                 p.persistent.remove("incapacitated");
                 self.battle
                     .replace_roster_at_rest(roster)
                     .map_err(engine_error)?;
                 self.complete_node();
-                self.log("고해성사: 영구 전투불능이 해제되었습니다.");
+                self.log("고해성사: 전투불능이 해제되었습니다.");
             }
-            Command::RestSupply { id } => {
+            Command::RestSupply { id: _ } => {
                 if self.phase != RunPhase::Rest {
-                    return Err("쉼터에서만 창고를 강화합니다.".into());
+                    return Err("쉼터에서만 포탄을 보충합니다.".into());
                 }
-                self.upgrade_piece(id, content::pieces::WAREHOUSE, "휴식")?;
+                let capacity = self.ammo_capacity().ok_or("포탄 자원이 없습니다.")?;
+                let current = self.ammo.unwrap();
+                if current >= capacity {
+                    return Err("포탄이 이미 가득 찼습니다.".into());
+                }
+                // The artillery depot restored 10% of current ammunition.
+                // A one-shell minimum keeps the scaled 10-shell pool refillable.
+                let restored = (current / 10).max(1);
+                self.ammo = Some(current.saturating_add(restored).min(capacity));
+                self.log(format!("휴식: 포탄량 {} → {}", current, self.ammo.unwrap()));
                 self.complete_node();
             }
             Command::Reinforce { id } => {
@@ -876,11 +906,7 @@ impl Game {
                 }
                 let p = roster
                     .iter_mut()
-                    .find(|p| {
-                        p.id == id
-                            && p.position.is_none()
-                            && (self.ammo.is_some() || p.id != self.battle.king_id)
-                    })
+                    .find(|p| p.id == id && p.position.is_none() && p.id != self.battle.king_id)
                     .ok_or("사망한 아군 기물을 선택하세요.")?;
                 p.position = Some(origin);
                 p.moved = false;

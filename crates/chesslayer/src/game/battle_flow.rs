@@ -97,9 +97,6 @@ impl Game {
                 .expect("registered squad")
                 .turn_rule,
         );
-        if let Some(ammo) = self.ammo {
-            self.cards.mana = ammo;
-        }
         if self.event_state.next_battle_penalty {
             if let Some(card) = self.cards.hand.pop() {
                 self.cards.draw.push(card);
@@ -198,9 +195,6 @@ impl Game {
         self.round = self.round.saturating_add(1);
         self.cards
             .begin_turn(&mut self.rng, self.relics.contains(&Relic::IceCream));
-        if let Some(ammo) = self.ammo {
-            self.cards.mana = ammo;
-        }
         self.plan_boss();
     }
     pub(super) fn plan_boss(&mut self) {

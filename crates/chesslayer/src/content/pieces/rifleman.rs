@@ -6,6 +6,7 @@ pub const RIFLEMAN: PieceType = 70;
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 25,
     description: "상하좌우 한 칸 이동·포획. 전방 세 방향 6칸 이내 제자리 사격, 명중 95%에서 추가 거리마다 5%p 감소, 탄약 1 소모.",
+    upgrades: &[super::UpgradeDefinition { target: super::SNIPER, key: "sniper", effect: super::sniper::DEFINITION.description, requirement: "살아 있는 소총수 · 쉼터 행동 1회" }],
     ..PieceDefinition::new(RIFLEMAN, "rifleman", "소총수", movement)
 };
 

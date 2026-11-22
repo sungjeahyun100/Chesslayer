@@ -20,6 +20,24 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
             effect: super::bouncing_queen::DEFINITION.description,
             requirement: "살아 있는 일반 퀸 · 쉼터 행동 1회 · 추가 비용 없음",
         },
+        super::UpgradeDefinition {
+            target: super::MASKED_LADY,
+            key: "masked_lady",
+            effect: super::masked_lady::DEFINITION.description,
+            requirement: "살아 있는 퀸 · 쉼터 행동 1회",
+        },
+        super::UpgradeDefinition {
+            target: super::MORTAR,
+            key: "mortar",
+            effect: super::mortar::DEFINITION.description,
+            requirement: "살아 있는 퀸 · 쉼터 행동 1회",
+        },
+        super::UpgradeDefinition {
+            target: super::SPECIAL_COMMANDER,
+            key: "special_commander",
+            effect: super::special_commander::DEFINITION.description,
+            requirement: "살아 있는 퀸 · 쉼터 행동 1회",
+        },
     ],
     ..PieceDefinition::new(QUEEN, "queen", "퀸", movement)
 };

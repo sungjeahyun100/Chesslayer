@@ -19,6 +19,12 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
             effect: super::royal_knight::DEFINITION.description,
             requirement: "살아 있는 킹 · 쉼터 행동 1회",
         },
+        UpgradeDefinition {
+            target: super::SMILING_KING,
+            key: "smiling_king",
+            effect: super::smiling_king::DEFINITION.description,
+            requirement: "살아 있는 킹 · 쉼터 행동 1회",
+        },
     ],
     ..PieceDefinition::new(KING, "king", "킹", movement)
 };

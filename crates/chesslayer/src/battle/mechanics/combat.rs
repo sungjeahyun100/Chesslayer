@@ -76,6 +76,45 @@ impl Battle {
         if self.boss_action(action)? {
             return Ok(true);
         }
+        let first = &action.first;
+        if first.effect == Effect::Catch && first.move_to == first.from {
+            if let Some(actor) = self.board.piece_at(first.from)? {
+                let k = key(actor.kind);
+                if matches!(k, "slaughter_cart" | "feast_cart")
+                    && self.status(actor.id).corpse_bags > 0
+                {
+                    self.mechanics
+                        .statuses
+                        .entry(actor.id)
+                        .or_default()
+                        .corpse_bags -= 1;
+                    if k == "slaughter_cart" {
+                        let i = self.board.index(first.take).ok_or(Error::IllegalAction)?;
+                        self.mechanics.plague[i] =
+                            self.mechanics.rounds + 2 + u32::from(self.turn == ENEMY);
+                        self.events
+                            .push(format!("시체 투척: {}에 역병 생성.", square(first.take)));
+                    } else {
+                        let ids: Vec<_> = self
+                            .living(actor.owner)
+                            .into_iter()
+                            .filter(|(pos, q)| {
+                                q.id != actor.id
+                                    && distance(*pos, first.from) == 1
+                                    && self.status(q.id).blessing
+                            })
+                            .map(|(_, q)| q.id)
+                            .collect();
+                        for id in ids {
+                            let _ = self.grant_move_rights(id, 1);
+                        }
+                        self.events
+                            .push("고기다!: 주변 황충의 축복 아군에 행마권 1.".into());
+                    }
+                    return Ok(true);
+                }
+            }
+        }
         let special = action.steps().any(|s| {
             let q = self.board.piece_at(s.take).ok().flatten();
             s.effect == Effect::Catch
@@ -121,17 +160,16 @@ impl Battle {
             if capture {
                 let victim = victim.unwrap();
                 let mut penetration_bonus = 0;
-                if step.effect == Effect::Catch
-                    && victim.owner == captor.owner
-                    && is_lady(key(captor.kind))
-                {
+                if step.effect == Effect::Catch && victim.owner < 2 && is_lady(key(captor.kind)) {
                     self.make_corpse(step.take)?;
-                    self.mechanics.used.insert(format!("lady:{}", captor.id));
+                    self.mechanics
+                        .turn_used
+                        .insert(format!("lady:{}", captor.id));
                     if key(captor.kind) == "banquet_lady" && captor.owner == PLAYER {
                         self.mechanics.pending_draw += 1;
                     }
                     if key(captor.kind) == "inviting_lady" {
-                        self.hunger_near(step.from, captor.owner, 2);
+                        self.hunger_near(step.from, captor.owner, 8);
                     }
                     self.events.push(format!(
                         "{}: 아군을 제물로 삼아 시체를 남겼습니다.",

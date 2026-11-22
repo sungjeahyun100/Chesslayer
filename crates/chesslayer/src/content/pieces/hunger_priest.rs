@@ -5,7 +5,7 @@ pub const HUNGER_PRIEST: PieceType = 58;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 55,
-    description: "향연의 사제 능력 유지. 전투당 1회, 시체 포획 시 두 칸 이내 적 비로얄 하나의 허기를 한 단계 악화합니다.",
+    description: "향연의 사제 능력 계승. 시체 포획 시 적 비로얄 하나의 허기를 한 단계 약화합니다.",
     family: super::PieceFamily::Bishop,
     ..PieceDefinition::new(HUNGER_PRIEST, "hunger_priest", "허기의 사제", movement)
 };

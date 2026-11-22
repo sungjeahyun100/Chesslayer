@@ -2,6 +2,15 @@
 use super::*;
 
 impl Battle {
+    pub fn plague_cells(&self) -> Vec<(Position, u32)> {
+        (0..64)
+            .filter_map(|i| {
+                let remaining = self.mechanics.plague[i].saturating_sub(self.mechanics.rounds);
+                (remaining > 0)
+                    .then_some((Position::new((i % 8) as i32, (i / 8) as i32), remaining))
+            })
+            .collect()
+    }
     pub(in crate::battle) fn initialize_statuses(&mut self) {
         self.mechanics.statuses.clear();
         self.mechanics.pending_agility.clear();
@@ -16,7 +25,7 @@ impl Battle {
                     hunger: get("hunger").min(3),
                     madness: get("madness"),
                     guilt: get("guilt"),
-                    incapacitated: get("incapacitated") > 0,
+                    incapacitated: get("incapacitated"),
                     blessing: get("blessing") > 0,
                     death_threshold: get("death_threshold") > 0,
                     ..PieceStatus::default()
@@ -99,8 +108,17 @@ impl Battle {
                 result.push(format!("{label} {n}"));
             }
         }
-        if s.incapacitated {
-            result.push("영구 전투불능".into());
+        if s.incapacitated > 0 {
+            result.push(format!("전투불능 {}", s.incapacitated));
+        }
+        if s.pest > 0 {
+            result.push(format!("페스트 {}", s.pest));
+        }
+        if s.corpse_bags > 0 {
+            result.push(format!("시체자루 {}", s.corpse_bags));
+        }
+        if s.spirit_bomb {
+            result.push("원기옥".into());
         }
         if s.dining {
             result.push("식사의 예법".into());
@@ -108,7 +126,7 @@ impl Battle {
         if s.death_threshold {
             result.push("죽음의 문턱".into());
         }
-        if self.mechanics.bell_target == Some(id) {
+        if self.mechanics.bell_targets.contains(&Some(id)) {
             result.push("다음 수 만찬의 종소리".into());
         }
         if self.mechanics.temporary_pieces.contains(&id) {
@@ -249,9 +267,57 @@ impl Battle {
                 .push("마지막 저항: 이번 턴 적을 처치하지 못해 패배했습니다.".into());
             return Ok(());
         }
+        let infected: Vec<_> = self
+            .living(PLAYER)
+            .into_iter()
+            .chain(self.living(ENEMY))
+            .map(|(at, p)| (at, p, self.status(p.id).pest))
+            .collect();
+        for (at, p, stacks) in infected {
+            if stacks == 0 {
+                continue;
+            }
+            self.mechanics.statuses.entry(p.id).or_default().pest = stacks - 1;
+            let neighbors: Vec<_> = self
+                .board
+                .cells()
+                .iter()
+                .flatten()
+                .copied()
+                .filter(|q| q.kind != pieces::CORPSE && q.id != p.id)
+                .filter(|q| {
+                    self.piece_position(q.id)
+                        .is_some_and(|(pos, _)| distance(at, pos) == 1)
+                })
+                .map(|q| q.id)
+                .collect();
+            for target in neighbors {
+                if self.mechanics.rng.index(2) == 0 {
+                    self.mechanics.statuses.entry(target).or_default().pest = 3;
+                }
+            }
+            if stacks == 1 {
+                if let Some((pos, _)) = self.piece_position(p.id) {
+                    self.kill_at(pos, false)?;
+                }
+            }
+        }
+        if !self.sandbox {
+            self.sync_players();
+            self.update_result(ResultReason::RoyalCaptured);
+            if self.phase != Phase::Active {
+                return Ok(());
+            }
+        }
         let ids: Vec<_> = self.living(self.turn).iter().map(|(_, p)| p.id).collect();
         for id in ids {
-            self.mechanics.statuses.entry(id).or_default().agility = 0;
+            let status = self.mechanics.statuses.entry(id).or_default();
+            status.agility = 0;
+            if status.incapacitated_fresh {
+                status.incapacitated_fresh = false;
+            } else {
+                status.incapacitated = status.incapacitated.saturating_sub(1);
+            }
         }
         if self.turn == PLAYER {
             self.mechanics
@@ -277,16 +343,25 @@ impl Battle {
                     *expires = 0;
                 }
             }
+            for expires in &mut self.mechanics.plague {
+                if *expires <= self.mechanics.rounds {
+                    *expires = 0;
+                }
+            }
             let n = self.mechanics.rounds;
-            if self
-                .board
-                .cells()
-                .iter()
-                .flatten()
-                .any(|p| key(p.kind) == "eternal_guest")
-            {
+            // Resolve the enemy's bell first to preserve its established random choice.
+            for guest_owner in [ENEMY, PLAYER] {
+                if !self
+                    .living(guest_owner)
+                    .iter()
+                    .any(|(_, p)| key(p.kind) == "eternal_guest")
+                {
+                    self.mechanics.bell_targets[usize::from(guest_owner)] = None;
+                    continue;
+                }
                 if matches!(n, 2 | 5) {
-                    let mut targets = self.living(PLAYER);
+                    let mut targets =
+                        self.living(if guest_owner == PLAYER { ENEMY } else { PLAYER });
                     targets.retain(|(_, p)| !self.is_royal_piece(p.id));
                     let highest = targets
                         .iter()
@@ -296,11 +371,15 @@ impl Battle {
                     targets.retain(|(_, p)| self.status(p.id).hunger == highest);
                     if !targets.is_empty() {
                         let draw = self.mechanics.rng.index(targets.len());
-                        let selected = self.mechanics.search_random_index.take().unwrap_or(draw)
-                            % targets.len();
-                        self.mechanics.search_random_arity = Some(targets.len());
+                        let selected = if guest_owner == ENEMY {
+                            self.mechanics.search_random_arity = Some(targets.len());
+                            self.mechanics.search_random_index.take().unwrap_or(draw)
+                                % targets.len()
+                        } else {
+                            draw
+                        };
                         let (_, p) = targets[selected];
-                        self.mechanics.bell_target = Some(p.id);
+                        self.mechanics.bell_targets[usize::from(guest_owner)] = Some(p.id);
                         self.events.push(format!(
                             "만찬의 종소리: 다음 수 {}의 허기가 악화됩니다.",
                             piece_name(p.kind)
@@ -308,7 +387,7 @@ impl Battle {
                     }
                 }
                 if matches!(n, 3 | 6) {
-                    if let Some(id) = self.mechanics.bell_target.take() {
+                    if let Some(id) = self.mechanics.bell_targets[usize::from(guest_owner)].take() {
                         if self.piece_position(id).is_some() {
                             self.worsen_hunger(id);
                             self.events
@@ -342,12 +421,18 @@ impl Battle {
             self.mechanics.statuses.entry(p.id).or_default().weakness = 0;
             let mut kind = p.kind;
             let mut dead = false;
-            for _ in 0..weakness {
-                if let Some(parent) = pieces::ALL
-                    .iter()
-                    .find(|d| d.upgrades.iter().any(|u| u.target == kind) && d.kind != kind)
-                {
-                    kind = parent.kind;
+            for step in 0..weakness {
+                let recorded_parent =
+                    self.players
+                        .iter()
+                        .find(|owned| owned.id == p.id)
+                        .and_then(|owned| {
+                            pieces::upgrade_lineage(owned.kind, &owned.upgrades)
+                                .get(step as usize + 1)
+                                .copied()
+                        });
+                if let Some(parent) = recorded_parent.or_else(|| pieces::previous_upgrade(kind)) {
+                    kind = parent;
                 } else {
                     dead = true;
                     break;
@@ -385,6 +470,24 @@ impl Battle {
         self.limiter.remove(&p.id);
         self.sync_players();
         Ok(())
+    }
+    pub(in crate::battle) fn apply_plague_on_entry(&mut self, id: PieceId) {
+        if let Some((at, p)) = self.piece_position(id) {
+            if p.kind == pieces::CORPSE {
+                return;
+            }
+            if self
+                .board
+                .index(at)
+                .is_some_and(|i| self.mechanics.plague[i] > self.mechanics.rounds)
+            {
+                let s = self.mechanics.statuses.entry(id).or_default();
+                s.ingredient = true;
+                s.pest = 3;
+                self.events
+                    .push(format!("역병: {}에 식재료와 페스트 3.", piece_name(p.kind)));
+            }
+        }
     }
     pub(in crate::battle) fn hunger_near(&mut self, at: Position, owner: PlayerId, range: i32) {
         if owner == PLAYER {
@@ -440,7 +543,17 @@ impl Battle {
                 "{} 과흥분: 다음 자기 진영 턴에 민첩 3.",
                 piece_name(p.kind)
             ));
-        } else {
+        } else if !matches!(
+            key(p.kind),
+            "frenzied_dancer"
+                | "masked_dancer"
+                | "ecstatic_dancer"
+                | "tempting_dancer"
+                | "intoxicated_priest"
+                | "feast_priest"
+                | "locust_high_priest"
+                | "hunger_priest"
+        ) {
             let draw = self.mechanics.rng.index(2);
             let selected = self.mechanics.search_random_index.take().unwrap_or(draw) % 2;
             self.mechanics.search_random_arity = Some(2);
@@ -454,42 +567,89 @@ impl Battle {
         self.mechanics.corpse_eaten[usize::from(owner)] += 1;
         let eaten = self.mechanics.corpse_eaten[usize::from(owner)];
         let k = key(p.kind);
-        let first = self.mechanics.used.insert(format!("eat:{id}"));
-        if first {
+        {
             if is_cart(k) && owner == PLAYER {
                 self.mechanics.pending_draw += 1;
             }
-            if matches!(k, "slaughter_cart" | "ecstatic_dancer" | "glutton_follower") {
-                self.grant_agility(id, 1);
+            if is_cart(k) && owner == PLAYER {
+                self.mechanics.pending_mana += 1;
+            }
+            if matches!(k, "glutton_follower" | "masked_dancer") {
+                let _ = self.grant_move_rights(id, 1);
+            }
+            if k == "ecstatic_dancer" {
+                let _ = self.grant_move_rights(id, 2);
+            }
+            if matches!(k, "slaughter_cart" | "feast_cart") {
+                self.mechanics.statuses.entry(id).or_default().corpse_bags =
+                    self.status(id).corpse_bags.saturating_add(1);
             }
             if is_priest(k) {
-                let range = if k == "intoxicated_priest" { 1 } else { 2 };
-                self.choose_ally(
-                    at,
-                    owner,
-                    id,
-                    range,
-                    if k == "locust_high_priest" { 2 } else { 1 },
-                    "사제: 민첩을 받을 아군 선택",
-                );
+                if k == "intoxicated_priest" {
+                    let targets: Vec<_> =
+                        self.living(owner).into_iter().map(|(_, q)| q.id).collect();
+                    if !targets.is_empty() {
+                        let target = targets[self.mechanics.rng.index(targets.len())];
+                        let _ = self.grant_move_rights(target, 1);
+                    }
+                } else {
+                    let targets: Vec<_> =
+                        self.living(owner).into_iter().map(|(_, q)| q.id).collect();
+                    if owner == PLAYER {
+                        self.enqueue(
+                            "사제: 행마권을 받을 아군 선택",
+                            targets,
+                            ChoiceEffect::MoveRights(if k == "locust_high_priest" { 2 } else { 1 }),
+                            false,
+                        );
+                    } else if let Some(target) = targets.first() {
+                        let _ = self.grant_move_rights(
+                            *target,
+                            if k == "locust_high_priest" { 2 } else { 1 },
+                        );
+                    }
+                }
             }
-            if matches!(k, "hunger_priest" | "inviting_follower") {
+            if k == "inviting_follower" && self.mechanics.used.insert(format!("invite:{id}")) {
                 self.hunger_near(at, owner, 2);
             }
-            if k == "tempting_dancer" {
-                self.hunger_near(at, owner, 1);
-            }
-            if k == "feast_cart" {
+            if k == "hunger_priest" {
+                let targets: Vec<_> = self
+                    .living(if owner == PLAYER { ENEMY } else { PLAYER })
+                    .into_iter()
+                    .filter(|(_, q)| !self.is_royal_piece(q.id))
+                    .map(|(_, q)| q.id)
+                    .collect();
                 if owner == PLAYER {
-                    let targets = self.corpse_targets(at, 2);
                     self.enqueue(
-                        "연회의 수레: 이동할 시체 선택",
+                        "허기를 약화시킬 적 선택",
                         targets,
-                        ChoiceEffect::Corpse,
+                        ChoiceEffect::RelieveHunger,
                         false,
                     );
-                } else {
-                    self.slide_near_corpse(at, 2)?;
+                } else if let Some(target) = targets.first() {
+                    self.mechanics.statuses.entry(*target).or_default().hunger =
+                        self.status(*target).hunger.saturating_sub(1);
+                }
+            }
+            if k == "tempting_dancer" {
+                let targets: Vec<_> = self
+                    .living(if owner == PLAYER { ENEMY } else { PLAYER })
+                    .into_iter()
+                    .filter(|(_, q)| !self.is_royal_piece(q.id))
+                    .map(|(_, q)| q.id)
+                    .collect();
+                if owner == PLAYER {
+                    self.enqueue(
+                        "광기 2를 받을 적 선택",
+                        targets,
+                        ChoiceEffect::Madness(2),
+                        false,
+                    );
+                } else if let Some(target) = targets.first() {
+                    self.mechanics.statuses.entry(*target).or_default().madness =
+                        self.status(*target).madness.saturating_add(2);
+                    self.resolve_conscience(*target)?;
                 }
             }
         }
@@ -517,10 +677,9 @@ impl Battle {
                 }
             }
         }
-        if owner == ENEMY
-            && eaten <= 3
+        if eaten <= 3
             && self
-                .living(ENEMY)
+                .living(owner)
                 .iter()
                 .any(|(_, p)| key(p.kind) == "eternal_guest")
         {
@@ -566,7 +725,8 @@ impl Battle {
             }
             if s.guilt >= 2 {
                 s.guilt = 0;
-                s.incapacitated = true;
+                s.incapacitated = s.incapacitated.saturating_add(1);
+                s.incapacitated_fresh = true;
             }
         }
         if switched {
@@ -589,7 +749,7 @@ impl Battle {
                 ));
             }
         }
-        if self.status(id).incapacitated {
+        if self.status(id).incapacitated > 0 {
             let lost = self.agility(id);
             self.mechanics.statuses.entry(id).or_default().agility = 0;
             if self
@@ -599,37 +759,7 @@ impl Battle {
                 self.actions_left = self.actions_left.saturating_sub(lost);
             }
             self.events
-                .push("죄책감: 영구 전투불능. 휴식의 고해성사로만 회복할 수 있습니다.".into());
-        }
-        Ok(())
-    }
-    pub(in crate::battle) fn slide_near_corpse(
-        &mut self,
-        at: Position,
-        range: i32,
-    ) -> Result<(), Error> {
-        let corpses: Vec<_> = self
-            .board
-            .cells()
-            .iter()
-            .enumerate()
-            .filter_map(|(i, p)| {
-                p.filter(|p| p.kind == pieces::CORPSE)
-                    .map(|p| (Position::new(i as i32 % 8, i as i32 / 8), p))
-            })
-            .collect();
-        for (pos, p) in corpses {
-            if distance(at, pos) > range {
-                continue;
-            }
-            for (dx, dy) in [(0, -1), (1, 0), (0, 1), (-1, 0)] {
-                let to = Position::new(pos.file + dx, pos.rank + dy);
-                if self.board.contains(to) && self.board.piece_at(to)?.is_none() {
-                    self.board.set_piece(pos, None)?;
-                    self.board.set_piece(to, Some(p))?;
-                    return Ok(());
-                }
-            }
+                .push("죄책감: 전투불능. 자기 턴 종료 시 중첩이 1 감소합니다.".into());
         }
         Ok(())
     }

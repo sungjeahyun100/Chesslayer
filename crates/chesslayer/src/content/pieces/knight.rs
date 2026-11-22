@@ -21,6 +21,24 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
             effect: super::knightrider::DEFINITION.description,
             requirement: "살아 있는 일반 나이트 · 쉼터 행동 1회 · 추가 비용 없음",
         },
+        super::UpgradeDefinition {
+            target: super::DRONE,
+            key: "drone",
+            effect: super::drone::DEFINITION.description,
+            requirement: "살아 있는 나이트 · 쉼터 행동 1회",
+        },
+        super::UpgradeDefinition {
+            target: super::FRENZIED_DANCER,
+            key: "frenzied_dancer",
+            effect: super::frenzied_dancer::DEFINITION.description,
+            requirement: "살아 있는 나이트 · 쉼터 행동 1회",
+        },
+        super::UpgradeDefinition {
+            target: super::COMMANDO,
+            key: "commando",
+            effect: super::commando::DEFINITION.description,
+            requirement: "살아 있는 나이트 · 쉼터 행동 1회",
+        },
     ],
     ..PieceDefinition::new(KNIGHT, "knight", "나이트", movement)
 };

@@ -95,6 +95,14 @@ impl Game {
             return Ok(());
         }
         self.floor += 1;
+        // Incapacitation lasts within one floor, across its battles.
+        let mut roster = self.battle.outcome();
+        for piece in &mut roster {
+            piece.persistent.remove("incapacitated");
+        }
+        self.battle
+            .replace_roster_at_rest(roster)
+            .map_err(engine_error)?;
         self.final_battle = self.mode == RunMode::Campaign && self.floor == 5;
         self.current_node = None;
         self.path.clear();

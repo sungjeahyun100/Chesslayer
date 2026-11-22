@@ -5,7 +5,7 @@ pub const SLAUGHTER_CART: PieceType = 53;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 70,
-    description: "운구 수레 능력 유지. 전투당 1회, 자신의 시체 포획 시 민첩 1을 추가합니다.",
+    description: "운구 수레 능력 계승. 시체 포획 시 시체자루 1을 얻습니다. 시체 투척: 시체자루 1을 소모해 직선 경로의 한 칸에 2라운드 역병을 생성합니다.",
     ..PieceDefinition::new(SLAUGHTER_CART, "slaughter_cart", "살육의 수레", movement)
 };
 

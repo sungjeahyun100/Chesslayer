@@ -5,7 +5,8 @@ pub const ECSTATIC_LORD: PieceType = 46;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 100,
-    description: "로얄. 전투당 1회, 보드 어디서든 아군이 시체를 포획하면 카드 1장, 포획자 민첩 1, 마나 1을 얻습니다.",
+    description: "로얄. 양 진영의 모든 기물에 식재료를 부여합니다. 전투당 1회 아군의 시체 포획 시 카드 1장, 민첩 1, 마나 1을 얻습니다.",
+    upgrades: &[super::UpgradeDefinition { target: super::ETERNAL_GUEST, key: "eternal_guest", effect: super::eternal_guest::DEFINITION.description, requirement: "살아 있는 환희의 군주 · 쉼터 행동 1회" }],
     ..PieceDefinition::new(ECSTATIC_LORD, "ecstatic_lord", "환희의 군주", movement)
 };
 

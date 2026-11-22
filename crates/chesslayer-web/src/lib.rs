@@ -235,6 +235,9 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
         )?
     };
     for (index, command) in save.commands.iter().enumerate() {
+        if index == save.legacy_content_commands {
+            game.remove_retired_cards();
+        }
         game.legacy_content = index < save.legacy_content_commands;
         let result = if index < save.legacy_boss_commands {
             game.replay_legacy_command(command.clone())
@@ -245,6 +248,9 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
         if index + 1 == save.legacy_boss_commands {
             game.finish_legacy_replay();
         }
+    }
+    if save.legacy_content_commands == save.commands.len() {
+        game.remove_retired_cards();
     }
     game.legacy_content = false;
     Ok((game, save))

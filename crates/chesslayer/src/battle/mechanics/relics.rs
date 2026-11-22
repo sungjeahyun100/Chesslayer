@@ -11,17 +11,24 @@ impl Battle {
                     self.spawn_reserve_pawn(Position::new((cell % 8) as i32, (cell / 8) as i32));
             }
         }
-        let boss = self
+        let player_carnival = self
             .board
             .cells()
             .iter()
             .flatten()
-            .any(|p| key(p.kind) == "eternal_guest");
-        let enemy_carnival = boss
-            || self.board.cells().iter().flatten().any(|p| {
-                p.owner == ENEMY
-                    && matches!(key(p.kind), "smiling_king" | "toast_lord" | "ecstatic_lord")
-            });
+            .any(|p| p.owner == PLAYER && key(p.kind) == "eternal_guest");
+        let enemy_carnival = self
+            .board
+            .cells()
+            .iter()
+            .flatten()
+            .any(|p| p.owner == ENEMY && key(p.kind) == "eternal_guest");
+        let any_lord = self.board.cells().iter().flatten().any(|p| {
+            matches!(
+                key(p.kind),
+                "smiling_king" | "toast_lord" | "ecstatic_lord" | "eternal_guest"
+            )
+        });
         let carnival = relics.contains(&Relic::CarnivalFlare);
         let enemy_vanguard = self.board.cells().iter().flatten().any(|p| {
             p.owner == ENEMY && matches!(key(p.kind), "vanguard_commander" | "mounted_commander")
@@ -32,10 +39,12 @@ impl Battle {
                 continue;
             }
             let st = self.mechanics.statuses.entry(p.id).or_default();
-            if carnival || enemy_carnival {
+            if carnival || any_lord {
                 st.ingredient = true;
             }
-            if (carnival && p.owner == PLAYER) || (enemy_carnival && p.owner == ENEMY) {
+            if ((carnival || player_carnival) && p.owner == PLAYER)
+                || (enemy_carnival && p.owner == ENEMY)
+            {
                 st.blessing = true;
             }
         }

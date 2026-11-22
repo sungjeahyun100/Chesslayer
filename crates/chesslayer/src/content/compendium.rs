@@ -42,6 +42,7 @@ pub struct PieceEntry {
     pub shots: Vec<ShotEntry>,
     pub upgrades: Vec<UpgradeEntry>,
     pub starting: bool,
+    pub monster_only: bool,
 }
 
 #[derive(Serialize)]
@@ -277,6 +278,7 @@ pub fn catalog() -> Vec<SquadEntry> {
                             })
                             .collect(),
                         starting: initial.contains(&kind),
+                        monster_only: pieces::is_monster_only(kind),
                     })
                 })
                 .collect();

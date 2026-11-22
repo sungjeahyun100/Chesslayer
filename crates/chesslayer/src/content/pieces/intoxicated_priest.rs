@@ -5,8 +5,7 @@ pub const INTOXICATED_PRIEST: PieceType = 55;
 
 pub const DEFINITION: PieceDefinition = PieceDefinition {
     value: 35,
-    description:
-        "비숍 행마. 전투당 1회, 자신이 시체를 포획하면 인접한 다른 아군 하나에 민첩 1을 부여합니다.",
+    description: "비숍 행마. 시체 섭취의 부정적 효과를 받지 않고 시체 포획 시 무작위 아군 하나에 행마권 1을 부여합니다.",
     upgrades: &[super::UpgradeDefinition {
         target: super::FEAST_PRIEST,
         key: "feast_priest",

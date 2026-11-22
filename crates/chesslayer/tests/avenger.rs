@@ -321,7 +321,7 @@ fn resources_exhaustion_and_failure_rollback() {
         &mut g,
         &[CardKind::Bounty, CardKind::Scp500, CardKind::ClaudeOptimize],
     );
-    g.gold = 9;
+    g.gold = 49;
     let before = serde_json::to_string(&g.snapshot()).unwrap();
     assert!(g
         .dispatch(Command::PlayCard {
@@ -330,7 +330,7 @@ fn resources_exhaustion_and_failure_rollback() {
         })
         .is_err());
     assert_eq!(before, serde_json::to_string(&g.snapshot()).unwrap());
-    g.gold = 39;
+    g.gold = 159;
     g.dispatch(Command::PlayCard {
         id: 1,
         target: Some(1),
@@ -356,6 +356,15 @@ fn resources_exhaustion_and_failure_rollback() {
     .unwrap();
     assert_eq!(g.cards.exhausted.len(), 2);
     assert_eq!(g.phase, RunPhase::Combat);
+}
+#[test]
+fn full_armor_uses_current_health_instead_of_always_raising_maximum() {
+    let mut b = fixture();
+    b.set_health(1, 4, 10);
+    b.avenger_effect(CardKind::FullArmor, Some(1), None)
+        .unwrap();
+    assert_eq!(b.stats(1).health, 7);
+    assert_eq!(b.stats(1).max_health, 10);
 }
 #[test]
 fn draw_effect_cannot_redraw_itself_and_bad_hand_blocks_further_draws() {
@@ -488,9 +497,9 @@ fn endless_scaling_is_bounded_unique_and_progressive() {
 }
 
 #[test]
-fn en_passant_requires_the_last_double_step_and_ends_the_turn() {
+fn pawn_order_includes_en_passant_after_the_last_double_step() {
     let mut g = game();
-    hand(&mut g, &[CardKind::EnPassant]);
+    hand(&mut g, &[CardKind::PawnOrder]);
     g.battle.board.set_piece(Position::new(0, 6), None).unwrap();
     g.battle
         .board
@@ -515,18 +524,19 @@ fn en_passant_requires_the_last_double_step_and_ends_the_turn() {
             }),
         )
         .unwrap();
-    assert!(g.battle.avenger_targets(CardKind::EnPassant).is_empty());
+    assert!(g.battle.avenger_targets(CardKind::PawnOrder).contains(&9));
     g.battle.end_turn().unwrap();
     move_to(&mut g.battle, Position::new(3, 1), Position::new(3, 3));
-    assert_eq!(g.battle.avenger_targets(CardKind::EnPassant), vec![9]);
+    assert!(g.battle.avenger_targets(CardKind::PawnOrder).contains(&9));
     g.dispatch(Command::PlayCard {
         id: 1,
         target: Some(9),
     })
     .unwrap();
+    move_to(&mut g.battle, Position::new(2, 3), Position::new(3, 2));
     assert_eq!(g.battle.piece_position(9).unwrap().0, Position::new(3, 2));
     assert!(g.battle.piece_position(101).is_none());
-    assert_eq!(g.battle.turn, ENEMY);
+    assert_eq!(g.battle.stats(9).move_rights, 0);
 }
 
 #[test]

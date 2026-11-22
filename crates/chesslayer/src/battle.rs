@@ -906,6 +906,11 @@ impl Battle {
             return Err(Error::WrongTurn);
         }
         let boss_actor = self.is_boss_actor(piece);
+        let plague_occupants: Vec<_> = self
+            .plague_cells()
+            .into_iter()
+            .map(|(at, _)| (at, self.board.piece_at(at).ok().flatten().map(|p| p.id)))
+            .collect();
         if boss_actor && !self.boss_action_available(action) {
             return Err(Error::IllegalAction);
         }
@@ -947,7 +952,50 @@ impl Battle {
             ));
         } else {
             self.apply_effect(action, ActionSource::PieceMove)?;
+            for (at, before) in plague_occupants {
+                if let Some(arrived) = self.board.piece_at(at)? {
+                    if arrived.kind != pieces::CORPSE && Some(arrived.id) != before {
+                        self.apply_plague_on_entry(arrived.id);
+                    }
+                }
+            }
             self.check_king_goal(piece, action.first.from);
+            if matches!(
+                piece.kind,
+                pieces::PROCESSION_FOLLOWER
+                    | pieces::HUNGRY_FOLLOWER
+                    | pieces::GLUTTON_FOLLOWER
+                    | pieces::INVITING_FOLLOWER
+            ) && self
+                .piece_position(piece.id)
+                .is_some_and(|(at, _)| at.rank == if piece.owner == PLAYER { 0 } else { 7 })
+            {
+                let targets: Vec<_> = self
+                    .board
+                    .cells()
+                    .iter()
+                    .flatten()
+                    .filter(|p| {
+                        p.owner < 2
+                            && p.owner != piece.owner
+                            && p.kind != pieces::CORPSE
+                            && !self.is_royal_piece(p.id)
+                    })
+                    .map(|p| p.id)
+                    .collect();
+                if piece.owner == PLAYER {
+                    self.enqueue(
+                        "행렬의 신도: 제거할 적 비로얄 기물 선택",
+                        targets,
+                        mechanics::ChoiceEffect::Remove,
+                        false,
+                    );
+                } else if let Some(id) = targets.first() {
+                    if let Some((at, _)) = self.piece_position(*id) {
+                        self.kill_at(at, false)?;
+                    }
+                }
+            }
         }
         if piece.owner == ENEMY {
             self.en_passant = if self.matches_kind(piece, PAWN)

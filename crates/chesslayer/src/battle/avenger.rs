@@ -90,7 +90,7 @@ impl Battle {
             Position::new(king.file + dx.signum(), king.rank + dy.signum()),
         ))
     }
-    fn en_passant_action(&self, id: PieceId) -> Option<DefaultAction> {
+    pub(super) fn en_passant_action(&self, id: PieceId) -> Option<DefaultAction> {
         let (victim, land) = self.en_passant?;
         let (from, p) = self.piece_position(id)?;
         let (at, q) = self.piece_position(victim)?;
@@ -163,7 +163,20 @@ impl Battle {
             upgrades: vec![],
             persistent: BTreeMap::new(),
         });
-        self.mechanics.statuses.insert(id, PieceStatus::default());
+        let lord_present = self.board.cells().iter().flatten().any(|p| {
+            matches!(
+                pieces::definition(p.kind).map(|d| d.key),
+                Some("smiling_king" | "toast_lord" | "ecstatic_lord" | "eternal_guest")
+            )
+        });
+        self.mechanics.statuses.insert(
+            id,
+            PieceStatus {
+                ingredient: lord_present,
+                ..PieceStatus::default()
+            },
+        );
+        self.apply_plague_on_entry(id);
         Ok(id)
     }
     /// Board effects; resources and payment are staged by the run's card transaction.
@@ -197,6 +210,8 @@ impl Battle {
                 self.board.set_piece(b, None)?;
                 self.board.set_piece(c, k)?;
                 self.board.set_piece(d, p)?;
+                self.apply_plague_on_entry(self.king_id);
+                self.apply_plague_on_entry(id);
                 self.moved_ids.insert(id);
                 self.moved_ids.insert(self.king_id);
                 self.sync_players();
@@ -235,14 +250,11 @@ impl Battle {
                 let s = self.stats_mut(id);
                 let n = if kind == FullArmor { 3 } else { 1 };
                 s.health = s.health.saturating_add(n);
-                s.max_health = s.max_health.saturating_add(n);
-                if kind == Aerobics {
-                    s.temporary_health += n;
-                }
+                s.max_health = s.max_health.max(s.health);
                 if id == self.boss_id {
                     if let Some(boss) = &mut self.boss {
                         boss.hp = boss.hp.saturating_add(n);
-                        boss.max_health = boss.max_health.saturating_add(n);
+                        boss.max_health = boss.max_health.max(boss.hp);
                     }
                 }
             }
@@ -251,7 +263,9 @@ impl Battle {
                 let requested = if kind == Steroids { s.attack } else { 1 };
                 let n = requested.min(i32::MAX - s.attack);
                 s.attack += n;
-                s.temporary_attack = s.temporary_attack.saturating_add(n);
+                if kind == Steroids {
+                    s.temporary_attack = s.temporary_attack.saturating_add(n);
+                }
             }
             SwapStats => {
                 let s = self.stats_mut(id);
@@ -309,6 +323,35 @@ impl Battle {
                     self.grant_move_rights(id, 1)?;
                 }
             }
+            SpiritBomb => {
+                let ids: Vec<_> = self
+                    .board
+                    .cells()
+                    .iter()
+                    .flatten()
+                    .filter(|p| p.owner == PLAYER && p.kind != pieces::CORPSE)
+                    .map(|p| p.id)
+                    .collect();
+                for id in ids {
+                    self.mechanics.statuses.entry(id).or_default().spirit_bomb = true;
+                }
+            }
+            AllArmed => {
+                let ids: Vec<_> = self
+                    .board
+                    .cells()
+                    .iter()
+                    .flatten()
+                    .filter(|p| p.owner == PLAYER && p.kind != pieces::CORPSE)
+                    .map(|p| p.id)
+                    .collect();
+                for id in ids {
+                    let s = self.stats_mut(id);
+                    s.attack = s.attack.saturating_add(3);
+                    s.health = s.health.saturating_add(3);
+                    s.max_health = s.max_health.saturating_add(3);
+                }
+            }
             DisarmAll => {
                 let ids: Vec<_> = self
                     .board
@@ -346,20 +389,26 @@ impl Battle {
                     .iter()
                     .enumerate()
                     .filter_map(|(i, p)| {
-                        p.filter(|p| {
+                        p.filter(|_| {
                             let rank = i as i32 / 8;
-                            (rank < front.rank
+                            rank < front.rank
                                 && if kind == AlekhineGun {
                                     (i as i32 % 8 - front.file).abs() <= 1
                                 } else {
                                     rank >= front.rank - 4
-                                })
-                                || (kind == GunBarrage && formation.contains(&p.id))
+                                }
                         })
                         .map(|p| p.id)
                     })
                     .collect();
                 self.force_remove(&ids)?;
+                if kind == GunBarrage {
+                    for id in formation {
+                        let status = self.mechanics.statuses.entry(id).or_default();
+                        status.incapacitated = status.incapacitated.saturating_add(3);
+                        status.incapacitated_fresh = true;
+                    }
+                }
             }
             ComeHere => {
                 let empty = self.king_adjacent_empty().ok_or(Error::IllegalAction)?;
@@ -367,6 +416,7 @@ impl Battle {
                 let (from, p) = self.piece_position(id).ok_or(Error::IllegalAction)?;
                 self.board.set_piece(from, None)?;
                 self.board.set_piece(to, Some(p))?;
+                self.apply_plague_on_entry(id);
                 self.sync_players();
                 self.update_result(ResultReason::RoyalCaptured);
             }

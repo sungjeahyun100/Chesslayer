@@ -22,6 +22,8 @@ pub const DEFINITION: PieceDefinition = PieceDefinition {
             effect: "일반 폰 행마와 이동 이력을 유지하며 아군 바운싱 기물의 반사벽이 됩니다. 적군 바운싱 기물은 포획할 수 있습니다. 최종 랭크에서 바운싱 3종으로 승격합니다.",
             requirement: "살아 있는 일반 폰 · 쉼터 행동 1회 · 추가 비용 없음",
         },
+        super::UpgradeDefinition { target: super::AXE_INFANTRY, key: "axe_infantry", effect: super::axe_infantry::DEFINITION.description, requirement: "살아 있는 폰 · 쉼터 행동 1회" },
+        super::UpgradeDefinition { target: super::PROCESSION_FOLLOWER, key: "procession_follower", effect: super::procession_follower::DEFINITION.description, requirement: "살아 있는 폰 · 쉼터 행동 1회" },
     ],
     ..PieceDefinition::new(PAWN, "pawn", "폰", movement)
 };

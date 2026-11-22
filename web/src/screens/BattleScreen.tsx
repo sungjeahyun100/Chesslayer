@@ -31,9 +31,9 @@ export function BattleScreen({ state, cardState, cardMovement, input, board }: {
       {selectedPiece && <PieceInspector piece={selectedPiece} enemy={!!inspectedEnemy} abilities={selectedAbilities}
         activeAbility={activeAbility} canUseAbility={state.turn === 0} inputEnabled={input.policy.act} onAbility={input.chooseAbility}
         boss={state.boss} initiativeRemaining={initiativeRemaining} />}
-      <div className="combat-resource" aria-label={state.ammo !== null ? `탄약 ${state.ammo}` : `마나 ${state.mana}`}>
-        <span className="mana-orb">{state.ammo ?? state.mana}</span>
-        <span>{state.ammo !== null ? `탄약 / ${state.ammo_capacity}` : "마나"}</span>
+      <div className="combat-resources" aria-label={`마나 ${state.mana}, 포탄량 ${state.ammo ?? 0}`}>
+        <div className="combat-resource"><span className="mana-orb">{state.mana}</span><span>마나 {state.mana} / {Math.max(3, state.mana)}</span></div>
+        <div className="combat-resource"><span className="mana-orb">{state.ammo ?? 0}</span><span>포탄량 {state.ammo ?? 0} / {state.ammo_capacity ?? 10}</span></div>
       </div>
       <RelicList relics={state.relics} />
     </aside>
