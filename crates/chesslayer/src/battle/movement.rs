@@ -370,15 +370,101 @@ impl Battle {
         from: Position,
     ) -> Result<Vec<DefaultAction>, Error> {
         let definition = pieces::definition(kind).ok_or(Error::InvalidSetup)?;
-        if let Some(calculate) = definition.native_movement {
-            Ok(calculate(&self.board, from)?)
+        let mut actions = if let Some(calculate) = definition.native_movement {
+            calculate(&self.board, from)?
         } else {
-            Ok(self
-                .programs
+            self.programs
                 .get(&kind)
                 .ok_or(Error::InvalidSetup)?
-                .execute(&self.board, from)?)
+                .execute(&self.board, from)?
+        };
+        actions.extend(self.follower_jump_actions(kind, from)?);
+        Ok(actions)
+    }
+
+    fn follower_jump_actions(
+        &self,
+        kind: PieceType,
+        from: Position,
+    ) -> Result<Vec<DefaultAction>, Error> {
+        let directions = match kind {
+            pieces::INTOXICATED_PRIEST
+            | pieces::FEAST_PRIEST
+            | pieces::LOCUST_HIGH_PRIEST
+            | pieces::HUNGER_PRIEST => pieces::movement::DIAGONAL.to_vec(),
+            pieces::BUTCHER_CART
+            | pieces::FUNERAL_CART
+            | pieces::SLAUGHTER_CART
+            | pieces::FEAST_CART => pieces::movement::ORTHOGONAL.to_vec(),
+            pieces::MASKED_LADY
+            | pieces::RED_LADY
+            | pieces::BANQUET_LADY
+            | pieces::INVITING_LADY
+            | pieces::TOAST_LORD
+            | pieces::ECSTATIC_LORD
+            | pieces::ETERNAL_GUEST => pieces::movement::all_directions(),
+            // Dancers already have knight moves, which jump over every intervening piece.
+            _ => return Ok(vec![]),
+        };
+        let owner = self
+            .board
+            .piece_at(from)?
+            .ok_or(Error::IllegalAction)?
+            .owner;
+        let lord = matches!(
+            kind,
+            pieces::TOAST_LORD | pieces::ECSTATIC_LORD | pieces::ETERNAL_GUEST
+        );
+        let passes_corpses = matches!(
+            kind,
+            pieces::FUNERAL_CART | pieces::SLAUGHTER_CART | pieces::FEAST_CART
+        );
+        let mut actions = Vec::new();
+        for (dx, dy) in directions {
+            let mut square = Position::new(from.file + dx, from.rank + dy);
+            let mut crossed_follower = false;
+            let mut distance = 1;
+            while self.board.contains(square) && (!lord || distance <= 2) {
+                let occupant = self.board.piece_at(square)?;
+                if occupant.is_some_and(|piece| {
+                    piece.owner == owner
+                        && matches!(
+                            piece.kind,
+                            pieces::HUNGRY_FOLLOWER
+                                | pieces::GLUTTON_FOLLOWER
+                                | pieces::INVITING_FOLLOWER
+                        )
+                }) {
+                    crossed_follower = true;
+                } else if occupant
+                    .is_some_and(|piece| passes_corpses && piece.kind == pieces::CORPSE)
+                {
+                    if crossed_follower && occupant.is_some_and(|piece| piece.owner != owner) {
+                        actions.push(DefaultAction::one(crate::ActionStep::new(
+                            from,
+                            square,
+                            square,
+                            crate::Effect::TakeMove,
+                        )));
+                    }
+                } else {
+                    if crossed_follower && occupant.is_none_or(|piece| piece.owner != owner) {
+                        actions.push(DefaultAction::one(crate::ActionStep::new(
+                            from,
+                            square,
+                            square,
+                            crate::Effect::TakeMove,
+                        )));
+                    }
+                    if occupant.is_some() {
+                        break;
+                    }
+                }
+                square = Position::new(square.file + dx, square.rank + dy);
+                distance += 1;
+            }
         }
+        Ok(actions)
     }
     pub(in crate::battle) fn captures_player(&self, action: &DefaultAction) -> Result<bool, Error> {
         self.captures_owner(action, PLAYER)

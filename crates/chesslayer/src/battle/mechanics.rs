@@ -689,30 +689,218 @@ mod smoke {
         .unwrap()
     }
     #[test]
-    fn hungry_follower_leaps_only_named_families_with_existing_chesssembly() {
+    fn hungry_follower_and_upgrades_do_not_jump_over_named_families() {
         let from = Position::new(3, 4);
         let beyond = Position::new(3, 2);
-        let mut b = fixture(pieces::HUNGRY_FOLLOWER);
-        assert!(!b
+        for kind in [
+            pieces::HUNGRY_FOLLOWER,
+            pieces::GLUTTON_FOLLOWER,
+            pieces::INVITING_FOLLOWER,
+        ] {
+            let mut b = fixture(kind);
+            b.board
+                .set_piece(
+                    Position::new(3, 3),
+                    Some(Piece {
+                        id: 101,
+                        kind: pieces::TOAST_LORD,
+                        owner: ENEMY,
+                    }),
+                )
+                .unwrap();
+            assert!(
+                !b.legal_actions(from)
+                    .unwrap()
+                    .iter()
+                    .any(|a| a.first.move_to == beyond),
+                "kind {kind} must not leap"
+            );
+        }
+    }
+    #[test]
+    fn named_families_jump_over_hungry_follower_and_upgrades() {
+        let from = Position::new(3, 4);
+        for kind in [
+            pieces::INTOXICATED_PRIEST,
+            pieces::FEAST_PRIEST,
+            pieces::LOCUST_HIGH_PRIEST,
+            pieces::HUNGER_PRIEST,
+            pieces::BUTCHER_CART,
+            pieces::FUNERAL_CART,
+            pieces::SLAUGHTER_CART,
+            pieces::FEAST_CART,
+            pieces::MASKED_LADY,
+            pieces::RED_LADY,
+            pieces::BANQUET_LADY,
+            pieces::INVITING_LADY,
+            pieces::TOAST_LORD,
+            pieces::ECSTATIC_LORD,
+            pieces::ETERNAL_GUEST,
+        ] {
+            let diagonal = matches!(
+                kind,
+                pieces::INTOXICATED_PRIEST
+                    | pieces::FEAST_PRIEST
+                    | pieces::LOCUST_HIGH_PRIEST
+                    | pieces::HUNGER_PRIEST
+            );
+            let blocker = if diagonal {
+                Position::new(4, 3)
+            } else {
+                Position::new(3, 3)
+            };
+            let beyond = if diagonal {
+                Position::new(5, 2)
+            } else {
+                Position::new(3, 2)
+            };
+            for follower in [
+                pieces::HUNGRY_FOLLOWER,
+                pieces::GLUTTON_FOLLOWER,
+                pieces::INVITING_FOLLOWER,
+            ] {
+                let mut b = Battle::sandbox().unwrap();
+                b.sandbox_place(1, kind, PLAYER, from).unwrap();
+                b.sandbox_place(2, follower, PLAYER, blocker).unwrap();
+                let action = b
+                    .sandbox_actions(from)
+                    .unwrap()
+                    .into_iter()
+                    .find(|a| a.first.move_to == beyond)
+                    .unwrap_or_else(|| panic!("kind {kind} must jump over follower {follower}"));
+                b.sandbox_apply_action(&action).unwrap();
+                assert_eq!(b.board.piece_at(blocker).unwrap().unwrap().kind, follower);
+
+                let mut enemy = Battle::sandbox().unwrap();
+                enemy.sandbox_place(1, kind, PLAYER, from).unwrap();
+                enemy.sandbox_place(2, follower, ENEMY, blocker).unwrap();
+                assert!(
+                    !enemy
+                        .sandbox_actions(from)
+                        .unwrap()
+                        .iter()
+                        .any(|a| a.first.move_to == beyond),
+                    "kind {kind} must not jump over enemy follower {follower}"
+                );
+            }
+        }
+        for kind in [
+            pieces::FRENZIED_DANCER,
+            pieces::MASKED_DANCER,
+            pieces::ECSTATIC_DANCER,
+            pieces::TEMPTING_DANCER,
+        ] {
+            let mut b = Battle::sandbox().unwrap();
+            b.sandbox_place(1, kind, PLAYER, from).unwrap();
+            b.sandbox_place(2, pieces::HUNGRY_FOLLOWER, PLAYER, Position::new(3, 3))
+                .unwrap();
+            assert!(b
+                .sandbox_actions(from)
+                .unwrap()
+                .iter()
+                .any(|a| a.first.move_to == Position::new(4, 2)));
+        }
+    }
+    #[test]
+    fn follower_jump_still_respects_other_blockers_and_can_capture_after_landing() {
+        let from = Position::new(3, 4);
+        let mut b = Battle::sandbox().unwrap();
+        b.sandbox_place(1, pieces::BUTCHER_CART, PLAYER, from)
+            .unwrap();
+        b.sandbox_place(2, pieces::HUNGRY_FOLLOWER, PLAYER, Position::new(3, 3))
+            .unwrap();
+        b.sandbox_place(3, pieces::PAWN, ENEMY, Position::new(3, 2))
+            .unwrap();
+        let capture = b
+            .sandbox_actions(from)
+            .unwrap()
+            .into_iter()
+            .find(|a| a.first.move_to == Position::new(3, 2))
+            .unwrap();
+        b.sandbox_apply_action(&capture).unwrap();
+        assert_eq!(
+            b.board.piece_at(Position::new(3, 3)).unwrap().unwrap().kind,
+            pieces::HUNGRY_FOLLOWER
+        );
+        assert_eq!(
+            b.board.piece_at(Position::new(3, 2)).unwrap().unwrap().kind,
+            pieces::BUTCHER_CART
+        );
+
+        let mut blocked = fixture(pieces::BUTCHER_CART);
+        assert!(!blocked
             .legal_actions(from)
             .unwrap()
             .iter()
-            .any(|a| a.first.move_to == beyond));
-        b.board
+            .any(|a| a.first.move_to == Position::new(3, 2)));
+        blocked.board.set_piece(Position::new(3, 3), None).unwrap();
+        blocked
+            .board
             .set_piece(
-                Position::new(3, 3),
+                Position::new(3, 2),
                 Some(Piece {
-                    id: 101,
-                    kind: pieces::TOAST_LORD,
+                    id: 102,
+                    kind: pieces::HUNGRY_FOLLOWER,
                     owner: ENEMY,
                 }),
             )
             .unwrap();
-        assert!(b
+        blocked
+            .board
+            .set_piece(
+                Position::new(3, 3),
+                Some(Piece {
+                    id: 101,
+                    kind: pieces::PAWN,
+                    owner: PLAYER,
+                }),
+            )
+            .unwrap();
+        assert!(!blocked
             .legal_actions(from)
             .unwrap()
             .iter()
-            .any(|a| a.first.move_to == beyond));
+            .any(|a| a.first.move_to == Position::new(3, 1)));
+    }
+    #[test]
+    fn funeral_cart_keeps_its_corpse_passage_when_jumping_a_follower() {
+        let from = Position::new(3, 4);
+        let mut b = Battle::sandbox().unwrap();
+        b.sandbox_place(1, pieces::FUNERAL_CART, PLAYER, from)
+            .unwrap();
+        b.board
+            .set_piece(
+                Position::new(3, 3),
+                Some(Piece {
+                    id: 3,
+                    kind: pieces::CORPSE,
+                    owner: 2,
+                }),
+            )
+            .unwrap();
+        b.sandbox_place(2, pieces::HUNGRY_FOLLOWER, PLAYER, Position::new(3, 2))
+            .unwrap();
+        assert!(b
+            .sandbox_actions(from)
+            .unwrap()
+            .iter()
+            .any(|a| a.first.move_to == Position::new(3, 1)));
+    }
+    #[test]
+    fn lord_jump_ends_on_the_square_after_the_follower() {
+        let from = Position::new(3, 4);
+        let mut b = Battle::sandbox().unwrap();
+        b.sandbox_place(1, pieces::TOAST_LORD, PLAYER, from)
+            .unwrap();
+        b.sandbox_place(2, pieces::HUNGRY_FOLLOWER, PLAYER, Position::new(3, 3))
+            .unwrap();
+        let actions = b.sandbox_actions(from).unwrap();
+        assert!(actions
+            .iter()
+            .any(|a| a.first.move_to == Position::new(3, 2)));
+        assert!(!actions
+            .iter()
+            .any(|a| a.first.move_to == Position::new(3, 1)));
     }
     #[test]
     fn glutton_receives_one_move_right_per_corpse_without_negative_effects() {
