@@ -56,6 +56,21 @@ jobs:
           path: web/dist
           retention-days: 7
 
+      - name: Set Pages production branch
+        if: github.ref_name == (vars.CHESSLAYER_TEST_PRODUCTION_BRANCH || 'version/v1.0.0')
+        env:
+          CF_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          response=$(curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            "https://api.cloudflare.com/client/v4/accounts/${CF_ACCOUNT_ID}/pages/projects/chesslayer-test" \
+            --header "Authorization: Bearer ${CF_API_TOKEN}" \
+            --header 'Content-Type: application/json' \
+            --data "$(jq -n --arg branch "$GITHUB_REF_NAME" '{production_branch: $branch}')")
+          printf '%s' "$response" | jq -e --arg branch "$GITHUB_REF_NAME" \
+            '.success == true and .result.production_branch == $branch'
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/wrangler-action@v4
         with:
