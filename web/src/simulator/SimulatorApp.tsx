@@ -10,6 +10,7 @@ import { selfDestructKeys } from "../game/combatPlan";
 import type { CompendiumSquad } from "../Compendium";
 import type { Character, Command, EnemyInspection, RestOption, Snapshot, UpgradePath } from "../types";
 import { restoreSettings, saveSettings } from "./settings";
+import { BuildInfo } from "../BuildInfo";
 
 type Starter = { id: number; kind: number; key: string; name: string; cell: number };
 type Squad = { id: string; deck: string[]; relics: string[]; pieces: Starter[] };
@@ -171,7 +172,7 @@ export function SimulatorApp() {
   const changeEnemy = () => { focusEnemies.current = true; setScreen("setup"); };
 
   return <div className="sim-app">
-    <header className="sim-header"><div><p className="eyebrow">CHESSLAYER / LOCAL TOOLS</p><h1>전투 시뮬레이터</h1></div>
+    <header className="sim-header"><div><p className="eyebrow">CHESSLAYER / LOCAL TOOLS</p><h1>전투 시뮬레이터</h1><BuildInfo /></div>
       {screen === "battle" && <div className="sim-actions"><button onClick={() => config.current && start(config.current)}>전투 재시작</button>
         <button onClick={() => setScreen("setup")}>설정으로 돌아가기</button><button onClick={changeEnemy}>전투 상대 변경</button></div>}</header>
     {error && <p className="sim-error" role="alert">{error}<button onClick={() => setError("")}>닫기</button></p>}

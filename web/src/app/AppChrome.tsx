@@ -3,6 +3,7 @@ import type { Snapshot } from "../types";
 import { PieceImage } from "../PieceImage";
 import { floorLabel } from "../progress";
 import { version } from "../../package.json";
+import { BuildInfo } from "../BuildInfo";
 
 export type AppScreen = "home" | "choose" | "game" | "compendium" | "sandbox";
 
@@ -31,6 +32,7 @@ export function AppChrome({ screen, state, onHome }: { screen: AppScreen; state:
         </button>}
       </div>
     </header>
+    <div className="build-info-bar"><BuildInfo /></div>
     {help && screen !== "sandbox" && (
       <section className="guide">
         <strong>체크메이트 대신, 로얄을 포획하세요.</strong>

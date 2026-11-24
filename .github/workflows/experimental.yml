@@ -1,0 +1,64 @@
+name: Deploy Chesslayer experiment
+
+on:
+  push:
+    branches:
+      - 'version/v*'
+      - 'hotfix/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: experiment-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    if: startsWith(github.ref, 'refs/heads/version/v') || startsWith(github.ref, 'refs/heads/hotfix/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install wasm-pack
+        run: cargo install wasm-pack --version 0.14.0 --locked
+
+      - name: Setup Node.js 24
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --prefix web
+
+      - name: Build Rust WASM
+        run: npm run wasm --prefix web
+
+      - name: Build both game entry points
+        run: npm run build --prefix web
+        env:
+          VITE_BUILD_BRANCH: ${{ github.ref_name }}
+          VITE_BUILD_SHA: ${{ github.sha }}
+
+      - name: Save experimental build
+        uses: actions/upload-artifact@v4
+        with:
+          name: chesslayer-experiment-${{ github.run_id }}
+          path: web/dist
+          retention-days: 7
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy web/dist --project-name=chesslayer-test

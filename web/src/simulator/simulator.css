@@ -37,3 +37,4 @@
 .sim-app .skill-viewport { height: 340px; }
 @media (max-width: 1150px) { .sim-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } .sim-grid > :last-child { grid-column: 1 / -1; } }
 @media (max-width: 720px) { .sim-app { padding: 12px; } .sim-grid { display: block; } .sim-panel { margin-bottom: 12px; } .sim-header, .sim-launch { align-items: flex-start; flex-direction: column; } }
+.sim-app .build-info { color: #637263; }
