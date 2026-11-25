@@ -108,6 +108,42 @@ pub(super) struct Mechanics {
     pub(super) turn_moved: HashSet<PieceId>,
 }
 impl Mechanics {
+    pub(super) fn debug_state(&self) -> serde_json::Value {
+        let ids = |set: &HashSet<PieceId>| {
+            let mut result: Vec<_> = set.iter().copied().collect();
+            result.sort_unstable();
+            result
+        };
+        let strings = |set: &HashSet<String>| {
+            let mut result: Vec<_> = set.iter().cloned().collect();
+            result.sort();
+            result
+        };
+        let statuses: BTreeMap<_, _> = self.statuses.iter().map(|(id, status)| (*id, status)).collect();
+        serde_json::json!({
+            "statuses": statuses, "used": strings(&self.used), "turn_used": strings(&self.turn_used),
+            "corpse_eaten": self.corpse_eaten,
+            "pending_draw": self.pending_draw, "pending_mana": self.pending_mana,
+            "pending_ammo": self.pending_ammo, "pending_agility": self.pending_agility,
+            "player_artillery": self.player_artillery, "enemy_actions": self.enemy_actions,
+            "rounds": self.rounds, "fallout": self.fallout.as_slice(), "plague": self.plague.as_slice(),
+            "bell_targets": self.bell_targets, "finished": self.finished,
+            "initial_allies": self.initial_allies, "last_stand": self.last_stand,
+            "killed_this_turn": self.killed_this_turn, "endless": self.endless,
+            "ammo": self.ammo, "pending_choices": self.choices.iter().map(|choice| &choice.view).collect::<Vec<_>>(),
+            "temporary_pieces": ids(&self.temporary_pieces),
+            "mobilization_left": self.mobilization_left, "revenge_ready": self.revenge_ready,
+            "relief_ready": self.relief_ready, "human_wave_left": self.human_wave_left,
+            "wave_movers": ids(&self.wave_movers), "last_defense_ready": self.last_defense_ready,
+            "reckless": ids(&self.reckless), "aimed": self.aimed,
+            "propellant": self.propellant, "fire_data_sharing": self.fire_data_sharing,
+            "shared_target": self.shared_target, "entrenched_pending": ids(&self.entrenched_pending),
+            "entrenched_ready": ids(&self.entrenched_ready), "suppressed": ids(&self.suppressed),
+            "shot_counts": self.shot_counts, "shot_hits_this_turn": self.shot_hits_this_turn,
+            "regular_losses": self.regular_losses, "revived_once": self.revived_once,
+            "turn_moved": ids(&self.turn_moved),
+        })
+    }
     pub(super) fn search_hash(&self, h: &mut impl Hasher) {
         self.rng.hash(h);
         self.ammo.hash(h);

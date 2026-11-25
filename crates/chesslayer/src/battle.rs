@@ -220,6 +220,41 @@ struct KindPassive {
     ward: bool,
 }
 impl Battle {
+    /// Read-only engine internals for the separate expedition debugger.
+    pub fn debug_state(&self) -> serde_json::Value {
+        let sorted = |values: &HashSet<PieceId>| {
+            let mut values: Vec<_> = values.iter().copied().collect();
+            values.sort_unstable();
+            values
+        };
+        let absorbed: BTreeMap<_, _> = self.absorbed.iter().map(|(id, kinds)| {
+            let mut kinds: Vec<_> = kinds.iter().copied().collect();
+            kinds.sort_unstable();
+            (*id, kinds)
+        }).collect();
+        serde_json::json!({
+            "turn": self.turn, "phase": format!("{:?}", self.phase),
+            "result": format!("{:?}", self.result), "actions_left": self.actions_left,
+            "normal_actions_used": self.normal_actions_used,
+            "actions_per_turn": self.actions_per_turn, "limiter_turn": self.limiter_turn,
+            "forced_turn_end": self.forced_turn_end,
+            "initiative_turns_left": self.initiative_turns_left,
+            "enemy_initiative_turns_left": self.enemy_initiative_turns_left,
+            "self_defense_target": self.self_defense_target,
+            "temporary_upgrades": sorted(&self.temporary_upgrades),
+            "wards": sorted(&self.wards), "gambler_dice": self.gambler_dice,
+            "limiter": self.limiter.iter().map(|(id, state)| (*id,
+                serde_json::json!({"owner": state.owner, "moves_left": state.moves_left})))
+                .collect::<std::collections::BTreeMap<_, _>>(),
+            "kind_passives": self.kind_passives.iter().map(|(id, passive)| (*id,
+                serde_json::json!({"agility": passive.agility, "ward": passive.ward})))
+                .collect::<std::collections::BTreeMap<_, _>>(),
+            "absorbed": absorbed, "moved_ids": sorted(&self.moved_ids),
+            "combat_stats": self.combat_stats,
+            "battle_events": self.events,
+            "mechanics": self.mechanics.debug_state(),
+        })
+    }
     pub(crate) fn force_search_shot(&mut self, hit: bool) {
         self.mechanics.force_search_shot(hit);
     }

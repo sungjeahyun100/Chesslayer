@@ -19,6 +19,7 @@ export const combatTiming = {
 } as const;
 
 export type CombatPlan = {
+  dragged?: boolean;
   sequence?: number;
   kind: "move" | "return" | "tracer" | "mortar" | "blast" | "nuke" | "shotgun" | "chain";
   actor: Piece;

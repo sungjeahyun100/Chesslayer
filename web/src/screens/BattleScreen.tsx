@@ -1,14 +1,15 @@
 import type { ReactNode } from "react";
 import type { Snapshot } from "../types";
 import type { GameInput } from "../game/useGameInput";
+import type { BoardDrag } from "../game/useBoardDrag";
 import { BattleHeading } from "../components/BattleHeading";
 import { ActionHint } from "../components/ActionHint";
 import { CardHand } from "../components/CardHand";
 import { PieceInspector } from "../components/PieceInspector";
 import { RelicList } from "../components/RelicList";
 
-export function BattleScreen({ state, cardState, cardMovement, input, board }: { state: Snapshot; cardState: Snapshot;
-  cardMovement: { sequence: number; before: Snapshot; next: Snapshot } | null; input: GameInput; board: ReactNode }) {
+export function BattleScreen({ state, cardState, cardMovement, input, drag, board }: { state: Snapshot; cardState: Snapshot;
+  cardMovement: { sequence: number; before: Snapshot; next: Snapshot } | null; input: GameInput; drag: BoardDrag; board: ReactNode }) {
   const { enemyInspection, selected, activeAbility, targetCard } = input;
   const inspectedEnemy = state.phase === "combat" ? state.pieces.find((piece) => piece.id === enemyInspection?.piece_id && piece.cell === enemyInspection?.cell) : undefined;
   const selectedPiece = inspectedEnemy || state.pieces.find((piece) => piece.cell === selected);
@@ -25,7 +26,7 @@ export function BattleScreen({ state, cardState, cardMovement, input, board }: {
         <ActionHint state={state} input={input} />
       </section>
       {state.phase === "combat" && <CardHand state={cardState} movement={cardMovement} selectedCardId={targetCard?.id} selectedCount={input.stagedCount}
-        onChoose={input.chooseCard} disabled={!input.policy.act} />}
+        onChoose={input.chooseCard} onDragStart={drag.startCard} draggingCard={drag.drag} disabled={!input.policy.act} />}
     </div>
     <aside className="sidebar">
       {selectedPiece && <PieceInspector piece={selectedPiece} enemy={!!inspectedEnemy} abilities={selectedAbilities}

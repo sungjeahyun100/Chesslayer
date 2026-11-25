@@ -1,6 +1,7 @@
 import { useState, type RefObject } from "react";
 import type { Snapshot } from "../types";
 import type { GameInput } from "../game/useGameInput";
+import type { BoardDrag } from "../game/useBoardDrag";
 import type { BoardMove } from "../game/useGamePresentation";
 import type { CombatPlan } from "../game/combatPlan";
 import { PieceImage } from "../PieceImage";
@@ -17,11 +18,13 @@ import { statusVisuals } from "../game/statusVisuals";
 import { movementInfo } from "../components/pieceInfo";
 import { PieceStatuses } from "../PieceStatuses";
 
-export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, boardRevision, boardRef, animation, statusEffects }: {
-  state: Snapshot; input: GameInput; rewardUpgradeOpen: boolean; lastEnemyMove: BoardMove | null;
+export function RunBoard({ state, input, drag, rewardUpgradeOpen, lastEnemyMove, boardRevision, boardRef, animation, statusEffects }: {
+  state: Snapshot; input: GameInput; drag: BoardDrag; rewardUpgradeOpen: boolean; lastEnemyMove: BoardMove | null;
   boardRevision: number; boardRef: RefObject<HTMLDivElement | null>; animation: CombatPlan | null; statusEffects: StatusChange[];
 }) {
   const { selected, enemyInspection, activeAbility, abilityTargets, hoveredAbilityTarget, restChoice, promotion, targetCard, cardTargets, cardUpgrades } = input;
+  const draggedPiece = drag.drag?.kind === "piece" && !drag.drag.returning ? drag.drag.piece : null;
+  const draggedCard = drag.drag?.kind === "card" && !drag.drag.returning ? drag.drag.card : null;
   const turn = state.turn === 0;
   const restView = state.phase === "rest" || rewardUpgradeOpen;
   const boardPieces = rewardUpgradeOpen ? state.next_battle_pieces : state.pieces;
@@ -60,9 +63,9 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
           const piece = boardPieces.find((p) => p.cell === i);
           const legal =
             !activeAbility &&
-            selected !== null &&
+            (selected !== null || draggedPiece !== null) &&
             state.moves.some(
-              (m) => m.from === selected && m.to === i,
+              (m) => m.from === (draggedPiece?.cell ?? selected) && m.to === i,
             );
           const enemyCapture = !!inspectedEnemy && enemyCaptures.has(i);
           const enemyMove = !!inspectedEnemy && !piece && enemyMoves.has(i);
@@ -73,7 +76,12 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
           const pathIndex = preview?.paths.findIndex((path) => path.includes(i)) ?? -1;
           const targetId = piece?.id ?? 10000 + i;
           const effectTarget = state.effect_choice?.targets.includes(targetId);
-          const target = targetCard?.targets.includes(targetId) || !!abilityTarget || effectTarget;
+          const cardTarget = draggedCard
+            ? !draggedCard.disabled_reason && draggedCard.definition.targeted && draggedCard.targets.includes(targetId)
+            : targetCard?.targets.includes(targetId);
+          const target = cardTarget || !!abilityTarget || effectTarget;
+          const dropCandidate = !!drag.drag && drag.drag.cell === i;
+          const dropValid = dropCandidate && !!drag.drag?.valid;
           const staged = cardTargets.includes(targetId) || abilityTargets.includes(i) || (piece && cardUpgrades.some((u) => u.id === piece.id));
           const square = `${"abcdefgh"[i % 8]}${8 - Math.floor(i / 8)}`;
           return (
@@ -81,13 +89,16 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
               key={i}
               data-square={square}
               data-legal={legal || undefined}
+              data-drop={dropCandidate ? (dropValid ? "valid" : "invalid") : undefined}
               data-enemy-move={enemyMove || undefined}
               data-enemy-capture={enemyCapture || undefined}
               data-last-enemy-move={state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) || undefined}
-              className={`${state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) ? "last-enemy-move" : ""} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${fallout ? "fallout-cell" : ""} ${plague ? "plague-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
+              className={`${state.phase === "combat" && (lastEnemyMove?.from === i || lastEnemyMove?.to === i) ? "last-enemy-move" : ""} ${(restView ? restChoice?.cell : selected) === i ? "selected" : ""} ${inspectedEnemy?.cell === i ? "enemy-selected" : ""} ${restView && restChoice?.cell === i ? "rest-selected" : ""} ${legal ? "legal" : ""} ${target ? "targetable" : ""} ${staged ? "card-staged" : ""} ${dropCandidate ? dropValid ? "drop-valid" : "drop-invalid" : ""} ${fallout ? "fallout-cell" : ""} ${plague ? "plague-cell" : ""} ${preview?.blast.includes(i) ? "blast-preview" : ""} ${pathIndex >= 0 ? `pierce-path path-${pathIndex}` : ""} ${bossRisk.has(i) ? "boss-risk" : ""} ${bossTargets.has(i) ? "boss-target" : ""} ${state.boss?.hook_target === i ? "boss-hook-target" : ""}`}
               title={abilityTarget ? `${activeAbility?.name}${abilityTarget.chance !== null ? ` · 명중률 ${abilityTarget.chance}%` : ""}` : plague ? `역병 · 남은 ${plague.remaining}라운드 · 진입 시 식재료와 페스트 3` : fallout ? `방사성 낙진 · 남은 ${fallout.remaining}라운드 · 턴 종료 시 제거` : piece ? statusVisuals(piece).map((status) => `${status.label}: ${status.description}`).join("\n") || (piece.self_defense ? "호신용품: 적에게 직접 포획되어 사망하면 포획한 적도 사망합니다." : undefined) : undefined}
               onMouseEnter={() => { if (abilityTarget) input.hoverAbility(i); }}
               onMouseLeave={() => { if (hoveredAbilityTarget === i) input.hoverAbility(null); }}
+              onPointerDown={(event) => { if (piece) drag.startPiece(event, piece); }}
+              onDragStart={(event) => event.preventDefault()}
               onClick={() => input.clickSquare(i)}
               disabled={
                 !input.policy.board || (!restView &&
@@ -117,6 +128,8 @@ export function RunBoard({ state, input, rewardUpgradeOpen, lastEnemyMove, board
             <BoardPiece
               key={p.id}
               piece={p}
+              dragGhost={drag.drag?.kind === "piece" && drag.drag.piece.id === p.id}
+              noTransition={animation?.dragged && animation.actor.id === p.id}
               onSelect={() => input.clickSquare(p.cell)}
               focused={
                 restView && restChoice?.id === p.id

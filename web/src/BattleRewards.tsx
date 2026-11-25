@@ -6,11 +6,12 @@ import { PieceImage } from "./PieceImage";
 import { rarityNames } from "./rarity";
 import type { Command, Snapshot } from "./types";
 
-export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snapshot; send: (command: Command) => void; revisit: boolean; onUpgrade: () => void }) {
+export function BattleRewards({ state, send, revisit, onUpgrade, embedded = false }: { state: Snapshot; send: (command: Command) => void; revisit: boolean; onUpgrade: () => void; embedded?: boolean }) {
   const choiceMade = state.reward_choice !== null;
   const special = state.node_kind === "elite" || state.node_kind === "boss";
   const panel = useRef<HTMLDivElement>(null);
   useEffect(() => {
+    if (embedded) return;
     const root = document.getElementById("root")!;
     const previousFocus = document.activeElement as HTMLElement | null;
     const previousOverflow = document.body.style.overflow;
@@ -22,7 +23,7 @@ export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snap
       document.body.style.overflow = previousOverflow;
       if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, []);
+  }, [embedded]);
   function keepFocus(event: KeyboardEvent<HTMLDivElement>) {
     if (event.key !== "Tab") return;
     const buttons = Array.from(panel.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
@@ -37,8 +38,7 @@ export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snap
       first.focus();
     }
   }
-  return createPortal(
-    <div className="reward-overlay">
+  const view = <>
     <div className="battle-rewards" ref={panel} role="dialog" aria-modal="true" aria-labelledby="battle-rewards-title" tabIndex={-1} onKeyDown={keepFocus}>
       <p className="eyebrow">ROYAL DEFEATED</p>
       <h2 id="battle-rewards-title">전투 승리</h2>
@@ -91,7 +91,6 @@ export function BattleRewards({ state, send, revisit, onUpgrade }: { state: Snap
         {state.node_kind === "boss" ? state.mode === "endless" ? "다음 층으로 →" : "원정 마치기 →" : revisit ? "맵으로 돌아가기 →" : "다음으로 진행 →"}
       </button>
     </div>
-    </div>,
-    document.body,
-  );
+  </>;
+  return embedded ? <div className="ed-reward">{view}</div> : createPortal(<div className="reward-overlay">{view}</div>, document.body);
 }

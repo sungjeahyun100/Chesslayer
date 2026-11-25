@@ -1,0 +1,24 @@
+.ed-app { min-height: 100vh; padding: 8px 12px; color: #213426; background: #e9eee7; font-size: 13px; }
+.ed-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #547a59; padding-bottom: 6px; }
+.ed-header h1 { font-size: 23px; margin: 0; }.ed-header strong { font-size: 10px; letter-spacing: .1em; }.ed-head-status { display: flex; gap: 14px; align-items: center; }
+.ed-app button, .ed-app select, .ed-app input { font: inherit; }.ed-app button { cursor: pointer; padding: 4px 8px; }.ed-app button:disabled { cursor: default; opacity: .5; }
+.ed-toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 7px 0; border-bottom: 1px solid #9eae9f; }.ed-toolbar button { white-space: nowrap; }
+.ed-columns { display: grid; grid-template-columns: minmax(240px, 18%) minmax(420px, 1fr) minmax(270px, 23%); gap: 6px; height: min(770px, calc(100vh - 240px)); min-height: 500px; }
+.ed-side, .ed-inspector, .ed-game, .ed-bottom > section { overflow: auto; min-width: 0; background: #f7f8f3; border: 1px solid #b9c8b8; }
+.ed-side, .ed-inspector { padding: 6px; }.ed-game .game-layout { max-width: none; }.ed-game .node-navigation { margin-top: 0; }
+.ed-app details { border-bottom: 1px solid #cad4c7; padding: 5px 2px; }.ed-app details > summary { cursor: pointer; font-weight: 700; padding: 4px; background: #e1e9dc; }
+.ed-app label { display: grid; gap: 2px; margin: 5px 0; }.ed-app input, .ed-app select { min-width: 0; max-width: 100%; padding: 4px; border: 1px solid #a8b7a7; background: white; color: #263b2b; }
+.ed-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 6px; }.ed-fields input { width: 100%; }
+.ed-flags { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }.ed-flags label { display: flex; align-items: center; }
+.ed-list { max-height: 190px; overflow: auto; }.ed-list > div { display: flex; align-items: center; gap: 5px; padding: 3px 0; border-bottom: 1px solid #e1e6df; }.ed-list > div button { margin-left: auto; }
+.ed-piece img { width: 24px; height: 24px; }.ed-piece span { flex: 1; min-width: 55px; }.ed-piece select { width: 110px; }.ed-piece label { display: flex; white-space: nowrap; }
+.ed-quick { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }.ed-upload { display: inline-flex !important; border: 1px solid #9eae9f; padding: 4px 8px; cursor: pointer; background: white; }.ed-upload input { display: none; }
+.ed-placeholder { padding: 25px; }.ed-error { padding: 8px; color: #8d2222; background: #fff0f0; }.ed-error button { margin-left: 12px; }
+.ed-reward { padding: 6px; }.ed-reward .battle-rewards { width: 100%; max-height: none; padding: 12px; box-shadow: none; }.ed-reward .reward-cards { gap: 4px; }
+.ed-metrics { display: flex; flex-wrap: wrap; gap: 4px; padding: 5px 0; }.ed-metrics span { background: #d8e6d2; padding: 3px 5px; }
+.ed-inspector pre, .ed-bottom pre { overflow: auto; max-height: 380px; margin: 4px 0; padding: 5px; background: #eef2ec; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.ed-bottom { display: grid; grid-template-columns: 1fr 1.3fr 1fr; gap: 6px; margin-top: 6px; height: 260px; }.ed-bottom > section { padding: 5px; }.ed-bottom details { border: 0; }
+.ed-scroll { max-height: 185px; overflow: auto; }.ed-app table { width: 100%; border-collapse: collapse; font-size: 11px; }.ed-app th, .ed-app td { border-bottom: 1px solid #d8e0d5; padding: 3px 5px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }.ed-app th { position: sticky; top: 0; background: #dde8d9; z-index: 1; }.ed-app tr[data-kind="reset"] { background: #fff4d7; }.ed-app tr[data-kind="added"] { background: #e1f3df; }.ed-app tr[data-kind="removed"], .ed-fail { background: #ffe3e0; }
+.ed-compare-head, .ed-rule { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; margin: 5px 0; }.ed-compare-head label { display: flex; align-items: center; }.ed-rule input { width: 110px; }.ed-note { color: #5d6b5b; font-size: 11px; margin: 5px; }
+@media (max-width: 1100px) { .ed-columns { grid-template-columns: 250px minmax(400px, 1fr); height: auto; }.ed-inspector { grid-column: 1 / -1; }.ed-bottom { grid-template-columns: 1fr; height: auto; }.ed-bottom > section { min-height: 190px; } }
+@media (max-width: 700px) { .ed-columns { display: block; }.ed-side, .ed-game, .ed-inspector { margin-bottom: 6px; }.ed-header { display: block; } }

@@ -1,0 +1,25 @@
+.hand .playing-card { user-select: none; transition: transform .16s ease, box-shadow .16s ease, opacity .16s ease; }
+.hand .playing-card:hover:not(:disabled):not(.drag-targeted):not(.drag-untargeted):not(.drag-returning) { transform: translateY(-8px); }
+.hand .playing-card[data-unavailable] { background: #eeeee6; color: #7b8572; }
+.hand .playing-card.drag-targeted { transform: translateY(-10px) scale(1.03); box-shadow: 0 12px 20px #17271d33; z-index: 3; }
+.hand .playing-card.drag-untargeted { box-shadow: 0 10px 16px #17271d2b; z-index: 3; }
+.hand .playing-card.drag-returning { transform: none; }
+.card-drag-arrow { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 119; overflow: visible; pointer-events: none; color: #ddae42; filter: drop-shadow(0 2px 3px #24322388); }
+.card-drag-arrow.valid { color: #80bd71; }
+.card-drag-arrow.invalid { color: #d96b5f; }
+.card-drag-arrow > path { fill: none; stroke: currentColor; stroke-width: 4; stroke-linecap: round; }
+.card-drag-arrow marker path { fill: currentColor; }
+.board .square { user-select: none; }
+.board .square.drop-valid { box-shadow: inset 0 0 0 5px #e9d871, inset 0 0 18px #fff1aa; z-index: 1; }
+.board .square.drop-invalid { box-shadow: inset 0 0 0 5px #d75d58, inset 0 0 15px #e77b6680; z-index: 1; }
+.board .piece.drag-ghost { opacity: .3; }
+.board .piece.no-transition { transition: none; }
+.board-drag-visual { position: fixed; z-index: 120; pointer-events: none; user-select: none; transform: translateY(-10px) scale(1.04); filter: drop-shadow(0 14px 15px #17271d66); transition: transform .13s ease, filter .13s ease; }
+.board-drag-visual.piece { display: grid; place-items: center; }
+.board-drag-visual.piece .piece-image { width: 88%; height: 88%; object-fit: contain; }
+.board-drag-visual.invalid { filter: drop-shadow(0 12px 12px #792e2866); }
+.board-drag-visual.returning { transform: translateY(0) scale(1); filter: none; transition: left .2s ease, top .2s ease, transform .2s ease, filter .2s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .board-drag-visual.returning { transition: none; }
+  .hand .playing-card { transition: none; }
+}

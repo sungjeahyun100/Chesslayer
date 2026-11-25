@@ -8,7 +8,7 @@ export type InputState =
   | { mode: "enemy"; inspection: EnemyInspection }
   | { mode: "ability"; cell: number; ability: Ability; targets: number[]; hovered: number | null }
   | { mode: "card"; card: Card; targets: number[]; upgrades: UpgradeSelection[]; focus: number | null }
-  | { mode: "promotion"; from: number; to: number; options: Promotion[] }
+  | { mode: "promotion"; from: number; to: number; options: Promotion[]; dragged?: boolean }
   | { mode: "rest"; choice: RestChoice };
 
 export type InputAction =
@@ -16,6 +16,7 @@ export type InputAction =
   | { type: "select-piece"; cell: number }
   | { type: "inspect-enemy"; inspection: EnemyInspection }
   | { type: "select-card"; card: Card }
+  | { type: "select-card-target"; card: Card; id: number; focus: boolean }
   | { type: "select-ability"; cell: number; ability: Ability }
   | { type: "cancel-ability" }
   | { type: "toggle-ability-target"; cell: number; limit: number }
@@ -27,7 +28,7 @@ export type InputAction =
   | { type: "stage-upgrade"; target: number }
   | { type: "remove-upgrade"; id: number }
   | { type: "select-rest"; choice: RestChoice }
-  | { type: "promote"; from: number; to: number; options: Promotion[] }
+  | { type: "promote"; from: number; to: number; options: Promotion[]; dragged?: boolean }
   | { type: "cancel-promotion" };
 
 export const idleInput: InputState = { mode: "idle" };
@@ -41,6 +42,8 @@ export function inputReducer(state: InputState, action: InputAction): InputState
     case "select-piece": return { mode: "piece", cell: action.cell };
     case "inspect-enemy": return { mode: "enemy", inspection: action.inspection };
     case "select-card": return { mode: "card", card: action.card, targets: [], upgrades: [], focus: null };
+    case "select-card-target": return { mode: "card", card: action.card,
+      targets: action.focus ? [] : [action.id], upgrades: [], focus: action.focus ? action.id : null };
     case "select-ability": return { mode: "ability", cell: action.cell, ability: action.ability, targets: [], hovered: null };
     case "cancel-ability": return state.mode === "ability" ? { mode: "piece", cell: state.cell } : state;
     case "toggle-ability-target": return state.mode === "ability" && (state.targets.includes(action.cell) || state.targets.length < action.limit)
@@ -56,7 +59,7 @@ export function inputReducer(state: InputState, action: InputAction): InputState
       ? { ...state, upgrades: [...state.upgrades.filter((choice) => choice.id !== state.focus), { id: state.focus, target: action.target }], focus: null } : state;
     case "remove-upgrade": return state.mode === "card" ? { ...state, upgrades: state.upgrades.filter((choice) => choice.id !== action.id) } : state;
     case "select-rest": return { mode: "rest", choice: action.choice };
-    case "promote": return { mode: "promotion", from: action.from, to: action.to, options: action.options };
+    case "promote": return { mode: "promotion", from: action.from, to: action.to, options: action.options, dragged: action.dragged };
     case "cancel-promotion": return state.mode === "promotion" ? { mode: "piece", cell: state.from } : state;
   }
 }

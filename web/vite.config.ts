@@ -6,6 +6,7 @@ export default defineConfig({
   build: { rollupOptions: { input: {
     main: "./index.html",
     simulator: "./battle-simulator.html",
+    expeditionDebugger: "./expedition-debugger.html",
   } } },
   server: { port: 5173, strictPort: true },
 });

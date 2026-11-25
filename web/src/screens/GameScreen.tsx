@@ -5,6 +5,7 @@ import type { BoardMove } from "../game/useGamePresentation";
 import type { CombatPlan } from "../game/combatPlan";
 import type { StatusChange } from "../game/statusVisuals";
 import { useGameInput } from "../game/useGameInput";
+import { useBoardDrag } from "../game/useBoardDrag";
 import { RunBoard } from "../board/RunBoard";
 import { ActMap, nodeTypes } from "../ActMap";
 import { BattleRewards } from "../BattleRewards";
@@ -17,10 +18,11 @@ import type { EndlessRecord } from "../endless";
 
 interface Props {
   simulator?: boolean;
+  debuggerMode?: boolean;
   snapshot: Snapshot;
   cardMovement: { sequence: number; before: Snapshot; next: Snapshot } | null;
   displayState: Snapshot;
-  send: (command: Command) => boolean;
+  send: (command: Command, directDrag?: boolean) => boolean;
   inspectEnemy: (cell: number) => EnemyInspection | null;
   setError: (message: string) => void;
   onRestart: () => void;
@@ -37,7 +39,7 @@ interface Props {
 }
 
 export function GameScreen({ snapshot, cardMovement, displayState: state, send: dispatchCommand, inspectEnemy, setError, onRestart,
-  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, statusEffects, endlessBest, endlessRunBest, simulator = false }: Props) {
+  developerMode, upgradeHistory, rewardUpgradeHistory, presentationBusy, lastEnemyMove, boardRevision, animation, statusEffects, endlessBest, endlessRunBest, simulator = false, debuggerMode = false }: Props) {
   const [statusOpen, setStatusOpen] = useState(false);
   const [rewardUpgradeOpen, setRewardUpgradeOpen] = useState(false);
   const closeStatus = useCallback(() => setStatusOpen(false), []);
@@ -46,9 +48,9 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
   const outcomeRef = useRef<HTMLElement>(null);
   const previousPhase = useRef<string | undefined>(undefined);
   const rewardOpen = !simulator && state.phase === "reward" && !presentationBusy && !rewardUpgradeOpen;
-  function send(command: Command) {
+  function send(command: Command, directDrag = false) {
     if (statusOpen || presentationBusy) return false;
-    const accepted = dispatchCommand(command);
+    const accepted = dispatchCommand(command, directDrag);
     if (accepted && command.type === "claim_upgrade") setRewardUpgradeOpen(false);
     return accepted;
   }
@@ -58,6 +60,7 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
       if (window.matchMedia("(max-width: 1000px)").matches) boardRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
     },
   });
+  const drag = useBoardDrag(snapshot, input, boardRef);
   useEffect(() => {
     if (state.phase !== previousPhase.current) {
       if (state.phase !== "combat" && state.phase !== "rest") outcomeRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -73,7 +76,7 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
   const restView = state.phase === "rest" || rewardUpgradeOpen;
   const restPiece = state.rest_options.find((piece) => piece.id === input.restChoice?.id);
   const upgradeOpen = restView && !!restPiece && !restPiece.dead;
-  const board = <RunBoard state={state} input={input} rewardUpgradeOpen={rewardUpgradeOpen}
+  const board = <RunBoard state={state} input={input} drag={drag} rewardUpgradeOpen={rewardUpgradeOpen}
     lastEnemyMove={lastEnemyMove} boardRevision={boardRevision} boardRef={boardRef} animation={animation} statusEffects={statusEffects} />;
   return <>
     {!simulator && createPortal(<div className="expedition-toolbar">
@@ -91,7 +94,7 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
           ? <RestScreen state={state} input={input} board={board} reward={rewardUpgradeOpen}
               history={rewardUpgradeOpen ? rewardUpgradeHistory : upgradeHistory}
               onClose={() => { input.chooseRest(null); if (rewardUpgradeOpen) closeRewardUpgrade(); }} />
-          : <BattleScreen state={state} cardState={snapshot.phase === "combat" ? snapshot : state} cardMovement={cardMovement} input={input} board={board} />)}
+          : <BattleScreen state={state} cardState={snapshot.phase === "combat" ? snapshot : state} cardMovement={cardMovement} input={input} drag={drag} board={board} />)}
         {!simulator && !["combat", "rest", "reward"].includes(state.phase) && <OutcomeScreen state={state} send={send}
           endlessBest={endlessBest} endlessRunBest={endlessRunBest}
           onRestart={() => { if (!statusOpen && !presentationBusy) onRestart(); }} outcomeRef={outcomeRef} />}
@@ -99,7 +102,8 @@ export function GameScreen({ snapshot, cardMovement, displayState: state, send: 
     )}
     {statusOpen && <ExpeditionStatus state={state} onClose={closeStatus} developerMode={developerMode}
       onUpgrade={(id, target) => { if (developerMode && !presentationBusy) dispatchCommand({ type: "developer_set_upgrade", id, target }); }} />}
-    {rewardOpen && <BattleRewards state={state} send={send} revisit={!!rewardRevisit}
+    {rewardOpen && <BattleRewards state={state} send={send} revisit={!!rewardRevisit} embedded={debuggerMode}
       onUpgrade={() => { input.reset(); setRewardUpgradeOpen(true); }} />}
+    {drag.overlay}
   </>;
 }

@@ -43,10 +43,12 @@ impl Game {
             .current_node
             .and_then(|id| self.map.nodes[id].encounter)
             .ok_or("전투 노드가 아닙니다.")?;
+        self.debug_event("battle_start_before", None, None, "전투 시작 전 상태");
         let mut encounter = encounter(index);
         content::encounters::choose_random_royal(index, &mut encounter, &mut self.rng);
         self.log(format!("{} · 전투 시작", ENCOUNTERS[index].name));
         let mut players = self.starting_roster()?;
+        self.debug_event("formation", None, None, "생존 로스터를 시작 진형에 배치");
         for piece in &mut players {
             piece.persistent.remove("hunger_worsened");
         }
@@ -97,13 +99,16 @@ impl Game {
                 .expect("registered squad")
                 .turn_rule,
         );
+        self.debug_event("combat_cards", None, None, "전투 카드 상태와 마나 초기화");
         if self.event_state.next_battle_penalty {
             if let Some(card) = self.cards.hand.pop() {
                 self.cards.draw.push(card);
             }
         }
         self.battle.configure_v030(&self.relics);
+        self.debug_event("relic_setup", None, None, "보유 유물의 전투 설정 적용");
         self.configure_expansion()?;
+        self.debug_event("expansion_setup", None, None, "부대별 전투 시작 효과 적용");
         if let Some(scaling) = &self.endless_scaling {
             scaling.apply(&mut self.battle);
         }
@@ -115,6 +120,7 @@ impl Game {
         self.events();
         self.check_finish()?;
         self.plan_boss();
+        self.debug_event("battle_start_after", None, None, "전투 시작 처리 완료");
         Ok(())
     }
     pub(super) fn perform_action<F>(&mut self, select: F) -> Result<bool, String>

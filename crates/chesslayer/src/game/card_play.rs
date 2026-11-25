@@ -37,6 +37,8 @@ impl Game {
             selection,
             d.clone(),
         )?;
+        self.debug_event("card_resolved", Some(d.name.into()),
+            Some(format!("{:?}", selection)), "카드 효과 적용 완료");
         self.log(format!(
             "{} 사용 · 마나 −{}{}",
             d.name,

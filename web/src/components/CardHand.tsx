@@ -1,14 +1,16 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type PointerEvent } from "react";
 import { createPortal } from "react-dom";
 import type { Card, PileCard, Snapshot } from "../types";
 import { CardFace } from "../CardFace";
 import { useCardMotion } from "./useCardMotion";
+import type { BoardDrag } from "../game/useBoardDrag";
 
 type Movement = { sequence: number; before: Snapshot; next: Snapshot } | null;
 
-export function CardHand({ state, movement, selectedCardId, selectedCount, disabled, onChoose }: {
+export function CardHand({ state, movement, selectedCardId, selectedCount, disabled, onChoose, onDragStart, draggingCard }: {
   state: Snapshot; movement: Movement;
   selectedCardId?: number; selectedCount: number; disabled: boolean; onChoose: (card: Card) => void;
+  onDragStart: (event: PointerEvent<HTMLElement>, card: Card) => void; draggingCard: BoardDrag["drag"];
 }) {
   const root = useRef<HTMLElement>(null);
   const closeButton = useRef<HTMLButtonElement>(null);
@@ -56,6 +58,15 @@ export function CardHand({ state, movement, selectedCardId, selectedCount, disab
     };
   }, [openPile]);
   const cards: PileCard[] = openPile === "draw" ? state.draw_pile : state.discard_pile;
+  const cardDrag = draggingCard?.kind === "card" ? draggingCard : null;
+  function dragStyle(card: Card): CSSProperties | undefined {
+    if (!cardDrag || cardDrag.card.id !== card.id || cardDrag.returning || card.definition.targeted) return undefined;
+    const dx = cardDrag.x - cardDrag.originX;
+    const dy = cardDrag.y - cardDrag.originY;
+    const distance = Math.max(1, Math.hypot(dx, dy));
+    const shift = Math.min(20, distance * .12);
+    return { transform: `translate(${dx / distance * shift}px, ${dy / distance * shift - 5}px) rotate(${dx / distance * 2}deg) scale(1.03)` };
+  }
   return <section className="hand-area" ref={root}>
     <div className="card-management">
       <button className="card-pile" data-pile="draw" onClick={() => setOpenPile("draw")} aria-label={`덱 ${visibleCounts.draw}장, 목록 보기`}>
@@ -68,9 +79,13 @@ export function CardHand({ state, movement, selectedCardId, selectedCount, disab
         <div className="hand" aria-label="손패">
           {state.hand.length === 0 && <p className="empty-hand">손패 없음</p>}
           {state.hand.map((card) => <button data-card-id={card.id}
-            className={`playing-card ${selectedCardId === card.id ? "active-card" : ""}`}
+            className={`playing-card ${selectedCardId === card.id ? "active-card" : ""} ${cardDrag?.card.id === card.id ? cardDrag.returning ? "drag-returning" : card.definition.targeted ? "drag-targeted" : "drag-untargeted" : ""}`}
             data-rarity={card.definition.rarity ?? "common"}
-            key={card.id} onClick={() => onChoose(card)} disabled={!!card.disabled_reason || disabled}
+            data-unavailable={!!card.disabled_reason || undefined}
+            style={dragStyle(card)}
+            key={card.id} onClick={() => onChoose(card)} onPointerDown={(event) => onDragStart(event, card)}
+            onDragStart={(event) => event.preventDefault()} draggable={false} disabled={disabled}
+            aria-disabled={!!card.disabled_reason || disabled}
             title={card.disabled_reason || card.definition.description}>
             <CardFace card={card.definition} selectedCount={selectedCardId === card.id ? selectedCount : 0} />
             {card.disabled_reason && <span className="card-unavailable">{card.disabled_reason}</span>}

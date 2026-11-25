@@ -7,15 +7,19 @@ export function BoardPiece({
   focused = false,
   previewKey,
   onSelect,
+  dragGhost = false,
+  noTransition = false,
 }: {
   piece: Piece;
   focused?: boolean;
   previewKey?: string;
   onSelect?: () => void;
+  dragGhost?: boolean;
+  noTransition?: boolean;
 }) {
   return (
     <span
-      className={`piece owner-${piece.owner} ${piece.royal ? "royal-piece" : ""} ${piece.ward ? "warded" : ""} ${focused ? "rest-focused" : ""}`}
+      className={`piece owner-${piece.owner} ${piece.royal ? "royal-piece" : ""} ${piece.ward ? "warded" : ""} ${focused ? "rest-focused" : ""} ${dragGhost ? "drag-ghost" : ""} ${noTransition ? "no-transition" : ""}`}
       style={{
         left: `${(piece.cell % 8) * 12.5}%`,
         top: `${Math.floor(piece.cell / 8) * 12.5}%`,

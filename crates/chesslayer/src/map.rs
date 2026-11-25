@@ -3,14 +3,14 @@ use crate::content::{
     encounters::{self, ELITES, FLOOR_TWO_ELITES, FLOOR_TWO_NORMALS},
     Relic, Rng, ENCOUNTERS, RELIC_REWARD_POOL,
 };
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub const MAP_ROWS: usize = 15;
 pub const MAP_LANES: usize = 7;
 const PATH_COUNT: usize = 6;
 // The boss is a separate node after the 7x15 grid.
 const BOSS_ROW: usize = MAP_ROWS;
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NodeKind {
     Combat,

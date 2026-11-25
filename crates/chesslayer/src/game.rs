@@ -9,6 +9,7 @@ use crate::{
 use serde::{Deserialize, Serialize};
 mod battle_flow;
 mod card_play;
+mod debugger;
 mod events;
 mod expansion;
 mod progression;
@@ -21,6 +22,7 @@ mod expansion_tests;
 #[cfg(test)]
 mod v1_integration_tests;
 pub use events::{EventKind, EventView};
+pub use debugger::ExpeditionDebugConfig;
 use std::collections::{HashSet, VecDeque};
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -190,6 +192,9 @@ pub struct SimulatorConfig {
 #[derive(Clone)]
 pub struct Game {
     pub simulator: bool,
+    pub expedition_debugger: bool,
+    pub debug_log: Vec<String>,
+    pub debug_events: Vec<serde_json::Value>,
     event_state: events::EventState,
     pub endless_scaling: Option<content::endless::Scaling>,
     pub bosses_defeated: u32,
@@ -287,6 +292,9 @@ impl Game {
         .map_err(engine_error)?;
         let mut game = Self {
             simulator: false,
+            expedition_debugger: false,
+            debug_log: vec![],
+            debug_events: vec![],
             event_state: events::EventState::default(),
             endless_scaling: None,
             bosses_defeated: 0,
@@ -471,10 +479,38 @@ impl Game {
         self.battle.set_ammunition(self.ammo.unwrap_or(0));
     }
     fn log(&mut self, message: impl Into<String>) {
-        self.log.push(message.into());
+        let message = message.into();
+        if self.expedition_debugger {
+            self.debug_log.push(message.clone());
+            let actor = self.relics.iter()
+                .find(|relic| message.starts_with(&format!("{}:", relic.name())))
+                .map(|relic| relic.name().to_string());
+            self.debug_event("engine_log", actor, None, &message);
+        }
+        self.log.push(message);
         if self.log.len() > 60 {
             self.log.remove(0);
         }
+    }
+    fn debug_event(&mut self, kind: &str, actor: Option<String>, target: Option<String>, result: &str) {
+        if !self.expedition_debugger { return; }
+        let state = serde_json::json!({
+            "phase": self.phase, "floor": self.floor, "current_node": self.current_node,
+            "gold": self.gold, "deck": self.deck, "relics": self.relics,
+            "roster": self.battle.outcome().iter().map(|p| serde_json::json!({
+                "id": p.id, "kind": p.kind, "alive": p.position.is_some(),
+                "position": p.position.map(cell), "persistent": p.persistent,
+            })).collect::<Vec<_>>(),
+            "cards": {"mana": self.cards.mana, "hand": self.cards.hand,
+                "draw": self.cards.draw, "discard": self.cards.discard,
+                "exhausted": self.cards.exhausted},
+            "battle": self.battle.debug_state(), "round": self.round,
+            "cleared_stages": self.cleared_stages,
+        });
+        self.debug_events.push(serde_json::json!({
+            "order": self.debug_events.len() + 1, "kind": kind,
+            "actor": actor, "target": target, "result": result, "state": state,
+        }));
     }
     fn events(&mut self) {
         self.resource_effects();

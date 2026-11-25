@@ -25,6 +25,7 @@
 @import "./styles/abilities-locations.css";
 @import "./styles/sandbox.css";
 @import "./styles/rarity.css";
+@import "./styles/drag-drop.css";
 
 .build-info-bar { position: sticky; top: 76px; z-index: 83; padding: 3px 5%; border-bottom: 1px solid var(--line); background: #faf9f4; }
 .build-info { display: inline-flex; flex-wrap: wrap; gap: 3px 10px; max-width: 100%; color: #687967; font: 12px/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }

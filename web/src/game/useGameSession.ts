@@ -38,11 +38,11 @@ export function useGameSession(active: boolean, onEnterGame: () => void) {
 
   // A new run frees the previous engine. Do not free live state during Vite HMR;
   // the browser releases this WASM instance when the document closes.
-  const send = useCallback((command: Command): boolean => {
+  const send = useCallback((command: Command, directDrag = false): boolean => {
     if (!engine.current) return false;
     try {
       const before: Snapshot = JSON.parse(engine.current.snapshot());
-      const context: { enemyTarget?: number; blast?: number[] } = {};
+      const context: { enemyTarget?: number; blast?: number[]; directDrag?: boolean } = { directDrag };
       if (command.type === "enemy_step_selected" && command.from !== null && command.index !== null) {
         context.enemyTarget = before.boss
           ? before.boss.plan?.targets[0]?.cell ?? before.boss.plan?.to

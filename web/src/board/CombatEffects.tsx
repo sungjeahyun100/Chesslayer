@@ -128,9 +128,11 @@ export function CombatEffects({ plan }: { plan: CombatPlan | null }) {
   const moving = plan.kind === "move" || plan.kind === "return";
   let motion: { x: number; y: number } | null = null;
   if (moving && (plan.kind === "return" || elapsed < plan.impact)) {
-    const t = elapsed < plan.impact ? clamp(elapsed / combatTiming.move)
+    const t = plan.dragged && plan.kind === "return" ? 1 - friction(clamp(elapsed / combatTiming.return))
+      : elapsed < plan.impact ? clamp(elapsed / combatTiming.move)
       : 1 - friction(clamp((elapsed - plan.impact) / combatTiming.return));
-    motion = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    if (!plan.dragged || plan.kind === "return" && elapsed < combatTiming.return)
+      motion = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
   }
   const projectiles = plan.kind === "tracer" ? Array.from({ length: plan.count }, (_, index) => {
     const age = elapsed - index * plan.interval;

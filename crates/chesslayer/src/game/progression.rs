@@ -45,21 +45,25 @@ impl Game {
         if self.phase != RunPhase::Reward {
             return Err("지금은 다음으로 진행할 수 없습니다.".into());
         }
+        self.debug_event("reward_continue_before", None, None, "보상 화면 종료 전");
         let id = self.current_node.expect("reward requires a selected node");
         if self.completed.contains(&id) {
             self.phase = RunPhase::Map;
             if self.map.nodes[id].kind == NodeKind::Boss {
                 self.finish_boss()?;
             }
+            self.debug_event("reward_continue_after", None, None, "노드 완료 및 다음 진행 반영");
             return Ok(());
         }
         self.complete_node();
         if self.map.nodes[id].kind == NodeKind::Boss {
             self.finish_boss()?;
         }
+        self.debug_event("reward_continue_after", None, None, "노드 완료 및 다음 진행 반영");
         Ok(())
     }
     pub(super) fn finish_boss(&mut self) -> Result<(), String> {
+        self.debug_event("floor_transition_before", None, None, "보스 격파 후 층 처리 시작");
         let mut roster = self.battle.outcome();
         let mut occupied: HashSet<_> = roster.iter().filter_map(|p| p.position).collect();
         let mut revived = 0;
@@ -92,6 +96,7 @@ impl Game {
         if self.final_battle {
             self.phase = RunPhase::Victory;
             self.log("부족의 독재자를 쓰러뜨렸습니다. 원정을 완수했습니다.");
+            self.debug_event("floor_transition_after", None, None, "최종 원정 완료");
             return Ok(());
         }
         self.floor += 1;
@@ -141,6 +146,7 @@ impl Game {
         } else {
             "다음 층으로 향합니다."
         });
+        self.debug_event("floor_transition_after", None, None, "다음 층 지도 생성 완료");
         Ok(())
     }
     pub(super) fn unlock_boss(&mut self) {
@@ -156,6 +162,7 @@ impl Game {
             return Ok(());
         }
         if let GameResult::Win { winner, reason } = self.battle.result {
+            self.debug_event("battle_end_before", None, None, "전투 종료 처리 시작");
             self.resource_effects();
             if self.simulator {
                 self.phase = if winner == PLAYER {
@@ -171,7 +178,9 @@ impl Game {
                 return Ok(());
             }
             self.battle.reset_after_battle().map_err(engine_error)?;
+            self.debug_event("roster_reset", None, None, "생존 위치와 전투 상태 정리");
             self.cards = CardCombat::default();
+            self.debug_event("combat_cards_reset", None, None, "전투 카드 상태 초기화");
             if winner == PLAYER {
                 self.record_node_clear();
                 self.phase = RunPhase::Reward;
@@ -195,6 +204,7 @@ impl Game {
                     self.unlock_boss();
                 }
                 self.generate_rewards();
+                self.debug_event("reward_generated", None, None, "실제 보상 생성 완료");
                 self.event_state.ambush_combat = false;
                 self.reward_node = self.current_node;
                 self.reward_choice = None;
@@ -208,6 +218,7 @@ impl Game {
                 self.log("생존 기물이 시작 칸으로 복귀합니다.");
             } else {
                 self.phase = RunPhase::Defeat;
+                self.debug_event("run_defeat", None, None, "원정 패배 확정");
                 self.log(match reason {
                     ResultReason::Counterattack => "역습으로 킹을 잃었습니다. 원정이 끝났습니다.",
                     ResultReason::RacingGoal => {
@@ -219,6 +230,7 @@ impl Game {
                     _ => "킹이 포획되었습니다. 원정이 끝났습니다.",
                 });
             }
+            self.debug_event("battle_end_after", None, None, "전투 종료 처리 완료");
         }
         Ok(())
     }

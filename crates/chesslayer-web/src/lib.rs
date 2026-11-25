@@ -1,4 +1,5 @@
-use chesslayer::game::{Command, Game, Progress, RunMode, SimulatorConfig};
+use chesslayer::game::{Command, ExpeditionDebugConfig, Game, Progress, RunMode, SimulatorConfig};
+use chesslayer::map::NodeKind;
 use chesslayer::Position;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::*;
@@ -24,6 +25,32 @@ struct SavedRun {
     legacy_content_commands: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     simulator: Option<SimulatorConfig>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    expedition_debugger: Option<ExpeditionDebugConfig>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    debug_ops: Vec<DebugOp>,
+}
+
+#[derive(Clone, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum DebugOp {
+    Command { command: Command },
+    Jump { floor: u8, row: usize },
+    EnterNode { kind: NodeKind, encounter: Option<usize> },
+    FinishBattle { winner: u16 },
+    EndRun,
+}
+impl DebugOp {
+    fn apply(self, game: &mut Game) -> Result<(), String> {
+        match self {
+            Self::Command { command } => game.dispatch(command),
+            Self::Jump { floor, row } => game.debug_jump(floor, row),
+            Self::EnterNode { kind, encounter } => game.debug_enter_node(kind, encounter),
+            Self::FinishBattle { winner } if winner <= 1 => game.debug_finish_battle(winner),
+            Self::FinishBattle { .. } => Err("승패 값이 올바르지 않습니다.".into()),
+            Self::EndRun => game.debug_end_run(),
+        }
+    }
 }
 
 const SAVE_VERSION: u32 = 24;
@@ -84,6 +111,8 @@ impl WebGame {
                 legacy_boss_commands: 0,
                 legacy_content_commands: 0,
                 simulator: None,
+                expedition_debugger: None,
+                debug_ops: vec![],
             },
         })
     }
@@ -106,8 +135,50 @@ impl WebGame {
                 legacy_boss_commands: 0,
                 legacy_content_commands: 0,
                 simulator: Some(config),
+                expedition_debugger: None,
+                debug_ops: vec![],
             },
         })
+    }
+    /// A disposable expedition with its own replay envelope and no account progress writes.
+    pub fn start_expedition_debugger(config: &str) -> Result<WebGame, JsValue> {
+        let config: ExpeditionDebugConfig = serde_json::from_str(config)
+            .map_err(|e| JsValue::from_str(&format!("원정 디버거 설정 오류: {e}")))?;
+        let game = Game::new_expedition_debugger(&config).map_err(|e| JsValue::from_str(&e))?;
+        Ok(Self {
+            game,
+            developer_mode: true,
+            save: SavedRun {
+                version: SAVE_VERSION, character: config.squad.clone(), seed: config.seed,
+                floor: config.floor, mode: RunMode::Campaign, progress: Progress::default(),
+                commands: vec![], legacy_boss_commands: 0, legacy_content_commands: 0,
+                simulator: None, expedition_debugger: Some(config), debug_ops: vec![],
+            },
+        })
+    }
+    pub fn debug_inspect(&self) -> Result<String, JsValue> {
+        if self.save.expedition_debugger.is_none() { return Err(JsValue::from_str("원정 디버거가 아닙니다.")); }
+        Ok(self.game.debug_inspect().to_string())
+    }
+    pub fn debug_jump(&mut self, floor: u8, row: usize) -> Result<String, JsValue> {
+        self.debug_apply(DebugOp::Jump { floor, row })
+    }
+    pub fn debug_enter_node(&mut self, kind: &str, encounter: Option<usize>) -> Result<String, JsValue> {
+        let kind: NodeKind = serde_json::from_value(serde_json::Value::String(kind.into()))
+            .map_err(|_| JsValue::from_str("등록되지 않은 노드 종류입니다."))?;
+        self.debug_apply(DebugOp::EnterNode { kind, encounter })
+    }
+    pub fn debug_finish_battle(&mut self, victory: bool) -> Result<String, JsValue> {
+        self.debug_apply(DebugOp::FinishBattle { winner: if victory { 0 } else { 1 } })
+    }
+    pub fn debug_end_run(&mut self) -> Result<String, JsValue> {
+        self.debug_apply(DebugOp::EndRun)
+    }
+    fn debug_apply(&mut self, op: DebugOp) -> Result<String, JsValue> {
+        if self.save.expedition_debugger.is_none() { return Err(JsValue::from_str("원정 디버거가 아닙니다.")); }
+        op.clone().apply(&mut self.game).map_err(|e| JsValue::from_str(&e))?;
+        self.save.debug_ops.push(op);
+        Ok(self.snapshot())
     }
     pub fn snapshot(&self) -> String {
         serde_json::to_string(&self.game.snapshot()).expect("snapshot is serializable")
@@ -183,7 +254,11 @@ impl WebGame {
         self.game
             .dispatch(command.clone())
             .map_err(|e| JsValue::from_str(&e))?;
-        self.save.commands.push(command);
+        if self.save.expedition_debugger.is_some() {
+            self.save.debug_ops.push(DebugOp::Command { command });
+        } else {
+            self.save.commands.push(command);
+        }
         Ok(self.snapshot())
     }
     pub fn set_developer_mode(&mut self, enabled: bool) {
@@ -194,10 +269,11 @@ impl WebGame {
     }
     pub fn restore(saved: &str) -> Result<WebGame, JsValue> {
         let (game, save) = restore_saved_run(saved).map_err(|e| JsValue::from_str(&e))?;
+        let developer_mode = save.expedition_debugger.is_some();
         Ok(Self {
             game,
             save,
-            developer_mode: false,
+            developer_mode,
         })
     }
 }
@@ -209,11 +285,11 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
     if !matches!(version, Some(23) | Some(24)) {
         return Err("이전 게임 규칙으로 저장된 원정입니다. 이어갈 수 없어 새 원정을 시작해야 합니다. 기존 기록은 새 원정을 시작하기 전까지 보존됩니다.".into());
     }
-    if header.get("character").and_then(|value| value.as_str()) != Some("avenger") {
-        return Err("이 저장 데이터의 부대는 v1.0.0에서 플레이할 수 없습니다. 새 복수귀 원정을 시작하세요. 기존 저장 데이터는 보존됩니다.".into());
-    }
     let mut save: SavedRun =
         serde_json::from_str(saved).map_err(|_| "저장된 원정을 읽을 수 없습니다.")?;
+    if save.simulator.is_none() && save.expedition_debugger.is_none() && save.character != "avenger" {
+        return Err("이 저장 데이터의 부대는 v1.0.0에서 플레이할 수 없습니다. 새 복수귀 원정을 시작하세요. 기존 저장 데이터는 보존됩니다.".into());
+    }
     if version == Some(23) {
         save.legacy_content_commands = save.commands.len();
     }
@@ -223,7 +299,9 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
         return Err("저장된 원정의 진행 기록이 올바르지 않습니다.".into());
     }
     save.version = SAVE_VERSION;
-    let mut game = if let Some(config) = &save.simulator {
+    let mut game = if let Some(config) = &save.expedition_debugger {
+        Game::new_expedition_debugger(config)?
+    } else if let Some(config) = &save.simulator {
         Game::new_simulator(config)?
     } else {
         Game::new_run_with_mode(
@@ -234,6 +312,12 @@ fn restore_saved_run(saved: &str) -> Result<(Game, SavedRun), String> {
             save.mode,
         )?
     };
+    if save.expedition_debugger.is_some() {
+        if !save.commands.is_empty() { return Err("디버거 기록이 올바르지 않습니다.".into()); }
+        for op in save.debug_ops.clone() {
+            op.apply(&mut game).map_err(|_| "디버거 기록이 올바르지 않습니다.")?;
+        }
+    }
     for (index, command) in save.commands.iter().enumerate() {
         if index == save.legacy_content_commands {
             game.remove_retired_cards();
@@ -432,6 +516,8 @@ mod save_tests {
             legacy_boss_commands: 0,
             legacy_content_commands: 0,
             simulator: None,
+            expedition_debugger: None,
+            debug_ops: vec![],
         };
         let encoded = serde_json::to_string(&save).unwrap();
         let (restored, _) = restore_saved_run(&encoded).unwrap();

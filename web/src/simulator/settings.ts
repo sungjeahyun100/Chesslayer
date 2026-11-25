@@ -28,12 +28,12 @@ function reachableKinds(entry: CompendiumSquad, root: number): Set<number> {
   return reachable;
 }
 
-export function restoreSettings(content: Content, entries: CompendiumSquad[]): SimulatorSettings | null {
+export function restoreSettings(content: Content, entries: CompendiumSquad[], key = SIMULATOR_SETTINGS_KEY): SimulatorSettings | null {
   const first = content.squads[0];
   if (!first) return null;
   let saved: Record<string, unknown> = {};
   try {
-    const parsed: unknown = JSON.parse(localStorage.getItem(SIMULATOR_SETTINGS_KEY) ?? "null");
+    const parsed: unknown = JSON.parse(localStorage.getItem(key) ?? "null");
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) saved = parsed as Record<string, unknown>;
   } catch { /* Malformed or unavailable browser storage: use current content defaults. */ }
   const savedSquad = content.squads.find((item) => item.id === saved.squad);
@@ -63,7 +63,7 @@ export function restoreSettings(content: Content, entries: CompendiumSquad[]): S
   };
 }
 
-export function saveSettings(settings: SimulatorSettings): void {
-  try { localStorage.setItem(SIMULATOR_SETTINGS_KEY, JSON.stringify(settings)); }
+export function saveSettings(settings: SimulatorSettings, key = SIMULATOR_SETTINGS_KEY): void {
+  try { localStorage.setItem(key, JSON.stringify(settings)); }
   catch { /* The simulator remains usable when storage is unavailable. */ }
 }

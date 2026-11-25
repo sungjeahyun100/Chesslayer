@@ -7,7 +7,7 @@ interface Options {
   state: Snapshot;
   gate: InputGate;
   rewardUpgradeOpen: boolean;
-  send: (command: Command) => boolean;
+  send: (command: Command, directDrag?: boolean) => boolean;
   inspectEnemy: (cell: number) => EnemyInspection | null;
   setError: (message: string) => void;
   closeRewardUpgrade: () => void;
@@ -38,9 +38,11 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
     return () => window.removeEventListener("keydown", cancel);
   }, [policy.blocked, rewardUpgradeOpen, closeRewardUpgrade, setError, input]);
 
-  function execute(command: Command) {
-    if (policy.blocked) return;
-    if (send(command)) dispatch({ type: "reset" });
+  function execute(command: Command, directDrag = false) {
+    if (policy.blocked) return false;
+    const accepted = send(command, directDrag);
+    if (accepted) dispatch({ type: "reset" });
+    return accepted;
   }
   function cancelCard() {
     if (policy.blocked) return;
@@ -53,6 +55,33 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
     setError("");
     if (card.definition.targeted) dispatch({ type: "select-card", card });
     else execute({ type: "play_card", id: card.id });
+  }
+  function dropCard(card: Card, cell: number) {
+    if (!policy.act || card.disabled_reason || !state.hand.some((entry) => entry.id === card.id)) return false;
+    if (!card.definition.targeted) {
+      return execute({ type: "play_card", id: card.id });
+    }
+    const piece = state.pieces.find((entry) => entry.cell === cell);
+    const targetId = piece?.id ?? 10000 + cell;
+    if (!card.targets.includes(targetId)) return false;
+    setError("");
+    if (card.definition.selection_mode === "upgrade") {
+      if (!piece) return false;
+      dispatch({ type: "select-card-target", card, id: piece.id, focus: true });
+    } else if (card.definition.selection_mode === "multiple" ||
+      ["limiter_release", "sacred_domain", "rename"].includes(card.definition.kind)) {
+      dispatch({ type: "select-card-target", card, id: targetId, focus: false });
+    } else return execute({ type: "play_card", id: card.id, target: targetId });
+    return true;
+  }
+  function dropPiece(from: number, to: number) {
+    if (!policy.act || from === to || !state.pieces.some((piece) => piece.owner === 0 && piece.cell === from)) return false;
+    const moves = state.moves.filter((move) => move.from === from && move.to === to);
+    if (!moves.length) return false;
+    const options = moves.flatMap((move) => move.promotion ? [move.promotion] : []);
+    if (options.length) dispatch({ type: "promote", from, to, options, dragged: true });
+    else return execute({ type: "move", from, to }, true);
+    return true;
   }
   function chooseAbility(ability: Ability) {
     if (!policy.act || !ability.targets.length) return;
@@ -143,7 +172,7 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
   }
   function confirmPromotion(kind: number) {
     if (policy.blocked || input.mode !== "promotion") return;
-    execute({ type: "move", from: input.from, to: input.to, promotion: kind });
+    execute({ type: "move", from: input.from, to: input.to, promotion: kind }, !!input.dragged);
   }
   function confirmCardUpgrade(target: number) {
     if (policy.blocked || !targetCard || !focusedUpgrade) return;
@@ -175,6 +204,7 @@ export function useGameInput({ state, gate, rewardUpgradeOpen, send, inspectEnem
     if (!policy.blocked) dispatch({ type: "hover-ability", cell });
   }
   return { renameName, setRenameName, input, ...view, policy, focusedUpgrade, stagedCount, stagedCost, clickSquare, chooseCard, chooseAbility,
+    dropCard, dropPiece,
     confirmCard, cancelCard, confirmAbility, cancelAbility, confirmPromotion, cancelPromotion,
     confirmCardUpgrade, closeCardUpgrade, chooseDeadPawn, removeCardUpgrade, chooseRest, hoverAbility,
     send: execute, reset: () => dispatch({ type: "reset" }) };

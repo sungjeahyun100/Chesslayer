@@ -128,11 +128,11 @@ export function SimulatorApp() {
     (floorFilter === "all" || (floorFilter === "final" ? item.final : !item.final && String(item.floor) === floorFilter))
     && `${item.name} ${item.id} ${item.description}`.toLowerCase().includes(encounterQuery.toLowerCase()));
 
-  const send = useCallback((command: Command): boolean => {
+  const send = useCallback((command: Command, directDrag = false): boolean => {
     if (!engine.current) return false;
     try {
       const before: Snapshot = JSON.parse(engine.current.snapshot());
-      const context: { enemyTarget?: number; blast?: number[] } = {};
+      const context: { enemyTarget?: number; blast?: number[]; directDrag?: boolean } = { directDrag };
       if (command.type === "enemy_step_selected" && command.from !== null && command.index !== null) {
         context.enemyTarget = before.boss ? before.boss.plan?.targets[0]?.cell ?? before.boss.plan?.to
           : engine.current.enemy_action_target(command.from, command.index);

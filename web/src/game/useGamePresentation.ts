@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { Command, Snapshot } from "../types";
-import { combatPresentationSteps, type CombatPlan } from "./combatPlan";
+import { combatPresentationSteps, combatTiming, type CombatPlan } from "./combatPlan";
 import { statusChanges, type StatusChange } from "./statusVisuals";
 
 export type FloorTransition = { next: Snapshot; stage: "out" | "in" };
@@ -30,7 +30,7 @@ export function useGamePresentation(onEnterGame: () => void) {
   // The engine result is committed before presentation starts. Keep the previous
   // snapshot on screen until contact, then reveal the committed next snapshot.
   const present = useCallback((next: Snapshot, before: Snapshot | null, source: "start" | "resume" | Command,
-    context: { enemyTarget?: number; blast?: number[] } = {}) => {
+    context: { enemyTarget?: number; blast?: number[]; directDrag?: boolean } = {}) => {
     clearAnimation();
     const newRun = typeof source === "string";
     if (newRun || (before?.phase !== "combat" && next.phase === "combat")) {
@@ -45,6 +45,13 @@ export function useGamePresentation(onEnterGame: () => void) {
       && (before?.floor !== next.floor || before?.final_battle !== next.final_battle) && next.phase === "map";
     const steps = before && typeof source !== "string" && !window.matchMedia("(prefers-reduced-motion: reduce)").matches
       ? combatPresentationSteps(before, next, source, context) : [];
+    if (context.directDrag && steps[0] && ["move", "return"].includes(steps[0].plan.kind)) {
+      const plan = steps[0].plan;
+      plan.dragged = true;
+      plan.impact = 0;
+      plan.duration = plan.kind === "return" ? combatTiming.return + combatTiming.impactFlash :
+        plan.result === "none" ? 0 : combatTiming.impactFlash;
+    }
     const showStatusChanges = (oldState: Snapshot, newState: Snapshot, newBatch: boolean) => {
       const changes = statusChanges(oldState, newState, newBatch);
       if (!changes.length || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
@@ -59,7 +66,7 @@ export function useGamePresentation(onEnterGame: () => void) {
       const playStep = (index: number) => {
         const step = steps[index];
         const plan = { ...step.plan, sequence: ++animationSequence.current };
-        setDisplayState(step.before);
+        setDisplayState(plan.dragged && plan.kind === "move" ? step.after : step.before);
         setAnimation(plan);
         timers.current.push(window.setTimeout(() => {
           // A finishing blow still needs its impact/fade on the board before
@@ -68,7 +75,7 @@ export function useGamePresentation(onEnterGame: () => void) {
             ? { ...step.after, phase: "combat" } : step.after);
           showStatusChanges(step.before, step.after, index === 0);
           setAnimation((current) => current?.sequence === plan.sequence ? { ...current, impactDone: true } : current);
-        }, plan.impact));
+        }, plan.dragged && plan.kind === "return" ? combatTiming.return : plan.impact));
         timers.current.push(window.setTimeout(() => {
           if (index + 1 < steps.length) playStep(index + 1);
           else {

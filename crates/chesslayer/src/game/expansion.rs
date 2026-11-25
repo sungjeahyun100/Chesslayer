@@ -228,6 +228,8 @@ impl Game {
         } else {
             next.cards.discard.push(card.clone());
         }
+        next.debug_event("card_resolved", Some(d.name.into()),
+            target.map(|id| format!("기물 #{id}")), "부대 카드 효과 적용 완료");
         next.log(format!("{} 사용 · 마나 −{}", d.name, d.cost));
         if matches!(card.kind, Castling | EnPassant) && next.battle.phase == Phase::Active {
             next.battle.end_turn().map_err(engine_error)?;
